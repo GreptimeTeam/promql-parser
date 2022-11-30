@@ -1,2 +1,5 @@
 # promql-rs
-PromQL Rust version
+
+TODO:
+
+- [ ] parse (string -> Expr)

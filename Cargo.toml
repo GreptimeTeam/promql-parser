@@ -1,0 +1,12 @@
+[package]
+name = "promql"
+description = "Parse PromQL query into AST"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yuanbo <bobo@greptime.com>"]
+keywords = ["promql", "prometheus"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
