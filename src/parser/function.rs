@@ -6,6 +6,7 @@ use super::ValueType;
 
 // Function represents a function of the expression language and is
 // used by function nodes.
+#[derive(Debug)]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
