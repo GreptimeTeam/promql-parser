@@ -1,23 +1,9 @@
 use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
-use crate::parser::{Function, Matcher};
-
-type Pos = i32;
-type ItemType = i32;
-
-// Item represents a token or text string returned from the scanner.
-pub struct Item {
-    typ: ItemType, // The type of this Item.
-    pos: Pos,      // The starting position, in bytes, of this Item in the input string.
-    val: String,   // The value of this Item.
-}
-
-impl Display for Item {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "item {}", self.val)
-    }
-}
+use crate::label::Matcher;
+use crate::parser::Function;
+use crate::parser::ItemType;
 
 // EvalStmt holds an expression and information on the range it should
 // be evaluated on.
@@ -36,6 +22,7 @@ pub struct EvalStmt {
 
 #[derive(Debug)]
 pub enum Expr {
+    // AggregateExpr represents an aggregation operation on a Vector.
     AggregateExpr {
         op: ItemType,          // The used aggregation operation.
         expr: Box<Expr>,       // The Vector expression over which is aggregated.
@@ -43,10 +30,15 @@ pub enum Expr {
         grouping: Vec<String>, // The labels by which to group the Vector.
         without: bool,         // Whether to drop the given labels rather than keep them.
     },
+
+    // UnaryExpr represents a unary operation on another expression.
+    // Currently unary operations are only supported for Scalars.
     UnaryExpr {
         op: ItemType,
         expr: Box<Expr>,
     },
+
+    // BinaryExpr represents a binary expression between two child expressions.
     BinaryExpr {
         op: ItemType,   // The operation of the expression.
         lhs: Box<Expr>, // The operands on the left sides of the operator.
@@ -67,16 +59,11 @@ pub enum Expr {
     },
 
     // SubqueryExpr represents a subquery.
+    // TODO: need more descriptions.
     SubqueryExpr {
         expr: Box<Expr>,
         range: Duration,
-        // OriginalOffset is the actual offset that was set in the query.
-        // This never changes.
-        original_offset: Duration,
-        // Offset is the offset used during the query execution
-        // which is calculated using the original offset, at modifier time,
-        // eval time, and subquery offsets in the AST tree.
-        offset: Duration,
+        offset: Instant,
         timestamp: Option<i64>,
         start_or_end: ItemType, // Set when @ is used with start() or end()
         step: Duration,
@@ -93,20 +80,11 @@ pub enum Expr {
     // VectorSelector represents a Vector selection.
     VectorSelector {
         name: String,
-        // OriginalOffset is the actual offset that was set in the query.
+        // offset is the actual offset that was set in the query.
         // This never changes.
-        original_offset: Duration,
-        // Offset is the offset used during the query execution
-        // which is calculated using the original offset, at modifier time,
-        // eval time, and subquery offsets in the AST tree.
-        offset: Duration,
-        timestamp: Option<i64>,
+        offset: Option<Instant>,
         start_or_end: ItemType, // Set when @ is used with start() or end()
         label_matchers: Vec<Matcher>,
-        // FIXME:
-        // The unexpanded seriesSet populated at query preparation time.
-        // unexpanded_series_set: storage.SeriesSet,
-        // series:              []storage.Series,
     },
 
     // MatrixSelector represents a Matrix selection.
@@ -115,10 +93,10 @@ pub enum Expr {
         // if the parser hasn't returned an error.
         vector_selector: Box<Expr>,
         range: Duration,
-        end_pos: Pos,
     },
 
     // Call represents a function call.
+    // TODO: need more descriptions
     Call {
         func: Function,       // The function that was called.
         args: Vec<Box<Expr>>, // Arguments used in the call.
