@@ -1,12 +1,15 @@
 [package]
-name = "promql"
+name = "promql-parser"
+readme = "README.md"
 description = "Parse PromQL query into AST"
-version = "0.1.0"
+repository = "https://github.com/GreptimeTeam/promql-parser"
+version = "0.0.1"
 edition = "2021"
-authors = ["Yuanbo <bobo@greptime.com>"]
-keywords = ["promql", "prometheus"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["greptime"]
+keywords = ["prometheus", "promql", "parser"]
+license = "Apache-2.0"
+license-file = "LICENSE"
+categories = ["parser-implementations"]
 
 [dependencies]
 cfgrammar = "0.12"
