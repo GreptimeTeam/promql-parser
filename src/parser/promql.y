@@ -112,7 +112,7 @@ START_EXPRESSION
 START_METRIC_SELECTOR
 %token startSymbolsEnd
 
-%start start
+%start expr
 
 // Operators are listed with increasing precedence.
 %left LOR
@@ -130,6 +130,15 @@ START_METRIC_SELECTOR
 %right LEFT_BRACKET
 
 %%
-start           -> Result<i32, String> :
-                POW { $1 }
-                ;
+expr -> Result<Expr, String>:
+    NUMBER
+    {
+        let val = $lexer.span_str($1.as_ref().unwrap().span())
+                        .parse::<f64>()
+                        .map_err(|_| "cannot be represented as a u64".to_string())?;
+        Ok(Expr::NumberLiteral { span: $span, val: val})
+    };
+
+%%
+
+use super::Expr;

@@ -1,3 +1,4 @@
+use lrpar::Span;
 use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
@@ -71,10 +72,12 @@ pub enum Expr {
 
     NumberLiteral {
         val: f64,
+        span: Span,
     },
 
     StringLiteral {
         val: String,
+        span: Span,
     },
 
     // VectorSelector represents a Vector selection.
