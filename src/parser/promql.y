@@ -645,52 +645,50 @@ START_METRIC_SELECTOR
 
 /* match_op        : EQL | NEQ | EQL_REGEX | NEQ_REGEX ; */
 
-/* /\* */
-/*  * Literals. */
-/*  *\/ */
-
-/* number_literal  : NUMBER */
-/*                         /\* { *\/ */
-/*                         /\* $$ = &NumberLiteral{ *\/ */
-/*                         /\*         Val:           yylex.(*parser).number($1.Val), *\/ */
-/*                         /\*         PosRange: $1.PositionRange(), *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 ; */
-
-/* number          : NUMBER */
-/* /\* { $$ = yylex.(*parser).number($1.Val) } *\/ */
-/* ; */
-
-/* signed_number   : ADD number */
-/* /\* { $$ = $2 } *\/ */
-/*                 | SUB number */
-/* /\* { $$ = -$2 } *\/ */
-/*                 ; */
-
-/* signed_or_unsigned_number: number | signed_number ; */
-
-/* uint            : NUMBER */
-/*                         /\* { *\/ */
-/*                         /\* var err error *\/ */
-/*                         /\* $$, err = strconv.ParseUint($1.Val, 10, 64) *\/ */
-/*                         /\* if err != nil { *\/ */
-/*                         /\*         yylex.(*parser).addParseErrf($1.PositionRange(), "invalid repetition in series values: %s", err) *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 ; */
-
-
 
 start -> Result<Expr, String>:
                 string_literal { $1 }
-;
+        |       number_literal { $1 }
+                ;
+
+/*
+ * Literals.
+ */
+
+number_literal -> Result<Expr, String>:
+                number { Ok(Expr::NumberLiteral { span: $span, val: $1?}) }
+                ;
+
+
+signed_or_unsigned_number -> Result<f64, String>:
+                number { $1 }
+        |       signed_number  { $1 };
+
+
+number -> Result<f64, String>:
+                NUMBER
+                {
+                        let s = $lexer.span_str($span);
+                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
+                }
+                ;
+
+signed_number -> Result<f64, String>:
+                ADD number { $2 }
+        |       SUB number { $2.map(|i| -i) }
+                ;
+
+uint -> Result<u64, String>:
+                NUMBER
+                {
+                        let s = $lexer.span_str($span);
+                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
+                }
+                ;
 
 duration -> Result<Duration, String>:
                 DURATION
-                {
-                        parse_duration($lexer.span_str($span))
-                }
+                { parse_duration($lexer.span_str($span)) }
                 ;
 
 string_literal -> Result<Expr, String>:
