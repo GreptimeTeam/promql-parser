@@ -1,7 +1,7 @@
 use promql_parser::parser;
 
 fn main() {
-    let promql = "this is to test string literal";
+    let promql = "1h";
 
     let ast = parser::parse(promql).unwrap();
 
