@@ -2,6 +2,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::time::Duration;
 
+/// 290 years
+const MAX_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 365 * 290);
+
 lazy_static! {
     static ref DURATION_RE: Regex = Regex::new(
         r"^((?P<year>[0-9]+)y)?((?P<week>[0-9]+)w)?((?P<day>[0-9]+)d)?((?P<hour>[0-9]+)h)?((?P<minute>[0-9]+)m)?((?P<second>[0-9]+)s)?((?P<milli>[0-9]+)ms)?$",
@@ -9,11 +12,21 @@ lazy_static! {
     .unwrap();
 }
 
-// 290 years
-const MAX_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 365 * 290);
-
-// parse_duration parses a string into a time.Duration, assuming that a year
-// always has 365d, a week always has 7d, and a day always has 24h.
+/// parses a string into a Duration, assuming that a year
+/// always has 365d, a week always has 7d, and a day always has 24h.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use std::time::Duration;
+/// use promql_parser::util;
+///
+/// assert_eq!(util::parse_duration("1h").unwrap(), Duration::from_secs(3600));
+/// assert_eq!(util::parse_duration("4d").unwrap(), Duration::from_secs(3600 * 24 * 4));
+/// assert_eq!(util::parse_duration("4d1h").unwrap(), Duration::from_secs(3600 * 97));
+/// ```
 pub fn parse_duration(ds: &str) -> Result<Duration, String> {
     if ds == "" {
         return Err("empty duration string".into());
