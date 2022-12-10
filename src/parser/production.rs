@@ -1,5 +1,5 @@
-use lrpar::{NonStreamingLexer, Span, Lexeme};
 use super::lex::{LexemeType, StorageType};
+use lrpar::{Lexeme, NonStreamingLexer, Span};
 
 // caller MUST pay attention to the index out of bounds issue
 pub fn span_to_string(

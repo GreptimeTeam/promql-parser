@@ -680,19 +680,18 @@ START_METRIC_SELECTOR
 /*                         /\* } *\/ */
 /*                 ; */
 
-/* duration : DURATION */
-/*                         /\* { *\/ */
-/*                         /\* var err error *\/ */
-/*                         /\* $$, err = parseDuration($1.Val) *\/ */
-/*                         /\* if err != nil { *\/ */
-/*                         /\*         yylex.(*parser).addParseErr($1.PositionRange(), err) *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 ; */
+
 
 start -> Result<Expr, String>:
                 string_literal { $1 }
 ;
+
+duration -> Result<Duration, String>:
+                DURATION
+                {
+                        parse_duration($lexer.span_str($span))
+                }
+                ;
 
 string_literal -> Result<Expr, String>:
                 STRING
@@ -700,7 +699,7 @@ string_literal -> Result<Expr, String>:
                         let val = span_to_string($lexer, $span)?;
                         Ok(Expr::StringLiteral { span: $span, val: val})
                 }
-;
+                ;
 
 /*
  * Wrappers for optional arguments.
@@ -716,18 +715,11 @@ string_literal -> Result<Expr, String>:
 /*                 | grouping_labels */
 /*                 ; */
 
-/* %% */
-
-/* expr -> Result<Expr, String>: */
-/*     NUMBER */
-/*     { */
-/*         let val = $lexer.span_str($1.as_ref().unwrap().span()) */
-/*                         .parse::<f64>() */
-/*                         .map_err(|_| "cannot be represented as a u64".to_string())?; */
-/*         Ok(Expr::NumberLiteral { span: $span, val: val}) */
-/*     }; */
-
 %%
+
+use std::time::{Duration, Instant};
 
 use crate::parser::{lexeme_to_string, span_to_string};
 use crate::parser::Expr;
+
+use crate::util::parse_duration;

@@ -1,7 +1,7 @@
-use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
-use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer, Span};
+use lrpar::lrpar_mod;
 
 pub mod label;
 pub mod parser;
+pub mod util;
 
 lrpar_mod!("parser/promql.y");
