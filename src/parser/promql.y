@@ -48,7 +48,7 @@ STRING
 TIMES
 
 // Operators.
-%token operatorsStart
+%token OPERATORS_START
 ADD
 DIV
 EQLC
@@ -68,10 +68,10 @@ POW
 SUB
 AT
 ATAN2
-%token operatorsEnd
+%token OPERATORS_END
 
 // Aggregators.
-%token aggregatorsStart
+%token AGGREGATORS_START
 AVG
 BOTTOMK
 COUNT
@@ -84,10 +84,10 @@ STDDEV
 STDVAR
 SUM
 TOPK
-%token aggregatorsEnd
+%token AGGREGATORS_END
 
 // Keywords.
-%token keywordsStart
+%token KEYWORDS_START
 BOOL
 BY
 GROUP_LEFT
@@ -96,21 +96,21 @@ IGNORING
 OFFSET
 ON
 WITHOUT
-%token keywordsEnd
+%token KEYWORDS_END
 
 // Preprocessors.
-%token preprocessorStart
+%token PREPROCESSOR_START
 START
 END
-%token preprocessorEnd
+%token PREPROCESSOR_END
 
 // Start symbols for the generated parser.
-%token startSymbolsStart
+%token STARTSYMBOLS_START
 START_METRIC
 START_SERIES_DESCRIPTION
 START_EXPRESSION
 START_METRIC_SELECTOR
-%token startSymbolsEnd
+%token STARTSYMBOLS_END
 
 %start start
 
@@ -567,89 +567,96 @@ START_METRIC_SELECTOR
 /*                         /\* { yylex.(*parser).unexpected("label set", "identifier or \"}\""); $$ = labels.Label{} } *\/ */
 /*                 ; */
 
-/* /\* */
-/*  * Series descriptions (only used by unit tests). */
-/*  *\/ */
-
-/* series_description: metric series_values */
-/*                         /\* { *\/ */
-/*                         /\* yylex.(*parser).generatedParserResult = &seriesDescription{ *\/ */
-/*                         /\*         labels: $1, *\/ */
-/*                         /\*         values: $2, *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 ; */
-
-/* series_values   : /\*empty*\/ */
-/*                         /\* { $$ = []SequenceValue{} } *\/ */
-/*                 | series_values SPACE series_item */
-/*                         /\* { $$ = append($1, $3...) } *\/ */
-/*                 | series_values SPACE */
-/*                         /\* { $$ = $1 } *\/ */
-/*                 | error */
-/*                         /\* { yylex.(*parser).unexpected("series values", ""); $$ = nil } *\/ */
-/*                 ; */
-
-/* series_item     : BLANK */
-/*                         /\* { $$ = []SequenceValue{{Omitted: true}}} *\/ */
-/*                 | BLANK TIMES uint */
-/*                         /\* { *\/ */
-/*                         /\* $$ = []SequenceValue{} *\/ */
-/*                         /\* for i:=uint64(0); i < $3; i++{ *\/ */
-/*                         /\*         $$ = append($$, SequenceValue{Omitted: true}) *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 | series_value */
-/*                         /\* { $$ = []SequenceValue{{Value: $1}}} *\/ */
-/*                 | series_value TIMES uint */
-/*                         /\* { *\/ */
-/*                         /\* $$ = []SequenceValue{} *\/ */
-/*                         /\* for i:=uint64(0); i <= $3; i++{ *\/ */
-/*                         /\*         $$ = append($$, SequenceValue{Value: $1}) *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 | series_value signed_number TIMES uint */
-/*                         /\* { *\/ */
-/*                         /\* $$ = []SequenceValue{} *\/ */
-/*                         /\* for i:=uint64(0); i <= $4; i++{ *\/ */
-/*                         /\*         $$ = append($$, SequenceValue{Value: $1}) *\/ */
-/*                         /\*         $1 += $2 *\/ */
-/*                         /\* } *\/ */
-/*                         /\* } *\/ */
-/*                 ; */
-
-/* series_value    : IDENTIFIER */
-/*                         /\* { *\/ */
-/*                         /\* if $1.Val != "stale" { *\/ */
-/*                         /\*         yylex.(*parser).unexpected("series values", "number or \"stale\"") *\/ */
-/*                         /\* } *\/ */
-/*                         /\* $$ = math.Float64frombits(value.StaleNaN) *\/ */
-/*                         /\* } *\/ */
-/*                 | number */
-/*                 | signed_number */
-/*                 ; */
-
-
-
-
-/* /\* */
-/*  * Keyword lists. */
-/*  *\/ */
-
-/* aggregate_op    : AVG | BOTTOMK | COUNT | COUNT_VALUES | GROUP | MAX | MIN | QUANTILE | STDDEV | STDVAR | SUM | TOPK ; */
-
-/* // inside of grouping options label names can be recognized as keywords by the lexer. This is a list of keywords that could also be a label name. */
-/* maybe_label     : AVG | BOOL | BOTTOMK | BY | COUNT | COUNT_VALUES | GROUP | GROUP_LEFT | GROUP_RIGHT | IDENTIFIER | IGNORING | LAND | LOR | LUNLESS | MAX | METRIC_IDENTIFIER | MIN | OFFSET | ON | QUANTILE | STDDEV | STDVAR | SUM | TOPK | START | END | ATAN2; */
-
-/* unary_op        : ADD | SUB; */
-
-/* match_op        : EQL | NEQ | EQL_REGEX | NEQ_REGEX ; */
-
-
 start -> Result<Expr, String>:
                 string_literal { $1 }
-        |       number_literal { $1 }
-                ;
+                | number_literal { $1 }
+;
+
+/*
+ * Series descriptions (only used by unit tests).
+ */
+/*
+series_description: metric series_values;
+series_values   :
+                | series_values SPACE series_item
+                | series_values SPACE
+                | error
+;
+
+series_item     : BLANK
+                | BLANK TIMES uint
+                | series_value
+                | series_value TIMES uint
+                | series_value signed_number TIMES uint
+;
+
+series_value    : IDENTIFIER
+                | number
+                | signed_number
+;
+*/
+
+/*
+ * Keyword lists.
+ */
+
+aggregate_op -> StorageType:
+                AVG { lexeme_to_token($1) }
+                | BOTTOMK { lexeme_to_token($1) }
+                | COUNT { lexeme_to_token($1) }
+                | COUNT_VALUES { lexeme_to_token($1) }
+                | GROUP { lexeme_to_token($1) }
+                | MAX { lexeme_to_token($1) }
+                | MIN { lexeme_to_token($1) }
+                | QUANTILE { lexeme_to_token($1) }
+                | STDDEV { lexeme_to_token($1) }
+                | STDVAR { lexeme_to_token($1) }
+                | SUM { lexeme_to_token($1) }
+                | TOPK { lexeme_to_token($1) }
+;
+
+// inside of grouping options label names can be recognized as keywords by the lexer. This is a list of keywords that could also be a label name.
+maybe_label -> StorageType:
+                AVG { lexeme_to_token($1) }
+                | BOOL { lexeme_to_token($1) }
+                | BOTTOMK { lexeme_to_token($1) }
+                | BY { lexeme_to_token($1) }
+                | COUNT { lexeme_to_token($1) }
+                | COUNT_VALUES { lexeme_to_token($1) }
+                | GROUP { lexeme_to_token($1) }
+                | GROUP_LEFT { lexeme_to_token($1) }
+                | GROUP_RIGHT { lexeme_to_token($1) }
+                | IDENTIFIER { lexeme_to_token($1) }
+                | IGNORING { lexeme_to_token($1) }
+                | LAND { lexeme_to_token($1) }
+                | LOR { lexeme_to_token($1) }
+                | LUNLESS { lexeme_to_token($1) }
+                | MAX { lexeme_to_token($1) }
+                | METRIC_IDENTIFIER { lexeme_to_token($1) }
+                | MIN { lexeme_to_token($1) }
+                | OFFSET { lexeme_to_token($1) }
+                | ON { lexeme_to_token($1) }
+                | QUANTILE { lexeme_to_token($1) }
+                | STDDEV { lexeme_to_token($1) }
+                | STDVAR { lexeme_to_token($1) }
+                | SUM { lexeme_to_token($1) }
+                | TOPK { lexeme_to_token($1) }
+                | START { lexeme_to_token($1) }
+                | END { lexeme_to_token($1) }
+                | ATAN2 { lexeme_to_token($1) }
+;
+
+unary_op -> StorageType:
+                ADD { lexeme_to_token($1) }
+                | SUB { lexeme_to_token($1) }
+;
+
+match_op -> StorageType:
+                EQL { lexeme_to_token($1) }
+                | NEQ { lexeme_to_token($1) }
+                | EQL_REGEX { lexeme_to_token($1) }
+                | NEQ_REGEX { lexeme_to_token($1) }
+;
 
 /*
  * Literals.
@@ -657,12 +664,13 @@ start -> Result<Expr, String>:
 
 number_literal -> Result<Expr, String>:
                 number { Ok(Expr::NumberLiteral { span: $span, val: $1?}) }
-                ;
+;
 
 
 signed_or_unsigned_number -> Result<f64, String>:
                 number { $1 }
-        |       signed_number  { $1 };
+                | signed_number  { $1 }
+;
 
 
 number -> Result<f64, String>:
@@ -671,12 +679,12 @@ number -> Result<f64, String>:
                         let s = $lexer.span_str($span);
                         s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
                 }
-                ;
+;
 
 signed_number -> Result<f64, String>:
                 ADD number { $2 }
-        |       SUB number { $2.map(|i| -i) }
-                ;
+                | SUB number { $2.map(|i| -i) }
+;
 
 uint -> Result<u64, String>:
                 NUMBER
@@ -684,12 +692,12 @@ uint -> Result<u64, String>:
                         let s = $lexer.span_str($span);
                         s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
                 }
-                ;
+;
 
 duration -> Result<Duration, String>:
                 DURATION
                 { parse_duration($lexer.span_str($span)) }
-                ;
+;
 
 string_literal -> Result<Expr, String>:
                 STRING
@@ -697,7 +705,7 @@ string_literal -> Result<Expr, String>:
                         let val = span_to_string($lexer, $span)?;
                         Ok(Expr::StringLiteral { span: $span, val: val})
                 }
-                ;
+;
 
 /*
  * Wrappers for optional arguments.
@@ -717,7 +725,8 @@ string_literal -> Result<Expr, String>:
 
 use std::time::{Duration, Instant};
 
-use crate::parser::{lexeme_to_string, span_to_string};
-use crate::parser::Expr;
+use crate::parser::{lexeme_to_string, span_to_string, lexeme_to_token};
+use crate::parser::{Expr, LexemeType, StorageType};
+use crate::parser::value::{NORMAL_NAN, STALE_NAN, STALE_STR};
 
 use crate::util::parse_duration;

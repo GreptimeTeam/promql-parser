@@ -19,3 +19,7 @@ pub fn lexeme_to_string(
     let span = lexeme.as_ref().unwrap().span();
     Ok(lexer.span_str(span).to_string())
 }
+
+pub fn lexeme_to_token(lexeme: Result<LexemeType, LexemeType>) -> StorageType {
+    lexeme.unwrap().tok_id()
+}
