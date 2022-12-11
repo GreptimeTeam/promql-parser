@@ -1,8 +1,4 @@
-use lrlex::lrlex_mod;
 use std::fmt::{self, Display};
-
-lrlex_mod!("token_map");
-use token_map::*;
 
 pub type TokenType = u8;
 

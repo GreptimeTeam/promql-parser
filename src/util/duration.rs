@@ -41,20 +41,20 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
     let caps = DURATION_RE.captures(ds).unwrap();
     let mut result = Duration::ZERO;
 
-    let mut checked_add = |title: &str, millis: u64| {
+    let mut add = |title: &str, millis: u64| {
         if let Some(cap) = caps.name(title) {
             let v = cap.as_str().parse::<u64>().unwrap();
             result = result + Duration::from_millis(v * millis);
         };
     };
 
-    checked_add("year", 1000 * 60 * 60 * 24 * 365); // y
-    checked_add("week", 1000 * 60 * 60 * 24 * 7); // w
-    checked_add("day", 1000 * 60 * 60 * 24); // d
-    checked_add("hour", 1000 * 60 * 60); // h
-    checked_add("minute", 1000 * 60); // m
-    checked_add("second", 1000); // s
-    checked_add("milli", 1); // ms
+    add("year", 1000 * 60 * 60 * 24 * 365); // y
+    add("week", 1000 * 60 * 60 * 24 * 7); // w
+    add("day", 1000 * 60 * 60 * 24); // d
+    add("hour", 1000 * 60 * 60); // h
+    add("minute", 1000 * 60); // m
+    add("second", 1000); // s
+    add("milli", 1); // ms
 
     if result.as_secs() > MAX_DURATION.as_secs() {
         return Err("duration out of range".into());

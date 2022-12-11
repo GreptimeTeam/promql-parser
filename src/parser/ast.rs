@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
 use super::Function;
-use crate::label::Matcher;
+use crate::label::{Matcher, Matchers};
 use crate::parser::TokenType;
 
 // EvalStmt holds an expression and information on the range it should
@@ -82,12 +82,12 @@ pub enum Expr {
 
     // VectorSelector represents a Vector selection.
     VectorSelector {
-        name: String,
+        name: Option<String>,
         // offset is the actual offset that was set in the query.
         // This never changes.
         offset: Option<Instant>,
-        start_or_end: TokenType, // Set when @ is used with start() or end()
-        label_matchers: Vec<Matcher>,
+        start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
+        label_matchers: Matchers,
     },
 
     // MatrixSelector represents a Matrix selection.
@@ -104,6 +104,26 @@ pub enum Expr {
         func: Function,       // The function that was called.
         args: Vec<Box<Expr>>, // Arguments used in the call.
     },
+}
+
+impl Expr {
+    pub fn empty_vector_selector() -> Self {
+        Self::VectorSelector {
+            name: None,
+            offset: None,
+            start_or_end: None,
+            label_matchers: Matchers::empty(),
+        }
+    }
+
+    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
+        Self::VectorSelector {
+            name,
+            offset: None,
+            start_or_end: None,
+            label_matchers: matchers,
+        }
+    }
 }
 
 #[derive(Debug)]
