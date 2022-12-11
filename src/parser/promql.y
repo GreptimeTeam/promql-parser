@@ -25,6 +25,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Diff with promql's generated_parser.y
+//
+// - no empty rule
+// - no series descriptions rule
+
 %token EQL
 BLANK
 COLON
@@ -525,137 +530,144 @@ START_METRIC_SELECTOR
 /*                         /\* { yylex.(*parser).unexpected("label matching", "identifier or \"}\""); $$ = nil} *\/ */
 /*                 ; */
 
-/* /\* */
-/*  * Metric descriptions. */
-/*  *\/ */
-
-/* metric          : metric_identifier label_set */
-/*                         /\* { $$ = append($2, labels.Label{Name: labels.MetricName, Value: $1.Val}); sort.Sort($$) } *\/ */
-/*                 | label_set */
-/*                         /\* {$$ = $1} *\/ */
-/*                 ; */
-
-
-/* metric_identifier: AVG | BOTTOMK | BY | COUNT | COUNT_VALUES | GROUP | IDENTIFIER |  LAND | LOR | LUNLESS | MAX | METRIC_IDENTIFIER | MIN | OFFSET | QUANTILE | STDDEV | STDVAR | SUM | TOPK | WITHOUT | START | END; */
-
-/* label_set       : LEFT_BRACE label_set_list RIGHT_BRACE */
-/*                         /\* { $$ = labels.New($2...) } *\/ */
-/*                 | LEFT_BRACE label_set_list COMMA RIGHT_BRACE */
-/*                         /\* { $$ = labels.New($2...) } *\/ */
-/*                 | LEFT_BRACE RIGHT_BRACE */
-/*                         /\* { $$ = labels.New() } *\/ */
-/*                 | /\* empty *\/ */
-/*                         /\* { $$ = labels.New() } *\/ */
-/*                 ; */
-
-/* label_set_list  : label_set_list COMMA label_set_item */
-/*                         /\* { $$ = append($1, $3) } *\/ */
-/*                 | label_set_item */
-/*                         /\* { $$ = []labels.Label{$1} } *\/ */
-/*                 | label_set_list error */
-/*                         /\* { yylex.(*parser).unexpected("label set", "\",\" or \"}\"", ); $$ = $1 } *\/ */
-
-/*                 ; */
-
-/* label_set_item  : IDENTIFIER EQL STRING */
-/*                         /\* { $$ = labels.Label{Name: $1.Val, Value: yylex.(*parser).unquoteString($3.Val) } } *\/ */
-/*                 | IDENTIFIER EQL error */
-/*                         /\* { yylex.(*parser).unexpected("label set", "string"); $$ = labels.Label{}} *\/ */
-/*                 | IDENTIFIER error */
-/*                         /\* { yylex.(*parser).unexpected("label set", "\"=\""); $$ = labels.Label{}} *\/ */
-/*                 | error */
-/*                         /\* { yylex.(*parser).unexpected("label set", "identifier or \"}\""); $$ = labels.Label{} } *\/ */
-/*                 ; */
-
 start -> Result<Expr, String>:
                 string_literal { $1 }
                 | number_literal { $1 }
 ;
 
 /*
- * Series descriptions (only used by unit tests).
+ * Metric descriptions.
  */
-/*
-series_description: metric series_values;
-series_values   :
-                | series_values SPACE series_item
-                | series_values SPACE
-                | error
+
+metric -> Result<Vec<Label>, String>:
+                metric_identifier label_set
+                {
+                    let label = Label::new(METRIC_NAME.to_string(), $1.val());
+                    let mut labels = $2?;
+                    labels.push(label);
+                    Ok(labels)
+                }
+                | label_set { $1 }
 ;
 
-series_item     : BLANK
-                | BLANK TIMES uint
-                | series_value
-                | series_value TIMES uint
-                | series_value signed_number TIMES uint
+
+metric_identifier -> Token:
+                AVG { lexeme_to_token($lexer, $1) }
+                | BOTTOMK { lexeme_to_token($lexer, $1) }
+                | BY { lexeme_to_token($lexer, $1) }
+                | COUNT { lexeme_to_token($lexer, $1) }
+                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
+                | GROUP { lexeme_to_token($lexer, $1) }
+                | IDENTIFIER { lexeme_to_token($lexer, $1) }
+                | LAND { lexeme_to_token($lexer, $1) }
+                | LOR { lexeme_to_token($lexer, $1) }
+                | LUNLESS { lexeme_to_token($lexer, $1) }
+                | MAX { lexeme_to_token($lexer, $1) }
+                | METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
+                | MIN { lexeme_to_token($lexer, $1) }
+                | OFFSET { lexeme_to_token($lexer, $1) }
+                | QUANTILE { lexeme_to_token($lexer, $1) }
+                | STDDEV { lexeme_to_token($lexer, $1) }
+                | STDVAR { lexeme_to_token($lexer, $1) }
+                | SUM { lexeme_to_token($lexer, $1) }
+                | TOPK { lexeme_to_token($lexer, $1) }
+                | WITHOUT { lexeme_to_token($lexer, $1) }
+                | START { lexeme_to_token($lexer, $1) }
+                | END { lexeme_to_token($lexer, $1) }
 ;
 
-series_value    : IDENTIFIER
-                | number
-                | signed_number
+label_set -> Result<Vec<Label>, String>:
+                LEFT_BRACE label_set_list RIGHT_BRACE { Ok(sort_labels($2?)) }
+                | LEFT_BRACE label_set_list COMMA RIGHT_BRACE { Ok(sort_labels($2?)) }
+                | LEFT_BRACE RIGHT_BRACE { Ok(vec![]) }
 ;
-*/
+
+label_set_list -> Result<Vec<Label>, String>:
+                label_set_list COMMA label_set_item
+                {
+                    let mut v1 = $1?;
+                    v1.push($3?);
+                    Ok(v1)
+                }
+                | label_set_item { Ok(vec![$1?]) }
+;
+
+label_set_item -> Result<Label, String>:
+                IDENTIFIER EQL STRING
+                {
+                    let name = lexeme_to_string($lexer, &$1);
+                    let value = lexeme_to_string($lexer, &$3);
+                    Ok(Label::new(name, value))
+                }
+                | IDENTIFIER EQL error { Err(format!("label set error, {}", $3)) }
+                | IDENTIFIER error { Err(format!("label set error, {}", $2)) }
+                | error { Err(format!("label set error, {}", $1)) }
+;
+
+error -> String:
+                ERROR { span_to_string($lexer, $span) }
+;
 
 /*
  * Keyword lists.
  */
 
-aggregate_op -> StorageType:
-                AVG { lexeme_to_token($1) }
-                | BOTTOMK { lexeme_to_token($1) }
-                | COUNT { lexeme_to_token($1) }
-                | COUNT_VALUES { lexeme_to_token($1) }
-                | GROUP { lexeme_to_token($1) }
-                | MAX { lexeme_to_token($1) }
-                | MIN { lexeme_to_token($1) }
-                | QUANTILE { lexeme_to_token($1) }
-                | STDDEV { lexeme_to_token($1) }
-                | STDVAR { lexeme_to_token($1) }
-                | SUM { lexeme_to_token($1) }
-                | TOPK { lexeme_to_token($1) }
+aggregate_op -> Token:
+                AVG { lexeme_to_token($lexer, $1) }
+                | BOTTOMK { lexeme_to_token($lexer, $1) }
+                | COUNT { lexeme_to_token($lexer, $1) }
+                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
+                | GROUP { lexeme_to_token($lexer, $1) }
+                | MAX { lexeme_to_token($lexer, $1) }
+                | MIN { lexeme_to_token($lexer, $1) }
+                | QUANTILE { lexeme_to_token($lexer, $1) }
+                | STDDEV { lexeme_to_token($lexer, $1) }
+                | STDVAR { lexeme_to_token($lexer, $1) }
+                | SUM { lexeme_to_token($lexer, $1) }
+                | TOPK { lexeme_to_token($lexer, $1) }
 ;
 
 // inside of grouping options label names can be recognized as keywords by the lexer. This is a list of keywords that could also be a label name.
-maybe_label -> StorageType:
-                AVG { lexeme_to_token($1) }
-                | BOOL { lexeme_to_token($1) }
-                | BOTTOMK { lexeme_to_token($1) }
-                | BY { lexeme_to_token($1) }
-                | COUNT { lexeme_to_token($1) }
-                | COUNT_VALUES { lexeme_to_token($1) }
-                | GROUP { lexeme_to_token($1) }
-                | GROUP_LEFT { lexeme_to_token($1) }
-                | GROUP_RIGHT { lexeme_to_token($1) }
-                | IDENTIFIER { lexeme_to_token($1) }
-                | IGNORING { lexeme_to_token($1) }
-                | LAND { lexeme_to_token($1) }
-                | LOR { lexeme_to_token($1) }
-                | LUNLESS { lexeme_to_token($1) }
-                | MAX { lexeme_to_token($1) }
-                | METRIC_IDENTIFIER { lexeme_to_token($1) }
-                | MIN { lexeme_to_token($1) }
-                | OFFSET { lexeme_to_token($1) }
-                | ON { lexeme_to_token($1) }
-                | QUANTILE { lexeme_to_token($1) }
-                | STDDEV { lexeme_to_token($1) }
-                | STDVAR { lexeme_to_token($1) }
-                | SUM { lexeme_to_token($1) }
-                | TOPK { lexeme_to_token($1) }
-                | START { lexeme_to_token($1) }
-                | END { lexeme_to_token($1) }
-                | ATAN2 { lexeme_to_token($1) }
+maybe_label -> Token:
+                AVG { lexeme_to_token($lexer, $1) }
+                | BOOL { lexeme_to_token($lexer, $1) }
+                | BOTTOMK { lexeme_to_token($lexer, $1) }
+                | BY { lexeme_to_token($lexer, $1) }
+                | COUNT { lexeme_to_token($lexer, $1) }
+                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
+                | GROUP { lexeme_to_token($lexer, $1) }
+                | GROUP_LEFT { lexeme_to_token($lexer, $1) }
+                | GROUP_RIGHT { lexeme_to_token($lexer, $1) }
+                | IDENTIFIER { lexeme_to_token($lexer, $1) }
+                | IGNORING { lexeme_to_token($lexer, $1) }
+                | LAND { lexeme_to_token($lexer, $1) }
+                | LOR { lexeme_to_token($lexer, $1) }
+                | LUNLESS { lexeme_to_token($lexer, $1) }
+                | MAX { lexeme_to_token($lexer, $1) }
+                | METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
+                | MIN { lexeme_to_token($lexer, $1) }
+                | OFFSET { lexeme_to_token($lexer, $1) }
+                | ON { lexeme_to_token($lexer, $1) }
+                | QUANTILE { lexeme_to_token($lexer, $1) }
+                | STDDEV { lexeme_to_token($lexer, $1) }
+                | STDVAR { lexeme_to_token($lexer, $1) }
+                | SUM { lexeme_to_token($lexer, $1) }
+                | TOPK { lexeme_to_token($lexer, $1) }
+                | START { lexeme_to_token($lexer, $1) }
+                | END { lexeme_to_token($lexer, $1) }
+                | ATAN2 { lexeme_to_token($lexer, $1) }
 ;
 
-unary_op -> StorageType:
-                ADD { lexeme_to_token($1) }
-                | SUB { lexeme_to_token($1) }
+unary_op -> Token:
+                ADD { lexeme_to_token($lexer, $1) }
+|               SUB { lexeme_to_token($lexer, $1) }
 ;
 
-match_op -> StorageType:
-                EQL { lexeme_to_token($1) }
-                | NEQ { lexeme_to_token($1) }
-                | EQL_REGEX { lexeme_to_token($1) }
-                | NEQ_REGEX { lexeme_to_token($1) }
+match_op -> Token:
+                EQL { lexeme_to_token($lexer, $1) }
+                | NEQ { lexeme_to_token($lexer, $1) }
+                | EQL_REGEX { lexeme_to_token($lexer, $1) }
+                | NEQ_REGEX { lexeme_to_token($lexer, $1) }
 ;
 
 /*
@@ -676,8 +688,8 @@ signed_or_unsigned_number -> Result<f64, String>:
 number -> Result<f64, String>:
                 NUMBER
                 {
-                        let s = $lexer.span_str($span);
-                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
+                    let s = $lexer.span_str($span);
+                    s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
                 }
 ;
 
@@ -689,8 +701,8 @@ signed_number -> Result<f64, String>:
 uint -> Result<u64, String>:
                 NUMBER
                 {
-                        let s = $lexer.span_str($span);
-                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
+                    let s = $lexer.span_str($span);
+                    s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
                 }
 ;
 
@@ -702,8 +714,8 @@ duration -> Result<Duration, String>:
 string_literal -> Result<Expr, String>:
                 STRING
                 {
-                        let val = span_to_string($lexer, $span)?;
-                        Ok(Expr::StringLiteral { span: $span, val: val})
+                    let val = span_to_string($lexer, $span);
+                    Ok(Expr::StringLiteral { span: $span, val: val})
                 }
 ;
 
@@ -726,7 +738,9 @@ string_literal -> Result<Expr, String>:
 use std::time::{Duration, Instant};
 
 use crate::parser::{lexeme_to_string, span_to_string, lexeme_to_token};
-use crate::parser::{Expr, LexemeType, StorageType};
+use crate::parser::{Expr, Token};
 use crate::parser::value::{NORMAL_NAN, STALE_NAN, STALE_STR};
+
+use crate::label::{self, Label, Labels, METRIC_NAME, sort_labels};
 
 use crate::util::parse_duration;

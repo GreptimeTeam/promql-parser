@@ -2,9 +2,9 @@ use lrpar::Span;
 use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
+use super::Function;
 use crate::label::Matcher;
-use crate::parser::Function;
-use crate::parser::ItemType;
+use crate::parser::TokenType;
 
 // EvalStmt holds an expression and information on the range it should
 // be evaluated on.
@@ -25,7 +25,7 @@ pub struct EvalStmt {
 pub enum Expr {
     // AggregateExpr represents an aggregation operation on a Vector.
     AggregateExpr {
-        op: ItemType,          // The used aggregation operation.
+        op: TokenType,         // The used aggregation operation.
         expr: Box<Expr>,       // The Vector expression over which is aggregated.
         param: Box<Expr>,      // Parameter used by some aggregators.
         grouping: Vec<String>, // The labels by which to group the Vector.
@@ -35,13 +35,13 @@ pub enum Expr {
     // UnaryExpr represents a unary operation on another expression.
     // Currently unary operations are only supported for Scalars.
     UnaryExpr {
-        op: ItemType,
+        op: TokenType,
         expr: Box<Expr>,
     },
 
     // BinaryExpr represents a binary expression between two child expressions.
     BinaryExpr {
-        op: ItemType,   // The operation of the expression.
+        op: TokenType,  // The operation of the expression.
         lhs: Box<Expr>, // The operands on the left sides of the operator.
         rhs: Box<Expr>, // The operands on the right sides of the operator.
 
@@ -66,7 +66,7 @@ pub enum Expr {
         range: Duration,
         offset: Instant,
         timestamp: Option<i64>,
-        start_or_end: ItemType, // Set when @ is used with start() or end()
+        start_or_end: TokenType, // Set when @ is used with start() or end()
         step: Duration,
     },
 
@@ -86,7 +86,7 @@ pub enum Expr {
         // offset is the actual offset that was set in the query.
         // This never changes.
         offset: Option<Instant>,
-        start_or_end: ItemType, // Set when @ is used with start() or end()
+        start_or_end: TokenType, // Set when @ is used with start() or end()
         label_matchers: Vec<Matcher>,
     },
 
