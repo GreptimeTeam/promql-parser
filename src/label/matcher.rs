@@ -1,38 +1,105 @@
-// Possible MatchTypes.
+use crate::parser::Token;
+use crate::parser::{T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use regex::Regex;
+
 #[derive(Debug)]
-pub enum MatchType {
-    MatchEqual,
-    MatchNotEqual,
-    MatchRegexp,
-    MatchNotRegexp,
+pub enum MatchOp {
+    Equal,
+    NotEqual,
+    Re(Regex),
+    NotRe(Regex),
 }
 
 // Matcher models the matching of a label.
 #[derive(Debug)]
 pub struct Matcher {
-    typ: MatchType,
+    op: MatchOp,
     name: String,
     value: String,
-    // FIXME: Regex Matcher
-    // re *FastRegexMatcher
 }
 
 impl Matcher {
-    pub fn new(t: MatchType, n: &str, v: &str) -> Self {
-        Self {
-            typ: t,
-            name: n.into(),
-            value: n.into(),
-        }
+    pub fn new(op: MatchOp, name: String, value: String) -> Self {
+        Self { op, name, value }
     }
 
-    // Matches returns whether the matcher matches the given string value.
-    pub fn matches(&self, s: &str) -> bool {
-        match self.typ {
-            MatchType::MatchEqual => self.value.eq(s),
-            MatchType::MatchNotEqual => self.value.ne(s),
-            MatchType::MatchRegexp => todo!(),
-            MatchType::MatchNotRegexp => todo!(),
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    // matches returns whether the matcher matches the given string value.
+    pub fn is_match(&self, s: &str) -> bool {
+        match &self.op {
+            MatchOp::Equal => self.value.eq(s),
+            MatchOp::NotEqual => self.value.ne(s),
+            MatchOp::Re(r) => r.is_match(s),
+            MatchOp::NotRe(r) => !r.is_match(s),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct Matchers {
+    matchers: Vec<Matcher>,
+}
+
+impl Matchers {
+    pub fn empty() -> Self {
+        Self { matchers: vec![] }
+    }
+
+    pub fn new(matchers: Vec<Matcher>) -> Self {
+        Self { matchers }
+    }
+
+    pub fn append(mut self, matcher: Matcher) -> Self {
+        self.matchers.push(matcher);
+        self
+    }
+}
+
+pub fn new_matcher(token: Token, name: String, value: String) -> Result<Matcher, String> {
+    match token.id() {
+        T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
+        T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
+        T_EQL_REGEX => {
+            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+            Ok(Matcher::new(MatchOp::Re(re), name, value))
+        }
+        T_NEQ_REGEX => {
+            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+            Ok(Matcher::new(MatchOp::NotRe(re), name, value))
+        }
+        _ => Err(format!("invalid match op {}", token.val())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_eq_ne() {
+        let op = MatchOp::Equal;
+        let matcher = Matcher::new(op, "name".into(), "up".into());
+        assert!(matcher.is_match("up"));
+        assert!(!matcher.is_match("down"));
+
+        let op = MatchOp::NotEqual;
+        let matcher = Matcher::new(op, "name".into(), "up".into());
+        assert!(matcher.is_match("foo"));
+        assert!(matcher.is_match("bar"));
+        assert!(!matcher.is_match("up"));
+    }
+
+    #[test]
+    fn test_re() {
+        let value = "api/v1/.*".to_string();
+        let re = Regex::new(&value).unwrap();
+        let op = MatchOp::Re(re);
+        let matcher = Matcher::new(op, "name".into(), value);
+        assert!(matcher.is_match("api/v1/query"));
+        assert!(matcher.is_match("api/v1/range_query"));
+        assert!(!matcher.is_match("api/v2"));
     }
 }
