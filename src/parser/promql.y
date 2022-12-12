@@ -390,11 +390,11 @@ string_literal -> Result<Expr, String>:
 
 %%
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::parser::{lexeme_to_string, span_to_string, lexeme_to_token};
 use crate::parser::{Expr, Token};
 
-use crate::label::{self, Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
+use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 
 use crate::util::parse_duration;
