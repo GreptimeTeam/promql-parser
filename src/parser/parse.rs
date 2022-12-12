@@ -1,4 +1,4 @@
-use super::{lex, Expr};
+use crate::parser::{lex, Expr};
 
 pub fn parse(input: &str) -> Result<Expr, String> {
     let lexer = lex::lexer(input);

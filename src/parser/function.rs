@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
-use super::ValueType;
+use crate::parser::ValueType;
 
 #[derive(Debug)]
 pub struct Function {

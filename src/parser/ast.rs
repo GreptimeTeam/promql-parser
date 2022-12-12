@@ -2,9 +2,8 @@ use lrpar::Span;
 use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
-use super::Function;
 use crate::label::Matchers;
-use crate::parser::TokenType;
+use crate::parser::{Function, TokenType};
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
