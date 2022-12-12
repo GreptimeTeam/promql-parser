@@ -394,7 +394,6 @@ use std::time::{Duration, Instant};
 
 use crate::parser::{lexeme_to_string, span_to_string, lexeme_to_token};
 use crate::parser::{Expr, Token};
-use crate::parser::value::STALE_STR;
 
 use crate::label::{self, Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 
