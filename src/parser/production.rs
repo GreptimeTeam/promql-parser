@@ -2,7 +2,7 @@ use super::LexemeType;
 use super::{Token, TokenType};
 use lrpar::{Lexeme, NonStreamingLexer, Span};
 
-// caller MUST pay attention to the index out of bounds issue
+/// caller MUST pay attention to the index out of bounds issue
 pub fn span_to_string(lexer: &dyn NonStreamingLexer<LexemeType, TokenType>, span: Span) -> String {
     lexer.span_str(span).to_string()
 }

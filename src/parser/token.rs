@@ -2,11 +2,10 @@ use std::fmt::{self, Display};
 
 pub type TokenType = u8;
 
-// Item represents a token or text string returned from the scanner.
 #[derive(Debug)]
 pub struct Token {
-    id: TokenType, // The type of this Item.
-    val: String,   // The value of this Item.
+    id: TokenType,
+    val: String,
 }
 
 impl Display for Token {

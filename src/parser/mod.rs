@@ -14,8 +14,6 @@ pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
 pub use token::{Token, TokenType};
 pub use value::{Value, ValueType};
 
-use crate::label::{MatchOp, Matcher};
-
 use lrlex::lrlex_mod;
 lrlex_mod!("token_map");
 pub use token_map::*;

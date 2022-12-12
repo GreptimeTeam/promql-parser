@@ -3,11 +3,12 @@ use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
 use super::Function;
-use crate::label::{Matcher, Matchers};
+use crate::label::Matchers;
 use crate::parser::TokenType;
 
-// EvalStmt holds an expression and information on the range it should
-// be evaluated on.
+/// EvalStmt holds an expression and information on the range it should
+/// be evaluated on.
+// TODO:
 pub struct EvalStmt {
     expr: Expr, // Expression to be evaluated.
 
@@ -23,7 +24,7 @@ pub struct EvalStmt {
 
 #[derive(Debug)]
 pub enum Expr {
-    // AggregateExpr represents an aggregation operation on a Vector.
+    /// AggregateExpr represents an aggregation operation on a Vector.
     AggregateExpr {
         op: TokenType,         // The used aggregation operation.
         expr: Box<Expr>,       // The Vector expression over which is aggregated.
@@ -32,14 +33,14 @@ pub enum Expr {
         without: bool,         // Whether to drop the given labels rather than keep them.
     },
 
-    // UnaryExpr represents a unary operation on another expression.
-    // Currently unary operations are only supported for Scalars.
+    /// UnaryExpr represents a unary operation on another expression.
+    /// Currently unary operations are only supported for Scalars.
     UnaryExpr {
         op: TokenType,
         expr: Box<Expr>,
     },
 
-    // BinaryExpr represents a binary expression between two child expressions.
+    /// BinaryExpr represents a binary expression between two child expressions.
     BinaryExpr {
         op: TokenType,  // The operation of the expression.
         lhs: Box<Expr>, // The operands on the left sides of the operator.
@@ -53,14 +54,12 @@ pub enum Expr {
         return_bool: bool,
     },
 
-    // ParenExpr wraps an expression so it cannot be disassembled as a consequence
-    // of operator precedence.
+    /// ParenExpr wraps an expression so it cannot be disassembled as a consequence
+    /// of operator precedence.
     ParenExpr {
         expr: Box<Expr>,
     },
 
-    // SubqueryExpr represents a subquery.
-    // TODO: need more descriptions.
     SubqueryExpr {
         expr: Box<Expr>,
         range: Duration,
@@ -80,7 +79,6 @@ pub enum Expr {
         span: Span,
     },
 
-    // VectorSelector represents a Vector selection.
     VectorSelector {
         name: Option<String>,
         // offset is the actual offset that was set in the query.
@@ -90,7 +88,6 @@ pub enum Expr {
         label_matchers: Matchers,
     },
 
-    // MatrixSelector represents a Matrix selection.
     MatrixSelector {
         // It is safe to assume that this is an VectorSelector
         // if the parser hasn't returned an error.
@@ -98,7 +95,7 @@ pub enum Expr {
         range: Duration,
     },
 
-    // Call represents a function call.
+    /// Call represents a function call.
     // TODO: need more descriptions
     Call {
         func: Function,       // The function that was called.
