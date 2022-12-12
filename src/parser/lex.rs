@@ -1,4 +1,4 @@
-use super::TokenType;
+use crate::parser::TokenType;
 use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
 
@@ -9,43 +9,44 @@ pub type Lexer<'a> = LRNonStreamingLexer<'a, 'a, LexemeType, TokenType>;
 pub fn lexer(s: &str) -> Lexer {
     let mut start = 0;
     let mut len = "node_cpu_seconds_total".len();
-    let metric_identifier_lexeme = DefaultLexeme::new(super::T_METRIC_IDENTIFIER, start, len);
+    let metric_identifier_lexeme =
+        DefaultLexeme::new(crate::parser::T_METRIC_IDENTIFIER, start, len);
 
     start += len;
     len = "{".len();
-    let left_brace_lexeme = DefaultLexeme::new(super::T_LEFT_BRACE, start, len);
+    let left_brace_lexeme = DefaultLexeme::new(crate::parser::T_LEFT_BRACE, start, len);
 
     start += len;
     len = "cpu".len();
-    let identifier1_lexeme = DefaultLexeme::new(super::T_IDENTIFIER, start, len);
+    let identifier1_lexeme = DefaultLexeme::new(crate::parser::T_IDENTIFIER, start, len);
 
     start += len;
     len = "=".len();
-    let eql1_lexeme = DefaultLexeme::new(super::T_EQL, start, len);
+    let eql1_lexeme = DefaultLexeme::new(crate::parser::T_EQL, start, len);
 
     start += len;
     len = "0".len();
-    let val1_lexeme = DefaultLexeme::new(super::T_STRING, start, len);
+    let val1_lexeme = DefaultLexeme::new(crate::parser::T_STRING, start, len);
 
     start += len;
     len = ",".len();
-    let comma_lexeme = DefaultLexeme::new(super::T_COMMA, start, len);
+    let comma_lexeme = DefaultLexeme::new(crate::parser::T_COMMA, start, len);
 
     start += len;
     len = "mode".len();
-    let identifier2_lexeme = DefaultLexeme::new(super::T_IDENTIFIER, start, len);
+    let identifier2_lexeme = DefaultLexeme::new(crate::parser::T_IDENTIFIER, start, len);
 
     start += len;
     len = "=".len();
-    let eql2_lexeme = DefaultLexeme::new(super::T_EQL, start, len);
+    let eql2_lexeme = DefaultLexeme::new(crate::parser::T_EQL, start, len);
 
     start += len;
     len = "idel".len();
-    let val2_lexeme = DefaultLexeme::new(super::T_STRING, start, len);
+    let val2_lexeme = DefaultLexeme::new(crate::parser::T_STRING, start, len);
 
     start += len;
     len = "}".len();
-    let right_brace_lexeme = DefaultLexeme::new(super::T_RIGHT_BRACE, start, len);
+    let right_brace_lexeme = DefaultLexeme::new(crate::parser::T_RIGHT_BRACE, start, len);
 
     let lexemes = vec![
         metric_identifier_lexeme,

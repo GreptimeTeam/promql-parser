@@ -1,5 +1,4 @@
-use super::LexemeType;
-use super::{Token, TokenType};
+use crate::parser::{LexemeType, Token, TokenType};
 use lrpar::{Lexeme, NonStreamingLexer, Span};
 
 /// caller MUST pay attention to the index out of bounds issue
