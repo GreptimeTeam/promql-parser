@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - 'docs/**'
+      - 'config/**'
+      - '**.md'
+      - '.dockerignore'
+      - 'docker/**'
+      - '.gitignore'
+  push:
+    branches:
+      - "main"
+      - "develop"
+    paths-ignore:
+      - 'docs/**'
+      - 'config/**'
+      - '**.md'
+      - '.dockerignore'
+      - 'docker/**'
+      - '.gitignore'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  typos:
+    name: Spell Check with Typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: crate-ci/typos@v1.0.4
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup component add clippy
+      - run: cargo clippy -- -D warnings
