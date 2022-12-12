@@ -1,7 +1,5 @@
 use std::fmt::{self, Display};
 
-pub const STALE_STR: &'static str = "stale";
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValueType {
     Vector,

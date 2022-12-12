@@ -8,7 +8,6 @@ use crate::parser::TokenType;
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
-// TODO:
 pub struct EvalStmt {
     expr: Expr, // Expression to be evaluated.
 
