@@ -1,12 +1,12 @@
+use lrpar::Span;
 use std::fmt::{self, Display};
 use std::time::{Duration, Instant};
 
-use crate::label::Matcher;
-use crate::parser::Function;
-use crate::parser::ItemType;
+use crate::label::Matchers;
+use crate::parser::{Function, TokenType};
 
-// EvalStmt holds an expression and information on the range it should
-// be evaluated on.
+/// EvalStmt holds an expression and information on the range it should
+/// be evaluated on.
 pub struct EvalStmt {
     expr: Expr, // Expression to be evaluated.
 
@@ -22,25 +22,25 @@ pub struct EvalStmt {
 
 #[derive(Debug)]
 pub enum Expr {
-    // AggregateExpr represents an aggregation operation on a Vector.
+    /// AggregateExpr represents an aggregation operation on a Vector.
     AggregateExpr {
-        op: ItemType,          // The used aggregation operation.
+        op: TokenType,         // The used aggregation operation.
         expr: Box<Expr>,       // The Vector expression over which is aggregated.
         param: Box<Expr>,      // Parameter used by some aggregators.
         grouping: Vec<String>, // The labels by which to group the Vector.
         without: bool,         // Whether to drop the given labels rather than keep them.
     },
 
-    // UnaryExpr represents a unary operation on another expression.
-    // Currently unary operations are only supported for Scalars.
+    /// UnaryExpr represents a unary operation on another expression.
+    /// Currently unary operations are only supported for Scalars.
     UnaryExpr {
-        op: ItemType,
+        op: TokenType,
         expr: Box<Expr>,
     },
 
-    // BinaryExpr represents a binary expression between two child expressions.
+    /// BinaryExpr represents a binary expression between two child expressions.
     BinaryExpr {
-        op: ItemType,   // The operation of the expression.
+        op: TokenType,  // The operation of the expression.
         lhs: Box<Expr>, // The operands on the left sides of the operator.
         rhs: Box<Expr>, // The operands on the right sides of the operator.
 
@@ -52,42 +52,40 @@ pub enum Expr {
         return_bool: bool,
     },
 
-    // ParenExpr wraps an expression so it cannot be disassembled as a consequence
-    // of operator precedence.
+    /// ParenExpr wraps an expression so it cannot be disassembled as a consequence
+    /// of operator precedence.
     ParenExpr {
         expr: Box<Expr>,
     },
 
-    // SubqueryExpr represents a subquery.
-    // TODO: need more descriptions.
     SubqueryExpr {
         expr: Box<Expr>,
         range: Duration,
         offset: Instant,
         timestamp: Option<i64>,
-        start_or_end: ItemType, // Set when @ is used with start() or end()
+        start_or_end: TokenType, // Set when @ is used with start() or end()
         step: Duration,
     },
 
     NumberLiteral {
         val: f64,
+        span: Span,
     },
 
     StringLiteral {
         val: String,
+        span: Span,
     },
 
-    // VectorSelector represents a Vector selection.
     VectorSelector {
-        name: String,
+        name: Option<String>,
         // offset is the actual offset that was set in the query.
         // This never changes.
         offset: Option<Instant>,
-        start_or_end: ItemType, // Set when @ is used with start() or end()
-        label_matchers: Vec<Matcher>,
+        start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
+        label_matchers: Matchers,
     },
 
-    // MatrixSelector represents a Matrix selection.
     MatrixSelector {
         // It is safe to assume that this is an VectorSelector
         // if the parser hasn't returned an error.
@@ -95,12 +93,32 @@ pub enum Expr {
         range: Duration,
     },
 
-    // Call represents a function call.
+    /// Call represents a function call.
     // TODO: need more descriptions
     Call {
         func: Function,       // The function that was called.
         args: Vec<Box<Expr>>, // Arguments used in the call.
     },
+}
+
+impl Expr {
+    pub fn empty_vector_selector() -> Self {
+        Self::VectorSelector {
+            name: None,
+            offset: None,
+            start_or_end: None,
+            label_matchers: Matchers::empty(),
+        }
+    }
+
+    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
+        Self::VectorSelector {
+            name,
+            offset: None,
+            start_or_end: None,
+            label_matchers: matchers,
+        }
+    }
 }
 
 #[derive(Debug)]
