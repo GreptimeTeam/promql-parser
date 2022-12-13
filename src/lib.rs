@@ -11,10 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![allow(clippy::let_unit_value)]
+lrpar::lrpar_mod!("parser/promql.y");
 
 pub mod label;
 pub mod parser;
 pub mod util;
-
-use lrpar::lrpar_mod;
-lrpar_mod!("parser/promql.y");

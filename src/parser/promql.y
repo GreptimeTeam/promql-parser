@@ -169,7 +169,7 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1);
                         let value = lexeme_to_string($lexer, &$3);
-                        Ok(new_matcher($2, name, value)?)
+                        new_matcher($2, name, value)
                 }
                 | IDENTIFIER match_op error
                 {
@@ -349,16 +349,12 @@ uint -> Result<u64, String>:
                 ;
 
 duration -> Result<Duration, String>:
-                DURATION
-                { parse_duration($lexer.span_str($span)) }
+                DURATION { parse_duration($lexer.span_str($span)) }
                 ;
 
 string_literal -> Result<Expr, String>:
                 STRING
-                {
-                        let val = span_to_string($lexer, $span);
-                        Ok(Expr::StringLiteral { span: $span, val: val})
-                }
+                { Ok(Expr::StringLiteral { span: $span, val: span_to_string($lexer, $span) }) }
                 ;
 
 // TODO
@@ -377,12 +373,8 @@ string_literal -> Result<Expr, String>:
 /*                 ; */
 
 %%
-
 use std::time::Duration;
 
-use crate::parser::{lexeme_to_string, span_to_string, lexeme_to_token};
-use crate::parser::{Expr, Token};
-
+use crate::parser::{Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
-
 use crate::util::parse_duration;
