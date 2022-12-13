@@ -1,0 +1,21 @@
+# manually check and fix the license declaration
+#
+# docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header check
+# docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
+#
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: Greptime Team
+
+  paths:
+    - "**/*.rs"
+
+  paths-ignore:
+    - "**/*.y"
+
+  comment: on-failure
+
+dependency:
+  files:
+    - Cargo.toml
