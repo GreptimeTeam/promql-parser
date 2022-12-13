@@ -40,7 +40,7 @@ const DAY_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
 const WEEK_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
 const YEAR_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 365);
 
-const ALL_CAPS: [(&'static str, Duration); 7] = [
+const ALL_CAPS: [(&str, Duration); 7] = [
     ("y", YEAR_DURATION),
     ("w", WEEK_DURATION),
     ("d", DAY_DURATION),
@@ -66,7 +66,7 @@ const ALL_CAPS: [(&'static str, Duration); 7] = [
 /// assert_eq!(util::parse_duration("4d1h").unwrap(), Duration::from_secs(3600 * 97));
 /// ```
 pub fn parse_duration(ds: &str) -> Result<Duration, String> {
-    if ds == "" {
+    if ds.is_empty() {
         return Err("empty duration string".into());
     } else if ds == "0" {
         return Ok(Duration::ZERO); // Allow 0 without a unit.
@@ -88,7 +88,7 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
         .fold(Ok(Duration::ZERO), |acc, x| {
             acc.and_then(|d| {
                 d.checked_add(x.unwrap_or(Duration::ZERO))
-                    .ok_or("duration overflowed".into())
+                    .ok_or_else(|| "duration overflowed".into())
             })
         })
 }

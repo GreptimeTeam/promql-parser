@@ -75,7 +75,7 @@ pub fn lexer(s: &str) -> Lexer {
         right_brace_lexeme,
     ]
     .into_iter()
-    .map(|l| Ok(l))
+    .map(Ok)
     .collect();
 
     LRNonStreamingLexer::new(s, lexemes, Vec::new())

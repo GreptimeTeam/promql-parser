@@ -14,7 +14,7 @@
 
 use std::fmt::{self, Display};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValueType {
     Vector,
     Scalar,
