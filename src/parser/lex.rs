@@ -13,9 +13,21 @@
 // limitations under the License.
 
 use crate::parser::token::*;
+use lazy_static::lazy_static;
 use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug};
+
+lazy_static! {
+    static ref dec_digits_set: HashSet<char> = "0123456789".chars().into_iter().collect();
+    static ref hex_digits_set: HashSet<char> =
+        "0123456789abcdefABCDEF".chars().into_iter().collect();
+    static ref all_duration_units: HashSet<char> = HashSet::from(['s', 'm', 'h', 'd', 'w', 'y']);
+    static ref all_duration_but_year_units: HashSet<char> =
+        HashSet::from(['s', 'm', 'h', 'd', 'w']);
+    static ref only_s_duration_units: HashSet<char> = HashSet::from(['s']);
+    static ref space_set: HashSet<char> = HashSet::from([' ', '\t', '\n', '\r']);
+}
 
 pub type LexemeType = DefaultLexeme<TokenType>;
 
@@ -113,10 +125,11 @@ enum LexerState {
     Start,
     End,
     Lexeme(TokenType),
+    /// consume all the remaining spaces, and ignore them
     Space,
-    String(char),
-    KeywordOrIdentifier(char),
-    NumberOrDuration(char),
+    String,
+    KeywordOrIdentifier,
+    NumberOrDuration,
     Duration,
     InsideBraces,
     LineComment,
@@ -137,6 +150,7 @@ impl LexerState {
                 }
 
                 if ctx.peek() == Some('#') {
+                    ctx.pop();
                     return LexerState::LineComment;
                 }
 
@@ -179,9 +193,15 @@ impl LexerState {
                         }
                         _ => LexerState::Lexeme(T_GTR),
                     },
-                    Some(ch) if is_digit(ch) => LexerState::NumberOrDuration(ch),
+                    Some(ch) if is_digit(ch) => {
+                        ctx.backup();
+                        LexerState::NumberOrDuration
+                    }
                     Some('.') => match ctx.peek() {
-                        Some(ch) if is_digit(ch) => LexerState::NumberOrDuration(ch),
+                        Some(ch) if is_digit(ch) => {
+                            ctx.backup();
+                            LexerState::NumberOrDuration
+                        }
                         Some(ch) => {
                             LexerState::Err(format!("unexpected character after '.' {}", ch))
                         }
@@ -189,17 +209,20 @@ impl LexerState {
                     },
                     Some(ch) if is_string_open(ch) => {
                         ctx.string_open = true;
-                        LexerState::String(ch)
+                        LexerState::String
                     }
-                    Some(ch) if is_alpha(ch) => LexerState::KeywordOrIdentifier(ch),
-                    Some(':') if !ctx.bracket_open => LexerState::KeywordOrIdentifier(':'),
-                    Some(':') if !ctx.got_colon => {
-                        ctx.got_colon = true;
-                        LexerState::Lexeme(T_COLON)
-                    }
-                    // : is in [], and : is already found once
-                    Some(':') => LexerState::Err(format!("unexpected colon ':'")),
+                    Some(ch) if is_alpha(ch) || ch == ':' => {
+                        if !ctx.bracket_open {
+                            ctx.backup();
+                            return LexerState::KeywordOrIdentifier;
+                        }
+                        if ctx.got_colon {
+                            return LexerState::Err("unexpected colon ':'".into());
+                        }
 
+                        ctx.got_colon = true;
+                        return LexerState::Lexeme(T_COLON);
+                    }
                     Some('(') => {
                         ctx.paren_depth += 1;
                         LexerState::Lexeme(T_LEFT_PAREN)
@@ -250,22 +273,29 @@ impl LexerState {
             LexerState::End => LexerState::Err("End state can not shift forward.".into()),
             LexerState::Lexeme(_) => LexerState::Start,
             LexerState::Space => {
-                while let Some(ch) = ctx.peek() {
-                    if is_space(ch) {
-                        ctx.pop();
-                    } else {
-                        break;
-                    }
-                }
-                ctx.align_pos();
+                accept_space(ctx);
                 LexerState::Start
             }
-            LexerState::String(_) => todo!(),
-            LexerState::KeywordOrIdentifier(_) => todo!(),
-            LexerState::NumberOrDuration(_) => todo!(),
+            LexerState::String => todo!(),
+            LexerState::KeywordOrIdentifier => keyword_or_identifier(ctx),
+            LexerState::NumberOrDuration => {
+                if scan_number(ctx) {
+                    return LexerState::Lexeme(T_NUMBER);
+                }
+                if accept_remaining_duration(ctx) {
+                    return LexerState::Lexeme(T_DURATION);
+                }
+                return LexerState::Err(format!(
+                    "bad number or duration syntax: {}",
+                    ctx.lexeme_string()
+                ));
+            }
             LexerState::Duration => todo!(),
             LexerState::InsideBraces => todo!(),
-            LexerState::LineComment => todo!(),
+            LexerState::LineComment => {
+                ignore_comment_line(ctx);
+                LexerState::Start
+            }
             LexerState::Escape => todo!(),
             LexerState::Err(_) => LexerState::End,
         }
@@ -312,6 +342,14 @@ impl Context {
         c
     }
 
+    /// if the nothing , then this will do nothing.
+    pub fn backup(&mut self) {
+        if let Some(ch) = self.chars.get(self.idx - 1) {
+            self.pos -= ch.len_utf8();
+            self.idx -= 1;
+        };
+    }
+
     /// get the first char.
     pub fn peek(&self) -> Option<char> {
         self.chars.get(self.idx + 1).copied()
@@ -320,13 +358,134 @@ impl Context {
     /// caller MUST hold the token_id and only need the span from the context.
     pub fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
         let lexeme = DefaultLexeme::new(token_id, self.start, self.pos - self.start);
-        self.align_pos();
+        self.ignore();
         lexeme
     }
 
     /// ignore the text between start and pos
-    pub fn align_pos(&mut self) {
+    pub fn ignore(&mut self) {
         self.start = self.pos;
+    }
+
+    pub fn lexeme_string(&self) -> String {
+        let mut s = String::from("");
+        let mut pos = self.pos;
+        let mut idx = self.idx;
+        while pos >= self.start {
+            if let Some(&ch) = self.chars.get(idx - 1) {
+                pos -= ch.len_utf8();
+                idx -= 1;
+                s.push(ch);
+            };
+        }
+        s.chars().rev().collect()
+    }
+}
+
+fn keyword_or_identifier(ctx: &mut Context) -> LexerState {
+    while let Some(ch) = ctx.pop() {
+        if !is_alpha_numeric(ch) && ch != ':' {
+            break;
+        }
+    }
+
+    if ctx.peek().is_some() {
+        ctx.backup();
+    }
+
+    let s = ctx.lexeme_string();
+    match get_keyword_token(&s.to_lowercase()) {
+        Some(token_id) => LexerState::Lexeme(token_id),
+        None if s.contains(':') => LexerState::Lexeme(T_METRIC_IDENTIFIER),
+        _ => LexerState::Lexeme(T_IDENTIFIER),
+    }
+}
+
+/// # has already not been consumed.
+fn ignore_comment_line(ctx: &mut Context) {
+    while let Some(ch) = ctx.pop() {
+        if is_end_of_line(ch) {
+            break;
+        }
+    }
+    ctx.ignore();
+}
+
+/// accept consumes the next char if it's from the valid set.
+fn accept(ctx: &mut Context, set: &HashSet<char>) -> bool {
+    if let Some(ch) = ctx.peek() {
+        if set.contains(&ch) {
+            ctx.pop();
+            return true;
+        }
+    }
+    false
+}
+
+/// accept_run consumes a run of char from the valid set.
+fn accept_run(ctx: &mut Context, set: &HashSet<char>) {
+    while let Some(ch) = ctx.peek() {
+        if set.contains(&ch) {
+            ctx.pop();
+        } else {
+            break;
+        }
+    }
+}
+
+/// accept_space consumes a run of space, and ignore them
+fn accept_space(ctx: &mut Context) {
+    accept_run(ctx, &space_set);
+    ctx.ignore();
+}
+
+/// scan_number scans numbers of different formats. The scanned Item is
+/// not necessarily a valid number. This case is caught by the parser.
+fn scan_number(ctx: &mut Context) -> bool {
+    let mut digits: &HashSet<char> = &dec_digits_set;
+
+    if accept(ctx, &HashSet::from(['0'])) && accept(ctx, &HashSet::from(['x', 'X'])) {
+        digits = &hex_digits_set;
+    }
+    accept_run(ctx, digits);
+    if accept(ctx, &HashSet::from(['.'])) {
+        accept_run(ctx, digits);
+    }
+    if accept(ctx, &HashSet::from(['e', 'E'])) {
+        accept(ctx, &HashSet::from(['+', '-']));
+        accept_run(ctx, &dec_digits_set);
+    }
+    // Next thing must not be alphanumeric unless it's the times token
+    match ctx.peek() {
+        Some(ch) if is_alpha_numeric(ch) => false,
+        _ => true,
+    }
+}
+
+fn accept_remaining_duration(ctx: &mut Context) -> bool {
+    // Next two char must be a valid duration.
+    if !accept(ctx, &all_duration_units) {
+        return false;
+    }
+    // Support for ms. Bad units like hs, ys will be caught when we actually
+    // parse the duration.
+    accept(ctx, &only_s_duration_units);
+
+    // Next char can be another number then a unit.
+    while accept(ctx, &dec_digits_set) {
+        accept_run(ctx, &dec_digits_set);
+        // y is no longer in the list as it should always come first in durations.
+        if !accept(ctx, &all_duration_units) {
+            return false;
+        }
+        // Support for ms. Bad units like hs, ys will be caught when we actually
+        // parse the duration.
+        accept(ctx, &only_s_duration_units);
+    }
+
+    match ctx.peek() {
+        Some(ch) if is_alpha_numeric(ch) => false,
+        _ => true,
     }
 }
 
@@ -335,7 +494,7 @@ fn is_string_open(ch: char) -> bool {
 }
 
 fn is_space(ch: char) -> bool {
-    ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+    space_set.contains(&ch)
 }
 
 fn is_end_of_line(ch: char) -> bool {
@@ -367,8 +526,8 @@ mod tests {
 
     #[test]
     fn test_lexer() {
-        // let lexer = Lexer::new("= == != ,+  -*  /% ! == ");
-        let lexer = Lexer::new("!a=");
+        let lexer = Lexer::new("arstrast 123.123 0x111 1y2m 5m = == != ,+  -*  /% ! == ");
+        // let lexer = Lexer::new("!a=");
         for lex in lexer {
             match lex {
                 Ok(lexeme) => println!("{:?}, display:{}", lexeme, token_display(lexeme.tok_id())),

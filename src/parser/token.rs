@@ -48,73 +48,115 @@ pub type TokenType = u8;
 // }
 
 lazy_static! {
-    static ref TOKEN_DISPLAY: HashMap<TokenType, &'static str> = {
-        let mut m = HashMap::new();
+    static ref TOKEN_DISPLAY: HashMap<TokenType, &'static str> =
+        [
+            // Operators.
+            (T_LAND, "and"),
+            (T_LOR, "or"),
+            (T_LUNLESS, "unless"),
+            (T_ATAN2, "atan2"),
 
-        // Operators.
-        m.insert(T_LAND, "and");
-        m.insert(T_LOR, "or");
-        m.insert(T_LUNLESS, "unless");
-        m.insert(T_ATAN2, "atan2");
+            // Aggregators.
+            (T_SUM, "sum"),
+            (T_AVG, "avg"),
+            (T_COUNT, "count"),
+            (T_MIN, "min"),
+            (T_MAX, "max"),
+            (T_GROUP, "group"),
+            (T_STDDEV, "stddev"),
+            (T_STDVAR, "stdvar"),
+            (T_TOPK, "topk"),
+            (T_BOTTOMK, "bottomk"),
+            (T_COUNT_VALUES, "count_values"),
+            (T_QUANTILE, "quantile"),
 
-        // Aggregators.
-        m.insert(T_SUM, "sum");
-        m.insert(T_AVG, "avg");
-        m.insert(T_COUNT, "count");
-        m.insert(T_MIN, "min");
-        m.insert(T_MAX, "max");
-        m.insert(T_GROUP, "group");
-        m.insert(T_STDDEV, "stddev");
-        m.insert(T_STDVAR, "stdvar");
-        m.insert(T_TOPK, "topk");
-        m.insert(T_BOTTOMK, "bottomk");
-        m.insert(T_COUNT_VALUES, "count_values");
-        m.insert(T_QUANTILE, "quantile");
+            // Keywords.
+            (T_OFFSET, "offset"),
+            (T_BY, "by"),
+            (T_WITHOUT, "without"),
+            (T_ON, "on"),
+            (T_IGNORING, "ignoring"),
+            (T_GROUP_LEFT, "group_left"),
+            (T_GROUP_RIGHT, "group_right"),
+            (T_BOOL, "bool"),
 
-        // Keywords.
-        m.insert(T_OFFSET, "offset");
-        m.insert(T_BY, "by");
-        m.insert(T_WITHOUT, "without");
-        m.insert(T_ON, "on");
-        m.insert(T_IGNORING, "ignoring");
-        m.insert(T_GROUP_LEFT, "group_left");
-        m.insert(T_GROUP_RIGHT, "group_right");
-        m.insert(T_BOOL, "bool");
+            // Preprocessors.
+            (T_START, "start"),
+            (T_END, "end"),
 
-        // Preprocessors.
-        m.insert(T_START, "start");
-        m.insert(T_END, "end");
+            (T_LEFT_PAREN, "("),
+            (T_RIGHT_PAREN, ")"),
+            (T_LEFT_BRACE, "{"),
+            (T_RIGHT_BRACE, "}"),
+            (T_LEFT_BRACKET, "["),
+            (T_RIGHT_BRACKET, "]"),
+            (T_COMMA, ","),
+            (T_EQL, "="),
+            (T_COLON, ":"),
+            (T_SEMICOLON, ","),
+            (T_BLANK, "_"),
+            (T_TIMES, "x"),
+            (T_SPACE, "<space>"),
+            (T_SUB, "-"),
+            (T_ADD, "+"),
+            (T_MUL, "*"),
+            (T_MOD, "%"),
+            (T_DIV, "/"),
+            (T_EQLC, "=="),
+            (T_NEQ, "!="),
+            (T_LTE, "<="),
+            (T_LSS, "<"),
+            (T_GTE, ">="),
+            (T_GTR, ">"),
+            (T_EQL_REGEX, "=~"),
+            (T_NEQ_REGEX, "!~"),
+            (T_POW, "^")].into_iter().collect();
 
-        m.insert(T_LEFT_PAREN, "(");
-        m.insert(T_RIGHT_PAREN, ")");
-        m.insert(T_LEFT_BRACE, "{");
-        m.insert(T_RIGHT_BRACE, "}");
-        m.insert(T_LEFT_BRACKET, "[");
-        m.insert(T_RIGHT_BRACKET, "]");
-        m.insert(T_COMMA, ",");
-        m.insert(T_EQL, "=");
-        m.insert(T_COLON, ":");
-        m.insert(T_SEMICOLON, ";");
-        m.insert(T_BLANK, "_");
-        m.insert(T_TIMES, "x");
-        m.insert(T_SPACE, "<space>");
-        m.insert(T_SUB, "-");
-        m.insert(T_ADD, "+");
-        m.insert(T_MUL, "*");
-        m.insert(T_MOD, "%");
-        m.insert(T_DIV, "/");
-        m.insert(T_EQLC, "==");
-        m.insert(T_NEQ, "!=");
-        m.insert(T_LTE, "<=");
-        m.insert(T_LSS, "<");
-        m.insert(T_GTE, ">=");
-        m.insert(T_GTR, ">");
-        m.insert(T_EQL_REGEX, "=~");
-        m.insert(T_NEQ_REGEX, "!~");
-        m.insert(T_POW, "^");
 
-        m
-    };
+    // This is a list of all keywords in PromQL.
+    // When changing this list, make sure to also change
+    // the maybe_label grammar rule in the generated parser
+    // to avoid misinterpretation of labels as keywords.
+    static ref keywords: HashMap<&'static str, TokenType> =
+        [
+            // Operators.
+            ("and", T_LAND),
+            ("or", T_LOR),
+            ("unless", T_LUNLESS),
+            ("atan2", T_ATAN2),
+
+            // Aggregators.
+            ("sum", T_SUM),
+            ("avg", T_AVG),
+            ("count", T_COUNT),
+            ("min", T_MIN),
+            ("max", T_MAX),
+            ("group", T_GROUP),
+            ("stddev", T_STDDEV),
+            ("stdvar", T_STDVAR),
+            ("topk", T_TOPK),
+            ("bottomk", T_BOTTOMK),
+            ("count_values", T_COUNT_VALUES),
+            ("quantile", T_QUANTILE),
+
+            // Keywords.
+            ("offset", T_OFFSET),
+            ("by", T_BY),
+            ("without", T_WITHOUT),
+            ("on", T_ON),
+            ("ignoring", T_IGNORING),
+            ("group_left", T_GROUP_LEFT),
+            ("group_right", T_GROUP_RIGHT),
+            ("bool", T_BOOL),
+
+            // Preprocessors.
+            ("start", T_START),
+            ("end", T_END),
+
+            // Special numbers.
+            ("inf", T_NUMBER),
+            ("nan", T_NUMBER),
+        ].into_iter().collect();
 }
 
 pub fn token_display(id: TokenType) -> String {
@@ -122,6 +164,10 @@ pub fn token_display(id: TokenType) -> String {
         Some(&display) => display.into(),
         None => format!("unknown token id <{id}>"),
     }
+}
+
+pub fn get_keyword_token(s: &str) -> Option<TokenType> {
+    keywords.get(s).copied()
 }
 
 #[derive(Debug)]
