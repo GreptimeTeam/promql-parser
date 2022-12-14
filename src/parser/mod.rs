@@ -17,7 +17,7 @@ mod function;
 pub mod lex;
 pub mod parse;
 pub mod production;
-mod token;
+pub mod token;
 pub mod value;
 
 pub use ast::Expr;

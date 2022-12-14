@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::Token;
-use crate::parser::lex::{T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::parser::token::{Token, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
 #[derive(Debug)]

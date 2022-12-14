@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-lrlex::lrlex_mod!("token_map");
-pub use token_map::*;
-
-use crate::parser::TokenType;
+use crate::parser::token::*;
 use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
 use std::fmt::Debug;
@@ -85,70 +82,202 @@ pub fn lexer<'a>(s: &'a str) -> LRNonStreamingLexer<'a, 'a, LexemeType, TokenTyp
 
 #[derive(Debug)]
 pub struct Lexer {
-    state: Box<dyn State>,
+    state: LexerState,
     ctx: Context,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let ctx = Context::new(input);
-        let state = Box::new(LexState);
+        let state = LexerState::Start;
         Self { state, ctx }
     }
 }
 
 impl Iterator for Lexer {
-    type Item = LexemeType;
+    type Item = Result<LexemeType, String>;
 
-    /// shift then check, if the new state is ready for lexeme.
-    /// lexeme is captured from the new state.
-    /// err state will terminate the whole lex process.
-    ///
-    /// FIXME: if last itme befor None is Err, this MUST be shown to users.
     fn next(&mut self) -> Option<Self::Item> {
-        while let Ok(state) = self.state.shift(&mut self.ctx) {
-            self.state = state;
-
-            let lexeme = self.state.lexeme(&mut self.ctx);
-            if lexeme.is_some() {
-                return lexeme;
-            }
+        self.state = self.state.shift(&mut self.ctx);
+        match &self.state {
+            LexerState::Lexeme(token_id) => Some(Ok(self.ctx.lexeme(*token_id))),
+            LexerState::Err(info) => Some(Err(info.clone())),
+            LexerState::End => None,
+            _ => self.next(),
         }
-        None
-
-        // loop {
-        //     match self.state.shift(&mut self.ctx) {
-        //         Ok(state) => self.state = state,
-        //         Err(e) => {
-        //             eprintln!("{e}");
-        //             return None;
-        //         }
-        //     };
-
-        //     let lexeme = self.state.lexeme(&mut self.ctx);
-        //     if lexeme.is_some() {
-        //         return lexeme;
-        //     }
-        // }
     }
 }
 
-trait State: Debug {
-    // Err will end the state.
-    // FIXME: Normal End Should be different from Err.
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String>;
+#[derive(Debug)]
+enum LexerState {
+    Start,
+    End,
+    Lexeme(TokenType),
+    Space,
+    String(char),
+    KeywordOrIdentifier(char),
+    NumberOrDuration(char),
+    Duration,
+    InsideBraces,
+    LineComment,
+    Escape,
+    Err(String),
+}
 
-    fn lexeme(&mut self, _: &mut Context) -> Option<LexemeType> {
-        println!("call lexeme in State default method");
-        None
+impl LexerState {
+    pub fn shift(&mut self, ctx: &mut Context) -> LexerState {
+        match self {
+            LexerState::Start => {
+                if ctx.brace_open {
+                    return LexerState::InsideBraces;
+                }
+
+                if ctx.bracket_open {
+                    return LexerState::Duration;
+                }
+
+                if ctx.peek() == Some('#') {
+                    return LexerState::LineComment;
+                }
+
+                match ctx.pop() {
+                    Some(',') => LexerState::Lexeme(T_COMMA),
+                    Some(ch) if is_space(ch) => LexerState::Space,
+                    Some('*') => LexerState::Lexeme(T_MUL),
+                    Some('/') => LexerState::Lexeme(T_DIV),
+                    Some('%') => LexerState::Lexeme(T_MOD),
+                    Some('+') => LexerState::Lexeme(T_ADD),
+                    Some('-') => LexerState::Lexeme(T_SUB),
+                    Some('^') => LexerState::Lexeme(T_POW),
+                    Some('=') => match ctx.peek() {
+                        Some('=') => {
+                            ctx.pop();
+                            LexerState::Lexeme(T_EQLC)
+                        }
+                        // =~ (label matcher) MUST be in brace, which will be handled in LexInsideBracesState
+                        Some('~') => LexerState::Err("unexpected character after '=': ~".into()),
+                        _ => LexerState::Lexeme(T_EQL),
+                    },
+                    Some('!') => match ctx.pop() {
+                        Some('=') => LexerState::Lexeme(T_NEQ),
+                        Some(ch) => {
+                            LexerState::Err(format!("unexpected character after '!': {}", ch))
+                        }
+                        None => LexerState::Err(format!("'!' can not be at the end")),
+                    },
+                    Some('<') => match ctx.peek() {
+                        Some('=') => {
+                            ctx.pop();
+                            LexerState::Lexeme(T_LTE)
+                        }
+                        _ => LexerState::Lexeme(T_LSS),
+                    },
+                    Some('>') => match ctx.peek() {
+                        Some('=') => {
+                            ctx.pop();
+                            LexerState::Lexeme(T_GTE)
+                        }
+                        _ => LexerState::Lexeme(T_GTR),
+                    },
+                    Some(ch) if is_digit(ch) => LexerState::NumberOrDuration(ch),
+                    Some('.') => match ctx.peek() {
+                        Some(ch) if is_digit(ch) => LexerState::NumberOrDuration(ch),
+                        Some(ch) => {
+                            LexerState::Err(format!("unexpected character after '.' {}", ch))
+                        }
+                        None => LexerState::Err(format!("'.' can not be at the end")),
+                    },
+                    Some(ch) if is_string_open(ch) => {
+                        ctx.string_open = true;
+                        LexerState::String(ch)
+                    }
+                    Some(ch) if is_alpha(ch) => LexerState::KeywordOrIdentifier(ch),
+                    Some(':') if !ctx.bracket_open => LexerState::KeywordOrIdentifier(':'),
+                    Some(':') if !ctx.got_colon => {
+                        ctx.got_colon = true;
+                        LexerState::Lexeme(T_COLON)
+                    }
+                    // : is in [], and : is already found once
+                    Some(':') => LexerState::Err(format!("unexpected colon ':'")),
+
+                    Some('(') => {
+                        ctx.paren_depth += 1;
+                        LexerState::Lexeme(T_LEFT_PAREN)
+                    }
+                    Some(')') => {
+                        if ctx.paren_depth == 0 {
+                            LexerState::Err(format!("unexpected right parenthesis ')'"))
+                        } else {
+                            ctx.paren_depth -= 1;
+                            LexerState::Lexeme(T_RIGHT_PAREN)
+                        }
+                    }
+                    // NOTE: pay attention to the space after left brace, cover it in testcases.
+                    Some('{') => {
+                        ctx.brace_open = true;
+                        LexerState::Lexeme(T_LEFT_BRACE)
+                    }
+                    Some('}') if !ctx.brace_open => {
+                        LexerState::Err("unexpected right bracket '}'".into())
+                    }
+                    Some('}') => {
+                        ctx.brace_open = false;
+                        LexerState::Lexeme(T_RIGHT_BRACE)
+                    }
+                    // NOTE: pay attention to the space after left bracket, cover it in testcases.
+                    Some('[') => {
+                        ctx.got_colon = false;
+                        ctx.bracket_open = true;
+                        LexerState::Lexeme(T_LEFT_BRACKET)
+                    }
+                    Some(']') if !ctx.bracket_open => {
+                        LexerState::Err("unexpected right bracket ']'".into())
+                    }
+                    Some(']') => {
+                        ctx.bracket_open = false;
+                        LexerState::Lexeme(T_RIGHT_BRACKET)
+                    }
+                    Some('@') => LexerState::Lexeme(T_AT),
+                    Some(ch) => LexerState::Err(format!("unexpected character: {}", ch)),
+                    None if ctx.paren_depth != 0 => {
+                        LexerState::Err(format!("unclosed left parenthesis"))
+                    }
+                    None if ctx.brace_open => LexerState::Err(format!("unclosed left brace")),
+                    None if ctx.bracket_open => LexerState::Err(format!("unclosed left bracket")),
+                    None => LexerState::End,
+                }
+            }
+            LexerState::End => LexerState::Err("End state can not shift forward.".into()),
+            LexerState::Lexeme(_) => LexerState::Start,
+            LexerState::Space => {
+                while let Some(ch) = ctx.peek() {
+                    if is_space(ch) {
+                        ctx.pop();
+                    } else {
+                        break;
+                    }
+                }
+                ctx.align_pos();
+                LexerState::Start
+            }
+            LexerState::String(_) => todo!(),
+            LexerState::KeywordOrIdentifier(_) => todo!(),
+            LexerState::NumberOrDuration(_) => todo!(),
+            LexerState::Duration => todo!(),
+            LexerState::InsideBraces => todo!(),
+            LexerState::LineComment => todo!(),
+            LexerState::Escape => todo!(),
+            LexerState::Err(_) => LexerState::End,
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Context {
     chars: Vec<char>,
-    start: usize,
-    pos: usize, // Current position in the input.
+    idx: usize,   // Current position in the Vec, increment by 1.
+    start: usize, // Start position of one Token, increment by char.len_utf8.
+    pos: usize,   // Current position in the input, increment by char.len_utf8.
 
     paren_depth: u8,    // Nesting depth of ( ) exprs, 0 means no parens.
     brace_open: bool,   // Whether a { is opened.
@@ -161,6 +290,7 @@ impl Context {
     pub fn new(input: &str) -> Context {
         Self {
             chars: input.chars().into_iter().collect(),
+            idx: 0,
             start: 0,
             pos: 0,
 
@@ -174,14 +304,17 @@ impl Context {
 
     /// pop the first char.
     pub fn pop(&mut self) -> Option<char> {
-        let c = self.chars.get(self.pos).copied();
-        self.pos += 1;
+        let c = self.chars.get(self.idx).copied();
+        if let Some(ch) = c {
+            self.pos += ch.len_utf8();
+            self.idx += 1;
+        };
         c
     }
 
     /// get the first char.
     pub fn peek(&self) -> Option<char> {
-        self.chars.get(self.pos + 1).copied()
+        self.chars.get(self.idx + 1).copied()
     }
 
     /// caller MUST hold the token_id and only need the span from the context.
@@ -194,274 +327,6 @@ impl Context {
     /// ignore the text between start and pos
     pub fn align_pos(&mut self) {
         self.start = self.pos;
-    }
-}
-
-#[derive(Debug)]
-struct LexState;
-impl State for LexState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        println!("shift in LexState");
-        if ctx.brace_open {
-            println!("ctx brace_open, next state is LexInsideBracesState");
-            return Ok(Box::new(LexInsideBracesState));
-        }
-
-        if ctx.bracket_open {
-            println!("ctx bracket_open, next state is LexInsideBracesState");
-            return Ok(Box::new(LexDurationState));
-        }
-
-        if ctx.peek() == Some('#') {
-            println!("comment line. next state is LexLineCommentState");
-            return Ok(Box::new(LexLineCommentState));
-        }
-
-        match ctx.pop() {
-            Some(',') => Ok(Box::new(LexemeState::new(T_COMMA))),
-            Some(ch) if is_space(ch) => Ok(Box::new(LexSpaceState)),
-            Some('*') => Ok(Box::new(LexemeState::new(T_MUL))),
-            Some('/') => Ok(Box::new(LexemeState::new(T_DIV))),
-            Some('%') => Ok(Box::new(LexemeState::new(T_MOD))),
-            Some('+') => Ok(Box::new(LexemeState::new(T_ADD))),
-            Some('-') => Ok(Box::new(LexemeState::new(T_SUB))),
-            Some('^') => Ok(Box::new(LexemeState::new(T_POW))),
-            Some('=') => match ctx.peek() {
-                Some('=') => {
-                    ctx.pop();
-                    Ok(Box::new(LexemeState::new(T_EQLC)))
-                }
-                // =~ (label matcher) MUST be in brace, which will be handled in LexInsideBracesState
-                Some('~') => Err("unexpected character after '=': ~".into()),
-                _ => Ok(Box::new(LexemeState::new(T_EQL))),
-            },
-            Some('!') => match ctx.pop() {
-                Some('=') => Ok(Box::new(LexemeState::new(T_NEQ))),
-                Some(ch) => Err(format!("unexpected character after '!': {}", ch)),
-                None => Err(format!("'!' can not be at the end")),
-            },
-            Some('<') => match ctx.peek() {
-                Some('=') => {
-                    ctx.pop();
-                    Ok(Box::new(LexemeState::new(T_LTE)))
-                }
-                _ => Ok(Box::new(LexemeState::new(T_LSS))),
-            },
-            Some('>') => match ctx.peek() {
-                Some('=') => {
-                    ctx.pop();
-                    Ok(Box::new(LexemeState::new(T_GTE)))
-                }
-                _ => Ok(Box::new(LexemeState::new(T_GTR))),
-            },
-            Some(ch) if is_digit(ch) => Ok(Box::new(LexNumberOrDurationState::new(ch))),
-            Some('.') => match ctx.peek() {
-                Some(ch) if is_digit(ch) => Ok(Box::new(LexNumberOrDurationState::new(ch))),
-                Some(ch) => Err(format!("unexpected character after '.' {}", ch)),
-                None => Err(format!("'.' can not be at the end")),
-            },
-            Some(ch) if is_string_open(ch) => {
-                ctx.string_open = true;
-                Ok(Box::new(LexStringState::new(ch)))
-            }
-            Some(ch) if is_alpha(ch) => Ok(Box::new(LexKeywordOrIdentifierState::new(ch))),
-            Some(':') if !ctx.bracket_open => Ok(Box::new(LexKeywordOrIdentifierState::new(':'))),
-            Some(':') if !ctx.got_colon => {
-                ctx.got_colon = true;
-                Ok(Box::new(LexemeState::new(T_COLON)))
-            }
-            // : is in [], and : is already found once
-            Some(':') => Err(format!("unexpected colon ':'")),
-
-            Some('(') => {
-                ctx.paren_depth += 1;
-                Ok(Box::new(LexemeState::new(T_LEFT_PAREN)))
-            }
-            Some(')') => {
-                if ctx.paren_depth == 0 {
-                    Err(format!("unexpected right parenthesis ')'"))
-                } else {
-                    ctx.paren_depth -= 1;
-                    Ok(Box::new(LexemeState::new(T_RIGHT_PAREN)))
-                }
-            }
-            // NOTE: pay attention to the space after left brace, cover it in testcases.
-            Some('{') => {
-                ctx.brace_open = true;
-                Ok(Box::new(LexemeState::new(T_LEFT_BRACE)))
-            }
-            Some('}') if !ctx.brace_open => Err("unexpected right bracket '}'".into()),
-            Some('}') => {
-                ctx.brace_open = false;
-                Ok(Box::new(LexemeState::new(T_RIGHT_BRACE)))
-            }
-            // NOTE: pay attention to the space after left bracket, cover it in testcases.
-            Some('[') => {
-                ctx.got_colon = false;
-                ctx.bracket_open = true;
-                Ok(Box::new(LexemeState::new(T_LEFT_BRACKET)))
-            }
-            Some(']') if !ctx.bracket_open => Err("unexpected right bracket ']'".into()),
-            Some(']') => {
-                ctx.bracket_open = false;
-                Ok(Box::new(LexemeState::new(T_RIGHT_BRACKET)))
-            }
-            Some('@') => Ok(Box::new(LexemeState::new(T_AT))),
-
-            Some(ch) => Err(format!("unexpected character: {}", ch)),
-            None => return Ok(Box::new(LexEndState)),
-        }
-    }
-}
-
-/// This won't shift state, and will terminate the lexer.
-#[derive(Debug)]
-struct LexEndState;
-impl State for LexEndState {
-    fn shift(&mut self, _ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        Err("no need to shift after EndState".into())
-    }
-}
-
-/// LexemeState is where the lexeme will be captured.
-#[derive(Debug)]
-struct LexemeState {
-    token_id: TokenType,
-}
-impl LexemeState {
-    pub fn new(token_id: TokenType) -> Self {
-        Self { token_id }
-    }
-}
-
-impl State for LexemeState {
-    /// After lexeme is captured, state will back to LexState with modified fields.
-    fn shift(&mut self, _ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        println!("shift in LexemeState, next -> LexState");
-        Ok(Box::new(LexState))
-    }
-
-    fn lexeme(&mut self, ctx: &mut Context) -> Option<LexemeType> {
-        println!("Call lexeme in LexemeState");
-        Some(ctx.lexeme(dbg!(self.token_id)))
-    }
-}
-
-// #[derive(Debug)]
-// struct LexInsideBracesState;
-// impl State for LexInsideBracesState {
-//     fn shift(&mut self, ctx: &mut Context) -> Box<dyn State> {
-//         todo!()
-//     }
-// }
-
-// #[derive(Debug)]
-// struct LexLineCommentState;
-// impl LexLineCommentState {}
-
-// impl State for LexLineCommentState {
-//     fn shift(&mut self, ctx: &mut Context) -> Box<dyn State> {
-//         todo!()
-//     }
-// }
-
-#[derive(Debug)]
-struct LexSpaceState;
-impl State for LexSpaceState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        while let Some(ch) = ctx.peek() {
-            if is_space(ch) {
-                ctx.pop();
-            } else {
-                break;
-            }
-        }
-        ctx.align_pos();
-        Ok(Box::new(LexState))
-    }
-}
-
-#[derive(Debug)]
-struct LexStringState {
-    ch: char, // ' or " or `
-}
-
-impl LexStringState {
-    pub fn new(ch: char) -> Self {
-        Self { ch }
-    }
-}
-
-impl State for LexStringState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexNumberOrDurationState {
-    ch: char, // the leading char which has been popped from the context
-}
-
-impl LexNumberOrDurationState {
-    pub fn new(ch: char) -> Self {
-        Self { ch }
-    }
-}
-
-impl State for LexNumberOrDurationState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexKeywordOrIdentifierState {
-    ch: char,
-}
-impl LexKeywordOrIdentifierState {
-    pub fn new(ch: char) -> Self {
-        Self { ch }
-    }
-}
-
-impl State for LexKeywordOrIdentifierState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexDurationState;
-
-impl State for LexDurationState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexInsideBracesState;
-
-impl State for LexInsideBracesState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexLineCommentState;
-impl State for LexLineCommentState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct LexEscapeState;
-impl State for LexEscapeState {
-    fn shift(&mut self, ctx: &mut Context) -> Result<Box<dyn State>, String> {
-        todo!()
     }
 }
 
@@ -502,9 +367,13 @@ mod tests {
 
     #[test]
     fn test_lexer() {
-        let lexer = Lexer::new(",");
+        // let lexer = Lexer::new("= == != ,+  -*  /% ! == ");
+        let lexer = Lexer::new("!a=");
         for lex in lexer {
-            println!("{:?}", lex);
+            match lex {
+                Ok(lexeme) => println!("{:?}, display:{}", lexeme, token_display(lexeme.tok_id())),
+                Err(e) => println!("{e}"),
+            }
         }
     }
 }
