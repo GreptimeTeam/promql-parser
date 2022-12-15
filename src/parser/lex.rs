@@ -30,6 +30,7 @@ lazy_static! {
     static ref HEX_CHAR_SET: HashSet<char> = HashSet::from(['x', 'X']);
     static ref SCI_CHAR_SET: HashSet<char> = HashSet::from(['e', 'E']);
     static ref SIGN_CHAR_SET: HashSet<char> = HashSet::from(['+', '-']);
+    static ref NORMAL_ESCAPE_SYMBOL_SET: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
 }
 
 pub type LexemeType = DefaultLexeme<TokenType>;
@@ -100,13 +101,17 @@ pub enum State {
     Start,
     End,
     Lexeme(TokenType),
-    String,
     KeywordOrIdentifier,
     NumberOrDuration,
     Duration,
     InsideBraces,
     LineComment,
-    Escape,
+
+    // char is the string symbol, ' or " or `
+    String(char),
+    // Escape happens inside String. char is the string symbol, ' or " or `
+    Escape(char),
+
     Err(String),
 }
 
@@ -121,7 +126,6 @@ pub struct Context {
     brace_open: bool,   // Whether a { is opened.
     bracket_open: bool, // Whether a [ is opened.
     got_colon: bool,    // Whether we got a ':' after [ was opened.
-    string_open: bool,
 }
 
 impl Context {
@@ -136,7 +140,6 @@ impl Context {
             brace_open: false,
             bracket_open: false,
             got_colon: false,
-            string_open: false,
         }
     }
 
@@ -197,7 +200,7 @@ pub struct Lexer {
     ctx: Context,
 }
 
-/// block for helper methods.
+/// block for context operations.
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let ctx = Context::new(input);
@@ -229,7 +232,7 @@ impl Lexer {
         self.ctx.brace_open = true;
     }
 
-    pub fn is_colon_spanned(&self) -> bool {
+    pub fn is_colon_scanned(&self) -> bool {
         self.ctx.got_colon
     }
 
@@ -237,7 +240,7 @@ impl Lexer {
         self.ctx.got_colon = true;
     }
 
-    pub fn reset_colon_spanned(&mut self) {
+    pub fn reset_colon_scanned(&mut self) {
         self.ctx.got_colon = false;
     }
 
@@ -251,18 +254,6 @@ impl Lexer {
 
     pub fn is_paren_balanced(&self) -> bool {
         self.ctx.paren_depth == 0
-    }
-
-    pub fn is_string(&self) -> bool {
-        self.ctx.string_open
-    }
-
-    pub fn span_string(&mut self) {
-        self.ctx.string_open = true;
-    }
-
-    pub fn close_string(&mut self) {
-        self.ctx.string_open = false;
     }
 
     pub fn pop(&mut self) -> Option<char> {
@@ -294,20 +285,20 @@ impl Lexer {
     }
 }
 
-/// block for state shifting operations.
+/// block for state operations.
 impl Lexer {
     pub fn shift(&mut self) {
         self.state = match self.state {
             State::Start => self.start(),
             State::End => panic!("End state can not shift forward."),
             State::Lexeme(_) => State::Start,
-            State::String => todo!(),
-            State::KeywordOrIdentifier => self.keyword_or_identifier(),
-            State::NumberOrDuration => self.number_or_duration(),
+            State::String(ch) => self.accept_string(ch),
+            State::KeywordOrIdentifier => self.accept_keyword_or_identifier(),
+            State::NumberOrDuration => self.accept_number_or_duration(),
             State::Duration => todo!(),
             State::InsideBraces => todo!(),
             State::LineComment => self.ignore_comment_line(),
-            State::Escape => todo!(),
+            State::Escape(ch) => self.accept_escape(ch),
             State::Err(_) => State::End,
         };
     }
@@ -381,7 +372,7 @@ impl Lexer {
                 }
 
                 // the following logic is in []
-                if self.is_colon_spanned() {
+                if self.is_colon_scanned() {
                     return State::Err("unexpected colon ':'".into());
                 }
                 // FIXME: how to get here?
@@ -389,10 +380,7 @@ impl Lexer {
                 self.span_colon();
                 return State::Lexeme(T_COLON);
             }
-            Some(ch) if is_string_open(ch) => {
-                self.span_string();
-                State::String
-            }
+            Some(ch) if is_string_symbol(ch) => State::String(ch),
             Some('(') => {
                 self.inc_paren_depth();
                 State::Lexeme(T_LEFT_PAREN)
@@ -419,7 +407,7 @@ impl Lexer {
             }
             // FIXME: pay attention to the space after left bracket, cover it in testcases.
             Some('[') => {
-                self.reset_colon_spanned();
+                self.reset_colon_scanned();
                 self.span_brackets();
                 State::Lexeme(T_LEFT_BRACKET)
             }
@@ -439,7 +427,7 @@ impl Lexer {
         }
     }
 
-    fn number_or_duration(&mut self) -> State {
+    fn accept_number_or_duration(&mut self) -> State {
         if self.scan_number() {
             return State::Lexeme(T_NUMBER);
         }
@@ -452,7 +440,7 @@ impl Lexer {
         ));
     }
 
-    fn keyword_or_identifier(&mut self) -> State {
+    fn accept_keyword_or_identifier(&mut self) -> State {
         while let Some(ch) = self.pop() {
             if !is_alpha_numeric(ch) && ch != ':' {
                 break;
@@ -567,6 +555,35 @@ impl Lexer {
             _ => true,
         }
     }
+
+    /// scans a string escape sequence. The initial escaping character (\)
+    /// has already been seen.
+    // FIXME: more escape logic happens here, mostly to check if number is valid.
+    // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex.go#L552
+    fn accept_escape(&mut self, symbol: char) -> State {
+        match self.pop() {
+            Some(ch) if ch == symbol || NORMAL_ESCAPE_SYMBOL_SET.contains(&ch) => {
+                State::String(symbol)
+            }
+            Some(_) => State::String(symbol),
+            None => State::Err("escape sequence not terminated".into()),
+        }
+    }
+
+    /// scans a quoted string. The initial quote has already been seen.
+    fn accept_string(&mut self, symbol: char) -> State {
+        while let Some(ch) = self.pop() {
+            if ch == '\\' {
+                return State::Escape(symbol);
+            }
+
+            if ch == symbol {
+                return State::Lexeme(T_STRING);
+            }
+        }
+
+        State::Err(format!("unterminated quoted string {}", symbol))
+    }
 }
 
 impl Iterator for Lexer {
@@ -583,7 +600,7 @@ impl Iterator for Lexer {
     }
 }
 
-fn is_string_open(ch: char) -> bool {
+fn is_string_symbol(ch: char) -> bool {
     ch == '"' || ch == '`' || ch == '\''
 }
 
@@ -611,7 +628,7 @@ fn is_label(chs: Vec<char>) -> bool {
     if chs.len() == 0 || !is_alpha(chs[0]) {
         return false;
     }
-    chs.iter().all(|ch| is_alpha_numeric(*ch))
+    chs.iter().all(|&ch| is_alpha_numeric(ch))
 }
 
 #[cfg(test)]
@@ -621,7 +638,7 @@ mod tests {
     #[test]
     fn test_lexer() {
         let lexer = Lexer::new(
-            "hel:lo up = == != ,+ 1y 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ # comment at the end",
+            r#"hel:lo up = == != ,+ 1y 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
         );
 
         // let lexer = Lexer::new("!a=");
@@ -631,5 +648,11 @@ mod tests {
                 Err(e) => println!("{e}"),
             }
         }
+    }
+
+    #[test]
+    fn test_name() {
+        let set: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
+        println!("{:?}", set);
     }
 }
