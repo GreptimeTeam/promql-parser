@@ -96,7 +96,7 @@ pub fn lexer<'a>(s: &'a str) -> LRNonStreamingLexer<'a, 'a, LexemeType, TokenTyp
 }
 
 #[derive(Debug)]
-enum LexerState {
+pub enum State {
     Start,
     End,
     Lexeme(TokenType),
@@ -110,20 +110,20 @@ enum LexerState {
     Err(String),
 }
 
-impl LexerState {
-    pub fn shift(&mut self, ctx: &mut Context) -> LexerState {
+impl State {
+    pub fn shift(&mut self, ctx: &mut Context) -> State {
         match self {
-            LexerState::Start => start(ctx),
-            LexerState::End => panic!("End state can not shift forward."),
-            LexerState::Lexeme(_) => LexerState::Start,
-            LexerState::String => todo!(),
-            LexerState::KeywordOrIdentifier => keyword_or_identifier(ctx),
-            LexerState::NumberOrDuration => number_or_duration(ctx),
-            LexerState::Duration => todo!(),
-            LexerState::InsideBraces => todo!(),
-            LexerState::LineComment => ignore_comment_line(ctx),
-            LexerState::Escape => todo!(),
-            LexerState::Err(_) => LexerState::End,
+            State::Start => start(ctx),
+            State::End => panic!("End state can not shift forward."),
+            State::Lexeme(_) => State::Start,
+            State::String => todo!(),
+            State::KeywordOrIdentifier => keyword_or_identifier(ctx),
+            State::NumberOrDuration => number_or_duration(ctx),
+            State::Duration => todo!(),
+            State::InsideBraces => todo!(),
+            State::LineComment => ignore_comment_line(ctx),
+            State::Escape => todo!(),
+            State::Err(_) => State::End,
         }
     }
 }
@@ -160,7 +160,7 @@ impl Context {
 
     /// pop the first char.
     pub fn pop(&mut self) -> Option<char> {
-        let c = self.chars.get(self.idx).copied();
+        let c = self.peek();
         if let Some(ch) = c {
             self.pos += ch.len_utf8();
             self.idx += 1;
@@ -181,11 +181,8 @@ impl Context {
         self.chars.get(self.idx).copied()
     }
 
-    /// caller MUST hold the token_id and only need the span from the context.
     pub fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
-        let lexeme = DefaultLexeme::new(token_id, self.start, self.pos - self.start);
-        self.ignore();
-        lexeme
+        DefaultLexeme::new(token_id, self.start, self.pos - self.start)
     }
 
     /// ignore the text between start and pos
@@ -214,15 +211,27 @@ impl Context {
 
 #[derive(Debug)]
 pub struct Lexer {
-    state: LexerState,
+    state: State,
     ctx: Context,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let ctx = Context::new(input);
-        let state = LexerState::Start;
+        let state = State::Start;
         Self { state, ctx }
+    }
+
+    /// lexeme() consumes the Span, which means lexeme() will get wrong
+    /// Span in consecutive calls unless Lexer shifts its State.
+    fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
+        let lexeme = self.ctx.lexeme(token_id);
+        self.ctx.ignore();
+        lexeme
+    }
+
+    fn shift(&mut self) {
+        self.state = self.state.shift(&mut self.ctx);
     }
 }
 
@@ -230,152 +239,152 @@ impl Iterator for Lexer {
     type Item = Result<LexemeType, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.state = self.state.shift(&mut self.ctx);
+        self.shift();
         match &self.state {
-            LexerState::Lexeme(token_id) => Some(Ok(self.ctx.lexeme(*token_id))),
-            LexerState::Err(info) => Some(Err(info.clone())),
-            LexerState::End => None,
+            State::Lexeme(token_id) => Some(Ok(self.lexeme(*token_id))),
+            State::Err(info) => Some(Err(info.clone())),
+            State::End => None,
             _ => self.next(),
         }
     }
 }
 
-fn start(ctx: &mut Context) -> LexerState {
+fn start(ctx: &mut Context) -> State {
     if ctx.brace_open {
-        return LexerState::InsideBraces;
+        return State::InsideBraces;
     }
 
     if ctx.bracket_open {
-        return LexerState::Duration;
+        return State::Duration;
     }
 
     match ctx.pop() {
-        Some('#') => LexerState::LineComment,
-        Some(',') => LexerState::Lexeme(T_COMMA),
+        Some('#') => State::LineComment,
+        Some(',') => State::Lexeme(T_COMMA),
         Some(ch) if is_space(ch) => {
             ctx.backup();
             accept_space(ctx)
         }
-        Some('*') => LexerState::Lexeme(T_MUL),
-        Some('/') => LexerState::Lexeme(T_DIV),
-        Some('%') => LexerState::Lexeme(T_MOD),
-        Some('+') => LexerState::Lexeme(T_ADD),
-        Some('-') => LexerState::Lexeme(T_SUB),
-        Some('^') => LexerState::Lexeme(T_POW),
+        Some('*') => State::Lexeme(T_MUL),
+        Some('/') => State::Lexeme(T_DIV),
+        Some('%') => State::Lexeme(T_MOD),
+        Some('+') => State::Lexeme(T_ADD),
+        Some('-') => State::Lexeme(T_SUB),
+        Some('^') => State::Lexeme(T_POW),
         Some('=') => match ctx.peek() {
             Some('=') => {
                 ctx.pop();
-                LexerState::Lexeme(T_EQLC)
+                State::Lexeme(T_EQLC)
             }
             // =~ (label matcher) MUST be in brace, which will be handled in LexInsideBracesState
-            Some('~') => LexerState::Err("unexpected character after '=': ~".into()),
-            _ => LexerState::Lexeme(T_EQL),
+            Some('~') => State::Err("unexpected character after '=': ~".into()),
+            _ => State::Lexeme(T_EQL),
         },
         Some('!') => match ctx.pop() {
-            Some('=') => LexerState::Lexeme(T_NEQ),
-            Some(ch) => LexerState::Err(format!("unexpected character after '!': {}", ch)),
-            None => LexerState::Err(format!("'!' can not be at the end")),
+            Some('=') => State::Lexeme(T_NEQ),
+            Some(ch) => State::Err(format!("unexpected character after '!': {}", ch)),
+            None => State::Err(format!("'!' can not be at the end")),
         },
         Some('<') => match ctx.peek() {
             Some('=') => {
                 ctx.pop();
-                LexerState::Lexeme(T_LTE)
+                State::Lexeme(T_LTE)
             }
-            _ => LexerState::Lexeme(T_LSS),
+            _ => State::Lexeme(T_LSS),
         },
         Some('>') => match ctx.peek() {
             Some('=') => {
                 ctx.pop();
-                LexerState::Lexeme(T_GTE)
+                State::Lexeme(T_GTE)
             }
-            _ => LexerState::Lexeme(T_GTR),
+            _ => State::Lexeme(T_GTR),
         },
         Some(ch) if is_digit(ch) => {
             ctx.backup();
-            LexerState::NumberOrDuration
+            State::NumberOrDuration
         }
         Some('.') => match ctx.peek() {
             Some(ch) if is_digit(ch) => {
                 ctx.backup();
-                LexerState::NumberOrDuration
+                State::NumberOrDuration
             }
-            Some(ch) => LexerState::Err(format!("unexpected character after '.' {}", ch)),
-            None => LexerState::Err(format!("'.' can not be at the end")),
+            Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
+            None => State::Err(format!("'.' can not be at the end")),
         },
         Some(ch) if is_alpha(ch) || ch == ':' => {
             if !ctx.bracket_open {
                 ctx.backup();
-                return LexerState::KeywordOrIdentifier;
+                return State::KeywordOrIdentifier;
             }
 
             // the following logic is in []
             if ctx.got_colon {
-                return LexerState::Err("unexpected colon ':'".into());
+                return State::Err("unexpected colon ':'".into());
             }
             // FIXME: how to get here?
             ctx.got_colon = true;
-            return LexerState::Lexeme(T_COLON);
+            return State::Lexeme(T_COLON);
         }
         Some(ch) if is_string_open(ch) => {
             ctx.string_open = true;
-            LexerState::String
+            State::String
         }
         Some('(') => {
             ctx.paren_depth += 1;
-            LexerState::Lexeme(T_LEFT_PAREN)
+            State::Lexeme(T_LEFT_PAREN)
         }
         Some(')') => {
             if ctx.paren_depth == 0 {
-                LexerState::Err(format!("unexpected right parenthesis ')'"))
+                State::Err(format!("unexpected right parenthesis ')'"))
             } else {
                 ctx.paren_depth -= 1;
-                LexerState::Lexeme(T_RIGHT_PAREN)
+                State::Lexeme(T_RIGHT_PAREN)
             }
         }
         // FIXME: pay attention to the space after left brace, cover it in testcases.
         Some('{') => {
             ctx.brace_open = true;
-            LexerState::Lexeme(T_LEFT_BRACE)
+            State::Lexeme(T_LEFT_BRACE)
         }
-        Some('}') if !ctx.brace_open => LexerState::Err("unexpected right bracket '}'".into()),
+        Some('}') if !ctx.brace_open => State::Err("unexpected right bracket '}'".into()),
         Some('}') => {
             ctx.brace_open = false;
-            LexerState::Lexeme(T_RIGHT_BRACE)
+            State::Lexeme(T_RIGHT_BRACE)
         }
         // FIXME: pay attention to the space after left bracket, cover it in testcases.
         Some('[') => {
             ctx.got_colon = false;
             ctx.bracket_open = true;
-            LexerState::Lexeme(T_LEFT_BRACKET)
+            State::Lexeme(T_LEFT_BRACKET)
         }
-        Some(']') if !ctx.bracket_open => LexerState::Err("unexpected right bracket ']'".into()),
+        Some(']') if !ctx.bracket_open => State::Err("unexpected right bracket ']'".into()),
         Some(']') => {
             ctx.bracket_open = false;
-            LexerState::Lexeme(T_RIGHT_BRACKET)
+            State::Lexeme(T_RIGHT_BRACKET)
         }
-        Some('@') => LexerState::Lexeme(T_AT),
-        Some(ch) => LexerState::Err(format!("unexpected character: {}", ch)),
-        None if ctx.paren_depth != 0 => LexerState::Err(format!("unclosed left parenthesis")),
-        None if ctx.brace_open => LexerState::Err(format!("unclosed left brace")),
-        None if ctx.bracket_open => LexerState::Err(format!("unclosed left bracket")),
-        None => LexerState::End,
+        Some('@') => State::Lexeme(T_AT),
+        Some(ch) => State::Err(format!("unexpected character: {}", ch)),
+        None if ctx.paren_depth != 0 => State::Err(format!("unclosed left parenthesis")),
+        None if ctx.brace_open => State::Err(format!("unclosed left brace")),
+        None if ctx.bracket_open => State::Err(format!("unclosed left bracket")),
+        None => State::End,
     }
 }
 
-fn number_or_duration(ctx: &mut Context) -> LexerState {
+fn number_or_duration(ctx: &mut Context) -> State {
     if scan_number(ctx) {
-        return LexerState::Lexeme(T_NUMBER);
+        return State::Lexeme(T_NUMBER);
     }
     if accept_remaining_duration(ctx) {
-        return LexerState::Lexeme(T_DURATION);
+        return State::Lexeme(T_DURATION);
     }
-    return LexerState::Err(format!(
+    return State::Err(format!(
         "bad number or duration syntax: {}",
         ctx.lexeme_string()
     ));
 }
 
-fn keyword_or_identifier(ctx: &mut Context) -> LexerState {
+fn keyword_or_identifier(ctx: &mut Context) -> State {
     while let Some(ch) = ctx.pop() {
         if !is_alpha_numeric(ch) && ch != ':' {
             break;
@@ -388,38 +397,30 @@ fn keyword_or_identifier(ctx: &mut Context) -> LexerState {
 
     let s = ctx.lexeme_string();
     match get_keyword_token(&s.to_lowercase()) {
-        Some(token_id) => LexerState::Lexeme(token_id),
-        None if s.contains(':') => LexerState::Lexeme(T_METRIC_IDENTIFIER),
-        _ => LexerState::Lexeme(T_IDENTIFIER),
+        Some(token_id) => State::Lexeme(token_id),
+        None if s.contains(':') => State::Lexeme(T_METRIC_IDENTIFIER),
+        _ => State::Lexeme(T_IDENTIFIER),
     }
 }
 
 /// # has already not been consumed.
-fn ignore_comment_line(ctx: &mut Context) -> LexerState {
+fn ignore_comment_line(ctx: &mut Context) -> State {
     while let Some(ch) = ctx.pop() {
         if is_end_of_line(ch) {
             break;
         }
     }
     ctx.ignore();
-    LexerState::Start
+    State::Start
 }
 
-/// accept consumes the next char if it's from the valid set.
-fn accept(ctx: &mut Context, set: &HashSet<char>) -> bool {
+/// accept consumes the next char if f(ch) returns true.
+fn accept<F>(ctx: &mut Context, f: F) -> bool
+where
+    F: Fn(char) -> bool,
+{
     if let Some(ch) = ctx.peek() {
-        if set.contains(&ch) {
-            ctx.pop();
-            return true;
-        }
-    }
-    false
-}
-
-/// accept consumes the next char if it's equal to the valid char.
-fn accept_char(ctx: &mut Context, valid: char) -> bool {
-    if let Some(ch) = ctx.peek() {
-        if ch == valid {
+        if f(ch) {
             ctx.pop();
             return true;
         }
@@ -428,9 +429,12 @@ fn accept_char(ctx: &mut Context, valid: char) -> bool {
 }
 
 /// accept_run consumes a run of char from the valid set.
-fn accept_run(ctx: &mut Context, set: &HashSet<char>) {
+fn accept_run<F>(ctx: &mut Context, f: F)
+where
+    F: Fn(char) -> bool,
+{
     while let Some(ch) = ctx.peek() {
-        if set.contains(&ch) {
+        if f(ch) {
             ctx.pop();
         } else {
             break;
@@ -439,10 +443,10 @@ fn accept_run(ctx: &mut Context, set: &HashSet<char>) {
 }
 
 /// accept_space consumes a run of space, and ignore them
-fn accept_space(ctx: &mut Context) -> LexerState {
-    accept_run(ctx, &SPACE_SET);
+fn accept_space(ctx: &mut Context) -> State {
+    accept_run(ctx, |ch| SPACE_SET.contains(&ch));
     ctx.ignore();
-    LexerState::Start
+    State::Start
 }
 
 /// scan_number scans numbers of different formats. The scanned Item is
@@ -450,16 +454,16 @@ fn accept_space(ctx: &mut Context) -> LexerState {
 fn scan_number(ctx: &mut Context) -> bool {
     let mut digits: &HashSet<char> = &DEC_DIGITS_SET;
 
-    if accept_char(ctx, '0') && accept(ctx, &HEX_CHAR_SET) {
+    if accept(ctx, |ch| ch == '0') && accept(ctx, |ch| HEX_CHAR_SET.contains(&ch)) {
         digits = &HEX_DIGITS_SET;
     }
-    accept_run(ctx, digits);
-    if accept_char(ctx, '.') {
-        accept_run(ctx, digits);
+    accept_run(ctx, |ch| digits.contains(&ch));
+    if accept(ctx, |ch| ch == '.') {
+        accept_run(ctx, |ch| digits.contains(&ch));
     }
-    if accept(ctx, &SCI_CHAR_SET) {
-        accept(ctx, &SIGN_CHAR_SET);
-        accept_run(ctx, &DEC_DIGITS_SET);
+    if accept(ctx, |ch| SCI_CHAR_SET.contains(&ch)) {
+        accept(ctx, |ch| SIGN_CHAR_SET.contains(&ch));
+        accept_run(ctx, |ch| DEC_DIGITS_SET.contains(&ch));
     }
     // Next thing must not be alphanumeric unless it's the times token.
     // If false, it maybe a duration lexeme.
@@ -471,23 +475,23 @@ fn scan_number(ctx: &mut Context) -> bool {
 
 fn accept_remaining_duration(ctx: &mut Context) -> bool {
     // Next two char must be a valid duration.
-    if !accept(ctx, &ALL_DURATION_UNITS) {
+    if !accept(ctx, |ch| ALL_DURATION_UNITS.contains(&ch)) {
         return false;
     }
     // Support for ms. Bad units like hs, ys will be caught when we actually
     // parse the duration.
-    accept(ctx, &ONLY_S_DURATION_UNITS);
+    accept(ctx, |ch| ONLY_S_DURATION_UNITS.contains(&ch));
 
     // Next char can be another number then a unit.
-    while accept(ctx, &DEC_DIGITS_SET) {
-        accept_run(ctx, &DEC_DIGITS_SET);
+    while accept(ctx, |ch| DEC_DIGITS_SET.contains(&ch)) {
+        accept_run(ctx, |ch| DEC_DIGITS_SET.contains(&ch));
         // y is no longer in the list as it should always come first in durations.
-        if !accept(ctx, &ALL_DURATION_UNITS) {
+        if !accept(ctx, |ch| ALL_DURATION_UNITS.contains(&ch)) {
             return false;
         }
         // Support for ms. Bad units like hs, ys will be caught when we actually
         // parse the duration.
-        accept(ctx, &ONLY_S_DURATION_UNITS);
+        accept(ctx, |ch| ONLY_S_DURATION_UNITS.contains(&ch));
     }
 
     match ctx.peek() {
