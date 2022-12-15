@@ -21,32 +21,6 @@ pub use token_map::*;
 
 pub type TokenType = u8;
 
-// fn is_operator(id: TokenType) -> bool {
-//     id > T_OPERATORS_START && id < T_OPERATORS_END
-// }
-
-// fn is_aggregator(id: TokenType) -> bool {
-//     id > T_AGGREGATORS_START && id < T_AGGREGATORS_END
-// }
-
-// fn is_aggregator_with_param(id: TokenType) -> bool {
-//     id == T_TOPK || id == T_BOTTOMK || id == T_COUNT_VALUES || id == T_QUANTILE
-// }
-
-// fn is_keyword(id: TokenType) -> bool {
-//     id > T_KEYWORDS_START && id < T_KEYWORDS_END
-// }
-
-// // IsComparisonOperator returns true if the Item corresponds to a comparison operator.
-// // Returns false otherwise.
-// fn iscomparisonoperator(id: TokenType) -> bool {
-//     id == T_EQLC || id == T_NEQ || id == T_LTE || id == T_LSS || id == T_GTE || id == T_GTR
-// }
-
-// fn is_set_operator(id: TokenType) -> bool {
-//     id == T_LAND || id == T_LOR || id == T_LUNLESS
-// }
-
 lazy_static! {
     static ref TOKEN_DISPLAY: HashMap<TokenType, &'static str> =
         [

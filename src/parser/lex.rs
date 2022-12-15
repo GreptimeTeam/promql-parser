@@ -34,21 +34,29 @@ lazy_static! {
 
 pub type LexemeType = DefaultLexeme<TokenType>;
 
-pub fn lexer<'a>(s: &'a str) -> Result<LRNonStreamingLexer<'a, 'a, LexemeType, TokenType>, String> {
+pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         None => Err(format!("generated empty lexemes for {}", s)),
         _ => {
-            let lexemes = lexemes
-                .into_iter()
-                .filter_map(|l| l.ok())
-                .map(|l| Ok(l))
-                .collect();
+            let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
         }
     }
 }
+
+// pub fn lexer<'a>(s: &'a str) -> Result<LRNonStreamingLexer<'a, 'a, LexemeType, TokenType>, String> {
+//     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
+//     match lexemes.last() {
+//         Some(Err(info)) => Err(info.into()),
+//         None => Err(format!("generated empty lexemes for {}", s)),
+//         _ => {
+//             let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
+//             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
+//         }
+//     }
+// }
 
 #[derive(Debug)]
 pub enum State {
@@ -292,7 +300,7 @@ impl Lexer {
             Some('!') => match self.pop() {
                 Some('=') => State::Lexeme(T_NEQ),
                 Some(ch) => State::Err(format!("unexpected character after '!': {}", ch)),
-                None => State::Err(format!("'!' can not be at the end")),
+                None => State::Err("'!' can not be at the end".into()),
             },
             Some('<') => match self.peek() {
                 Some('=') => {
@@ -312,11 +320,11 @@ impl Lexer {
             Some('.') => match self.peek() {
                 Some(ch) if is_digit(ch) => State::Number,
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
-                None => State::Err(format!("'.' can not be at the end")),
+                None => State::Err("'.' can not be at the end".into()),
             },
             Some(ch) if is_alpha(ch) || ch == ':' => {
                 self.backup();
-                return State::KeywordOrIdentifier;
+                State::KeywordOrIdentifier
             }
             Some(ch) if is_string_symbol(ch) => State::String(ch),
             Some('(') => {
@@ -325,7 +333,7 @@ impl Lexer {
             }
             Some(')') => {
                 if self.is_paren_balanced() {
-                    State::Err(format!("unexpected right parenthesis ')'"))
+                    State::Err("unexpected right parenthesis ')'".into())
                 } else {
                     self.dec_paren_depth();
                     State::Lexeme(T_RIGHT_PAREN)
@@ -346,29 +354,8 @@ impl Lexer {
             Some(']') => State::Err("unexpected right bracket ']'".into()),
             Some('@') => State::Lexeme(T_AT),
             Some(ch) => State::Err(format!("unexpected character: {}", ch)),
-            None if !self.is_paren_balanced() => State::Err(format!("unclosed left parenthesis")),
+            None if !self.is_paren_balanced() => State::Err("unclosed left parenthesis".into()),
             None => State::End,
-        }
-    }
-
-    fn inside_brackets(&mut self) -> State {
-        match self.pop() {
-            Some(':') => {
-                if self.is_colon_scanned() {
-                    return State::Err("unexpected colon".into());
-                }
-                self.set_colon_scanned();
-                State::Lexeme(T_COLON)
-            }
-            Some(ch) if is_digit(ch) => self.accept_duration(),
-            Some(']') => {
-                self.jump_outof_brackets();
-                self.reset_colon_scanned();
-                State::Lexeme(T_RIGHT_BRACKET)
-            }
-            Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
-            Some(ch) => State::Err(format!("unexpected character inside brackets: {}", ch)),
-            None => State::Err("unexpected end of input inside brackets".into()),
         }
     }
 
@@ -460,7 +447,7 @@ impl Lexer {
 
     /// consumes a run of space, and ignore them.
     fn ignore_space(&mut self) -> State {
-        // self.backup(); // backup to include the already spanned space
+        self.backup(); // backup to include the already spanned space
         self.accept_run(|ch| SPACE_SET.contains(&ch));
         self.ignore();
         State::Start
@@ -507,10 +494,7 @@ impl Lexer {
             self.accept(|ch| ch == 's');
         }
 
-        match self.peek() {
-            Some(ch) if is_alpha_numeric(ch) => false,
-            _ => true,
-        }
+        !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
     }
 
     /// scans a string escape sequence. The initial escaping character (\)
@@ -577,10 +561,32 @@ impl Lexer {
         }
     }
 
+    fn inside_brackets(&mut self) -> State {
+        match self.pop() {
+            Some(ch) if SPACE_SET.contains(&ch) => State::Space,
+            Some(':') => {
+                if self.is_colon_scanned() {
+                    return State::Err("unexpected colon".into());
+                }
+                self.set_colon_scanned();
+                State::Lexeme(T_COLON)
+            }
+            Some(ch) if is_digit(ch) => self.accept_duration(),
+            Some(']') => {
+                self.jump_outof_brackets();
+                self.reset_colon_scanned();
+                State::Lexeme(T_RIGHT_BRACKET)
+            }
+            Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
+            Some(ch) => State::Err(format!("unexpected character inside brackets: {}", ch)),
+            None => State::Err("unexpected end of input inside brackets".into()),
+        }
+    }
+
     // scans an alphanumeric identifier. The next character
     // is known to be a letter.
     fn accept_identifier(&mut self) -> State {
-        self.accept_run(|ch| is_alpha_numeric(ch));
+        self.accept_run(is_alpha_numeric);
         State::Lexeme(T_IDENTIFIER)
     }
 }
@@ -609,39 +615,79 @@ fn is_end_of_line(ch: char) -> bool {
 }
 
 fn is_alpha_numeric(ch: char) -> bool {
-    return is_alpha(ch) || is_digit(ch);
+    is_alpha(ch) || is_digit(ch)
 }
 
 fn is_digit(ch: char) -> bool {
-    return '0' <= ch && ch <= '9';
+    ('0'..'9').contains(&ch)
 }
 
 fn is_alpha(ch: char) -> bool {
-    return ch == '_' || ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z');
+    ch == '_' || ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_lexer() {
-        let input = "node_cpu_seconds_total";
-        // r#"hel:lo up = == != ,+ [1y] 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
-        let lexer = Lexer::new(input);
-
-        // let lexer = Lexer::new("!a=");
-        for lex in lexer {
-            match lex {
-                Ok(lexeme) => println!("{:?}, display:{}", lexeme, token_display(lexeme.tok_id())),
-                Err(e) => println!("{e}"),
-            }
-        }
+    lazy_static! {
+        static ref COMMON_CASES: Vec<bool> = [
+            (",", vec![(T_COMMA, 0, 1)]),
+            ("()", vec![(T_LEFT_PAREN, 0, 1), (T_RIGHT_PAREN, 1, 1)]),
+            ("{}", vec![(T_LEFT_BRACE, 0, 1), (T_RIGHT_BRACE, 1, 1)]),
+            (
+                "[5m]",
+                vec![
+                    (T_LEFT_BRACKET, 0, 1),
+                    (T_DURATION, 1, 2),
+                    (T_RIGHT_BRACKET, 3, 1)
+                ]
+            ),
+            (
+                "[ 5m]",
+                vec![
+                    (T_LEFT_BRACKET, 0, 1),
+                    (T_DURATION, 2, 2),
+                    (T_RIGHT_BRACKET, 4, 1)
+                ]
+            ),
+            (
+                "[  5m]",
+                vec![
+                    (T_LEFT_BRACKET, 0, 1),
+                    (T_DURATION, 3, 2),
+                    (T_RIGHT_BRACKET, 5, 1)
+                ]
+            ),
+            (
+                "[  5m ]",
+                vec![
+                    (T_LEFT_BRACKET, 0, 1),
+                    (T_DURATION, 3, 2),
+                    (T_RIGHT_BRACKET, 6, 1)
+                ]
+            ),
+            ("\r\n\r", vec![]),
+        ]
+        .into_iter()
+        .map(|(input, expected)| {
+            let expected: Vec<LexemeType> = expected
+                .into_iter()
+                .map(|(token_id, start, len)| LexemeType::new(token_id, start, len))
+                .collect();
+            let actual: Vec<LexemeType> = Lexer::new(input)
+                .into_iter()
+                .filter_map(|l| l.ok())
+                .collect();
+            let success = actual == expected;
+            dbg!(success, actual, expected);
+            success
+        })
+        .collect();
     }
 
     #[test]
-    fn test_name() {
-        let set: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
-        println!("{:?}", set);
+    fn test_lexer() {
+        assert!(COMMON_CASES.iter().all(|&t| t));
     }
 }
