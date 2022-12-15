@@ -631,43 +631,59 @@ mod tests {
     use super::*;
 
     lazy_static! {
-        static ref COMMON_CASES: Vec<bool> = [
+        static ref CASES: Vec<bool> = [
+            // common
             (",", vec![(T_COMMA, 0, 1)]),
             ("()", vec![(T_LEFT_PAREN, 0, 1), (T_RIGHT_PAREN, 1, 1)]),
             ("{}", vec![(T_LEFT_BRACE, 0, 1), (T_RIGHT_BRACE, 1, 1)]),
-            (
-                "[5m]",
-                vec![
-                    (T_LEFT_BRACKET, 0, 1),
-                    (T_DURATION, 1, 2),
-                    (T_RIGHT_BRACKET, 3, 1)
-                ]
-            ),
-            (
-                "[ 5m]",
-                vec![
-                    (T_LEFT_BRACKET, 0, 1),
-                    (T_DURATION, 2, 2),
-                    (T_RIGHT_BRACKET, 4, 1)
-                ]
-            ),
-            (
-                "[  5m]",
-                vec![
-                    (T_LEFT_BRACKET, 0, 1),
-                    (T_DURATION, 3, 2),
-                    (T_RIGHT_BRACKET, 5, 1)
-                ]
-            ),
-            (
-                "[  5m ]",
-                vec![
-                    (T_LEFT_BRACKET, 0, 1),
-                    (T_DURATION, 3, 2),
-                    (T_RIGHT_BRACKET, 6, 1)
-                ]
-            ),
+            ("[5m]", vec![(T_LEFT_BRACKET, 0, 1), (T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+            ("[ 5m]", vec![(T_LEFT_BRACKET, 0, 1), (T_DURATION, 2, 2), (T_RIGHT_BRACKET, 4, 1)]),
+            ("[  5m]", vec![(T_LEFT_BRACKET, 0, 1), (T_DURATION, 3, 2), (T_RIGHT_BRACKET, 5, 1)]),
+            ("[  5m ]", vec![(T_LEFT_BRACKET, 0, 1), (T_DURATION, 3, 2), (T_RIGHT_BRACKET, 6, 1)]),
             ("\r\n\r", vec![]),
+
+            // numbers
+            ("1", vec![(T_NUMBER, 0, 1)]),
+            ("4.23", vec![(T_NUMBER, 0, 4)]),
+            (".3", vec![(T_NUMBER, 0, 2)]),
+            ("5.", vec![(T_NUMBER, 0, 2)]),
+            ("NaN", vec![(T_NUMBER, 0, 3)]),
+            ("nAN", vec![(T_NUMBER, 0, 3)]),
+            ("NaN 123", vec![(T_NUMBER, 0, 3), (T_NUMBER, 4, 3)]),
+            ("NaN123", vec![(T_IDENTIFIER, 0, 6)]),
+            ("iNf", vec![(T_NUMBER, 0, 3)]),
+            ("Inf", vec![(T_NUMBER, 0, 3)]),
+            ("+Inf", vec![(T_ADD, 0, 1), (T_NUMBER, 1, 3)]),
+            ("+Inf 123", vec![(T_ADD, 0, 1), (T_NUMBER, 1, 3), (T_NUMBER, 5, 3)]),
+            ("-Inf 123", vec![(T_SUB, 0, 1), (T_NUMBER, 1, 3), (T_NUMBER, 5, 3)]),
+            ("Infoo", vec![(T_IDENTIFIER, 0, 5)]),
+            ("-Inf123", vec![(T_SUB, 0, 1), (T_IDENTIFIER, 1, 6)]),
+            ("-Inf 123", vec![(T_SUB, 0, 1), (T_NUMBER, 1, 3), (T_NUMBER, 5, 3)]),
+            ("0x123", vec![(T_NUMBER, 0, 5)]),
+
+            // strings
+            ("\"test\\tsequence\"", vec![(T_STRING, 0, 16)]), // "test\tsequence"
+            ("\"test\\\\.expression\"", vec![(T_STRING, 0, 19)]), // "test\\.expression"
+            // TODO: "\"test\\.expression\""
+            ("`test\\.expression`", vec![(T_STRING, 0, 18)]), // `test\.expression`
+            // TODO: ".٩" https://github.com/prometheus/prometheus/issues/939
+
+            // durations
+            // NOTE: diff with Prometheus Go Version
+            // duration is only valid in []
+            ("[5s]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+            ("[123m]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 4), (T_RIGHT_BRACKET, 5, 1)]),
+            ("[1h]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+            ("[3w]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+            ("[1y]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+
+            // identifiers
+            ("abc", vec![(T_IDENTIFIER, 0, 3)]),
+            ("a:bc", vec![(T_METRIC_IDENTIFIER, 0, 4)]),
+            ("abc d", vec![(T_IDENTIFIER, 0, 3), (T_IDENTIFIER, 4, 1)]),
+            (":bc", vec![(T_METRIC_IDENTIFIER, 0, 3)]),
+            ("0a:bc", vec![]),
+
         ]
         .into_iter()
         .map(|(input, expected)| {
@@ -677,17 +693,22 @@ mod tests {
                 .collect();
             let actual: Vec<LexemeType> = Lexer::new(input)
                 .into_iter()
-                .filter_map(|l| l.ok())
+                .filter_map(|l| {
+                    match &l {
+                        Ok(t) => println!("token: {:?}", t),
+                        Err(i) => println!("err: {}", i),
+                    }
+                    l.ok()
+                })
                 .collect();
-            let success = actual == expected;
-            dbg!(success, actual, expected);
-            success
+            dbg!(&expected, &actual);
+            actual == expected
         })
         .collect();
     }
 
     #[test]
     fn test_lexer() {
-        assert!(COMMON_CASES.iter().all(|&t| t));
+        assert!(CASES.iter().all(|&t| t));
     }
 }
