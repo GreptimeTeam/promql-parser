@@ -25,7 +25,6 @@ lazy_static! {
     static ref ALL_DURATION_UNITS: HashSet<char> = HashSet::from(['s', 'm', 'h', 'd', 'w', 'y']);
     static ref ALL_DURATION_BUT_YEAR_UNITS: HashSet<char> =
         HashSet::from(['s', 'm', 'h', 'd', 'w']);
-    static ref ONLY_S_DURATION_UNITS: HashSet<char> = HashSet::from(['s']);
     static ref SPACE_SET: HashSet<char> = HashSet::from([' ', '\t', '\n', '\r']);
     static ref HEX_CHAR_SET: HashSet<char> = HashSet::from(['x', 'X']);
     static ref SCI_CHAR_SET: HashSet<char> = HashSet::from(['e', 'E']);
@@ -101,17 +100,15 @@ pub enum State {
     Start,
     End,
     Lexeme(TokenType),
+    Identifier,
     KeywordOrIdentifier,
-    NumberOrDuration,
-    Duration,
+    Number,
+    InsideBrackets,
     InsideBraces,
     LineComment,
-
-    // char is the string symbol, ' or " or `
-    String(char),
-    // Escape happens inside String. char is the string symbol, ' or " or `
-    Escape(char),
-
+    Space,
+    String(char), // char is the symbol, ' or " or `
+    Escape(char), // Escape happens inside String. char is the symbol, ' or " or `
     Err(String),
 }
 
@@ -212,11 +209,11 @@ impl Lexer {
         self.ctx.brace_open
     }
 
-    pub fn reset_braces(&mut self) {
+    pub fn jump_outof_braces(&mut self) {
         self.ctx.brace_open = false;
     }
 
-    pub fn span_braces(&mut self) {
+    pub fn dive_into_braces(&mut self) {
         self.ctx.brace_open = true;
     }
 
@@ -224,11 +221,11 @@ impl Lexer {
         self.ctx.bracket_open
     }
 
-    pub fn reset_brackets(&mut self) {
+    pub fn jump_outof_brackets(&mut self) {
         self.ctx.bracket_open = false;
     }
 
-    pub fn span_brackets(&mut self) {
+    pub fn dive_into_brackets(&mut self) {
         self.ctx.brace_open = true;
     }
 
@@ -236,7 +233,7 @@ impl Lexer {
         self.ctx.got_colon
     }
 
-    pub fn span_colon(&mut self) {
+    pub fn set_colon_scanned(&mut self) {
         self.ctx.got_colon = true;
     }
 
@@ -288,17 +285,21 @@ impl Lexer {
 /// block for state operations.
 impl Lexer {
     pub fn shift(&mut self) {
+        // NOTE: the design of the match arms's order is of no importance.
+        // If different orders result in different states, then it has to be fixed.
         self.state = match self.state {
             State::Start => self.start(),
             State::End => panic!("End state can not shift forward."),
             State::Lexeme(_) => State::Start,
             State::String(ch) => self.accept_string(ch),
             State::KeywordOrIdentifier => self.accept_keyword_or_identifier(),
-            State::NumberOrDuration => self.accept_number_or_duration(),
-            State::Duration => todo!(),
-            State::InsideBraces => todo!(),
+            State::Identifier => self.accept_identifier(),
+            State::Number => self.accept_number(),
+            State::InsideBrackets => self.inside_brackets(),
+            State::InsideBraces => self.inside_braces(),
             State::LineComment => self.ignore_comment_line(),
             State::Escape(ch) => self.accept_escape(ch),
+            State::Space => self.ignore_space(),
             State::Err(_) => State::End,
         };
     }
@@ -309,16 +310,15 @@ impl Lexer {
         }
 
         if self.is_inside_brackets() {
-            return State::Duration;
+            return State::InsideBrackets;
         }
 
+        // NOTE: the design of the match arms's order is of no importance.
+        // If different orders result in different states, then it has to be fixed.
         match self.pop() {
             Some('#') => State::LineComment,
             Some(',') => State::Lexeme(T_COMMA),
-            Some(ch) if is_space(ch) => {
-                self.backup();
-                self.accept_space()
-            }
+            Some(ch) if SPACE_SET.contains(&ch) => self.ignore_space(),
             Some('*') => State::Lexeme(T_MUL),
             Some('/') => State::Lexeme(T_DIV),
             Some('%') => State::Lexeme(T_MOD),
@@ -330,7 +330,7 @@ impl Lexer {
                     self.pop();
                     State::Lexeme(T_EQLC)
                 }
-                // =~ (label matcher) MUST be in brace, which will be handled in LexInsideBracesState
+                // =~ (label matcher) MUST be in brace
                 Some('~') => State::Err("unexpected character after '=': ~".into()),
                 _ => State::Lexeme(T_EQL),
             },
@@ -353,32 +353,15 @@ impl Lexer {
                 }
                 _ => State::Lexeme(T_GTR),
             },
-            Some(ch) if is_digit(ch) => {
-                self.backup();
-                State::NumberOrDuration
-            }
+            Some(ch) if is_digit(ch) => State::Number,
             Some('.') => match self.peek() {
-                Some(ch) if is_digit(ch) => {
-                    self.backup();
-                    State::NumberOrDuration
-                }
+                Some(ch) if is_digit(ch) => State::Number,
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
                 None => State::Err(format!("'.' can not be at the end")),
             },
             Some(ch) if is_alpha(ch) || ch == ':' => {
-                if !self.is_inside_brackets() {
-                    self.backup();
-                    return State::KeywordOrIdentifier;
-                }
-
-                // the following logic is in []
-                if self.is_colon_scanned() {
-                    return State::Err("unexpected colon ':'".into());
-                }
-                // FIXME: how to get here?
-                // inside brackets and colon not spanned yet.
-                self.span_colon();
-                return State::Lexeme(T_COLON);
+                self.backup();
+                return State::KeywordOrIdentifier;
             }
             Some(ch) if is_string_symbol(ch) => State::String(ch),
             Some('(') => {
@@ -393,51 +376,73 @@ impl Lexer {
                     State::Lexeme(T_RIGHT_PAREN)
                 }
             }
-            // FIXME: pay attention to the space after left brace, cover it in testcases.
             Some('{') => {
-                self.span_braces();
+                self.dive_into_braces();
                 State::Lexeme(T_LEFT_BRACE)
             }
-            Some('}') if !self.is_inside_braces() => {
-                State::Err("unexpected right bracket '}'".into())
-            }
-            Some('}') => {
-                self.reset_braces();
-                State::Lexeme(T_RIGHT_BRACE)
-            }
-            // FIXME: pay attention to the space after left bracket, cover it in testcases.
+            // the matched } has been consumed inside braces
+            Some('}') => State::Err("unexpected right bracket '}'".into()),
             Some('[') => {
                 self.reset_colon_scanned();
-                self.span_brackets();
+                self.dive_into_brackets();
                 State::Lexeme(T_LEFT_BRACKET)
             }
-            Some(']') if !self.is_inside_brackets() => {
-                State::Err("unexpected right bracket ']'".into())
-            }
-            Some(']') => {
-                self.reset_brackets();
-                State::Lexeme(T_RIGHT_BRACKET)
-            }
+            // the matched ] has been consumed inside brackets
+            Some(']') => State::Err("unexpected right bracket ']'".into()),
             Some('@') => State::Lexeme(T_AT),
             Some(ch) => State::Err(format!("unexpected character: {}", ch)),
             None if !self.is_paren_balanced() => State::Err(format!("unclosed left parenthesis")),
-            None if self.is_inside_braces() => State::Err(format!("unclosed left brace")),
-            None if self.is_inside_brackets() => State::Err(format!("unclosed left bracket")),
             None => State::End,
         }
     }
 
-    fn accept_number_or_duration(&mut self) -> State {
-        if self.scan_number() {
-            return State::Lexeme(T_NUMBER);
+    fn inside_brackets(&mut self) -> State {
+        match self.pop() {
+            Some(':') => {
+                if self.is_colon_scanned() {
+                    return State::Err("unexpected colon".into());
+                }
+                self.set_colon_scanned();
+                State::Lexeme(T_COLON)
+            }
+            Some(ch) if is_digit(ch) => self.accept_duration(),
+            Some(']') => {
+                self.jump_outof_brackets();
+                self.reset_colon_scanned();
+                State::Lexeme(T_RIGHT_BRACKET)
+            }
+            Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
+            Some(ch) => State::Err(format!("unexpected character inside brackets: {}", ch)),
+            None => State::Err("unexpected end of input inside brackets".into()),
         }
-        if self.accept_remaining_duration() {
-            return State::Lexeme(T_DURATION);
+    }
+
+    /// the first number has been seen, so first backup.
+    fn accept_duration(&mut self) -> State {
+        self.backup();
+        self.scan_number();
+        if !self.accept_remaining_duration() {
+            return State::Err(format!(
+                "bad duration syntax around {}",
+                self.lexeme_string()
+            ));
         }
-        return State::Err(format!(
-            "bad number or duration syntax: {}",
-            self.lexeme_string()
-        ));
+        State::Lexeme(T_DURATION)
+    }
+
+    /// the first number has been seen, so first backup.
+    fn accept_number(&mut self) -> State {
+        self.backup();
+        self.scan_number();
+
+        match self.peek() {
+            Some(ch) if !SPACE_SET.contains(&ch) => State::Err(format!(
+                "unexpected {} after number {}",
+                ch,
+                self.lexeme_string()
+            )),
+            _ => State::Lexeme(T_NUMBER),
+        }
     }
 
     fn accept_keyword_or_identifier(&mut self) -> State {
@@ -498,8 +503,9 @@ impl Lexer {
         }
     }
 
-    /// accept_space consumes a run of space, and ignore them
-    fn accept_space(&mut self) -> State {
+    /// consumes a run of space, and ignore them.
+    fn ignore_space(&mut self) -> State {
+        // self.backup(); // backup to include the already spanned space
         self.accept_run(|ch| SPACE_SET.contains(&ch));
         self.ignore();
         State::Start
@@ -507,7 +513,7 @@ impl Lexer {
 
     /// scan_number scans numbers of different formats. The scanned Item is
     /// not necessarily a valid number. This case is caught by the parser.
-    fn scan_number(&mut self) -> bool {
+    fn scan_number(&mut self) {
         let mut digits: &HashSet<char> = &DEC_DIGITS_SET;
 
         if self.accept(|ch| ch == '0') && self.accept(|ch| HEX_CHAR_SET.contains(&ch)) {
@@ -521,14 +527,10 @@ impl Lexer {
             self.accept(|ch| SIGN_CHAR_SET.contains(&ch));
             self.accept_run(|ch| DEC_DIGITS_SET.contains(&ch));
         }
-        // Next thing must not be alphanumeric unless it's the times token.
-        // If false, it maybe a duration lexeme.
-        match self.peek() {
-            Some(ch) if is_alpha_numeric(ch) => false,
-            _ => true,
-        }
     }
 
+    /// number part has already been scanned.
+    /// true only if the char after duration is not alphanumeric.
     fn accept_remaining_duration(&mut self) -> bool {
         // Next two char must be a valid duration.
         if !self.accept(|ch| ALL_DURATION_UNITS.contains(&ch)) {
@@ -536,7 +538,7 @@ impl Lexer {
         }
         // Support for ms. Bad units like hs, ys will be caught when we actually
         // parse the duration.
-        self.accept(|ch| ONLY_S_DURATION_UNITS.contains(&ch));
+        self.accept(|ch| ch == 's');
 
         // Next char can be another number then a unit.
         while self.accept(|ch| DEC_DIGITS_SET.contains(&ch)) {
@@ -547,7 +549,7 @@ impl Lexer {
             }
             // Support for ms. Bad units like hs, ys will be caught when we actually
             // parse the duration.
-            self.accept(|ch| ONLY_S_DURATION_UNITS.contains(&ch));
+            self.accept(|ch| ch == 's');
         }
 
         match self.peek() {
@@ -584,6 +586,48 @@ impl Lexer {
 
         State::Err(format!("unterminated quoted string {}", symbol))
     }
+
+    /// scans the inside of a vector selector. Keywords are ignored and
+    /// scanned as identifiers.
+    fn inside_braces(&mut self) -> State {
+        match self.pop() {
+            Some('#') => State::LineComment,
+            Some(',') => State::Lexeme(T_COMMA),
+            Some(ch) if SPACE_SET.contains(&ch) => State::Space,
+            Some(ch) if is_alpha(ch) => State::Identifier,
+            Some(ch) if is_string_symbol(ch) => State::String(ch),
+            Some('=') => match self.peek() {
+                Some('~') => {
+                    self.pop();
+                    State::Lexeme(T_EQL_REGEX)
+                }
+                _ => State::Lexeme(T_EQL),
+            },
+            Some('!') => match self.pop() {
+                Some('~') => State::Lexeme(T_NEQ_REGEX),
+                Some('=') => State::Lexeme(T_NEQ),
+                Some(ch) => State::Err(format!(
+                    "unexpected character after '!' inside braces: {}",
+                    ch
+                )),
+                None => State::Err("'!' can not be at the end".into()),
+            },
+            Some('{') => State::Err("unexpected left brace '{' inside braces".into()),
+            Some('}') => {
+                self.jump_outof_braces();
+                State::Lexeme(T_RIGHT_BRACE)
+            }
+            Some(ch) => State::Err(format!("unexpected character inside braces: {}", ch)),
+            None => State::Err("unexpected end of input inside braces".into()),
+        }
+    }
+
+    // scans an alphanumeric identifier. The next character
+    // is known to be a letter.
+    fn accept_identifier(&mut self) -> State {
+        self.accept_run(|ch| is_alpha_numeric(ch));
+        State::Lexeme(T_IDENTIFIER)
+    }
 }
 
 impl Iterator for Lexer {
@@ -604,10 +648,6 @@ fn is_string_symbol(ch: char) -> bool {
     ch == '"' || ch == '`' || ch == '\''
 }
 
-fn is_space(ch: char) -> bool {
-    SPACE_SET.contains(&ch)
-}
-
 fn is_end_of_line(ch: char) -> bool {
     ch == '\r' || ch == '\n'
 }
@@ -624,13 +664,6 @@ fn is_alpha(ch: char) -> bool {
     return ch == '_' || ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z');
 }
 
-fn is_label(chs: Vec<char>) -> bool {
-    if chs.len() == 0 || !is_alpha(chs[0]) {
-        return false;
-    }
-    chs.iter().all(|&ch| is_alpha_numeric(ch))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,7 +671,7 @@ mod tests {
     #[test]
     fn test_lexer() {
         let lexer = Lexer::new(
-            r#"hel:lo up = == != ,+ 1y 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
+            r#"hel:lo up = == != ,+ [1y] 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
         );
 
         // let lexer = Lexer::new("!a=");
