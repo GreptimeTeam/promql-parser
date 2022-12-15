@@ -34,65 +34,20 @@ lazy_static! {
 
 pub type LexemeType = DefaultLexeme<TokenType>;
 
-// FIXME: this is just a demo Lexer, constructed for example
-pub fn lexer<'a>(s: &'a str) -> LRNonStreamingLexer<'a, 'a, LexemeType, TokenType> {
-    let mut start = 0;
-    let mut len = "node_cpu_seconds_total".len();
-    let metric_identifier_lexeme = DefaultLexeme::new(T_METRIC_IDENTIFIER, start, len);
-
-    start += len;
-    len = "{".len();
-    let left_brace_lexeme = DefaultLexeme::new(T_LEFT_BRACE, start, len);
-
-    start += len;
-    len = "cpu".len();
-    let identifier1_lexeme = DefaultLexeme::new(T_IDENTIFIER, start, len);
-
-    start += len;
-    len = "=".len();
-    let eql1_lexeme = DefaultLexeme::new(T_EQL, start, len);
-
-    start += len;
-    len = "0".len();
-    let val1_lexeme = DefaultLexeme::new(T_STRING, start, len);
-
-    start += len;
-    len = ",".len();
-    let comma_lexeme = DefaultLexeme::new(T_COMMA, start, len);
-
-    start += len;
-    len = "mode".len();
-    let identifier2_lexeme = DefaultLexeme::new(T_IDENTIFIER, start, len);
-
-    start += len;
-    len = "=".len();
-    let eql2_lexeme = DefaultLexeme::new(T_EQL, start, len);
-
-    start += len;
-    len = "idel".len();
-    let val2_lexeme = DefaultLexeme::new(T_STRING, start, len);
-
-    start += len;
-    len = "}".len();
-    let right_brace_lexeme = DefaultLexeme::new(T_RIGHT_BRACE, start, len);
-
-    let lexemes = vec![
-        metric_identifier_lexeme,
-        left_brace_lexeme,
-        identifier1_lexeme,
-        eql1_lexeme,
-        val1_lexeme,
-        comma_lexeme,
-        identifier2_lexeme,
-        eql2_lexeme,
-        val2_lexeme,
-        right_brace_lexeme,
-    ]
-    .into_iter()
-    .map(Ok)
-    .collect();
-
-    LRNonStreamingLexer::new(s, lexemes, Vec::new())
+pub fn lexer<'a>(s: &'a str) -> Result<LRNonStreamingLexer<'a, 'a, LexemeType, TokenType>, String> {
+    let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
+    match lexemes.last() {
+        Some(Err(info)) => Err(info.into()),
+        None => Err(format!("generated empty lexemes for {}", s)),
+        _ => {
+            let lexemes = lexemes
+                .into_iter()
+                .filter_map(|l| l.ok())
+                .map(|l| Ok(l))
+                .collect();
+            Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -226,7 +181,7 @@ impl Lexer {
     }
 
     pub fn dive_into_brackets(&mut self) {
-        self.ctx.brace_open = true;
+        self.ctx.bracket_open = true;
     }
 
     pub fn is_colon_scanned(&self) -> bool {
@@ -630,6 +585,7 @@ impl Lexer {
     }
 }
 
+// TODO: reference iterator
 impl Iterator for Lexer {
     type Item = Result<LexemeType, String>;
 
@@ -670,9 +626,9 @@ mod tests {
 
     #[test]
     fn test_lexer() {
-        let lexer = Lexer::new(
-            r#"hel:lo up = == != ,+ [1y] 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
-        );
+        let input = "node_cpu_seconds_total";
+        // r#"hel:lo up = == != ,+ [1y] 2m 2d 3ms 2d3ms 123 1.1 0x1f .123 1.1e2 1.1 - != * / % == @ "hello" 'prometheus' `greptimedb` " " # comment at the end"#,
+        let lexer = Lexer::new(input);
 
         // let lexer = Lexer::new("!a=");
         for lex in lexer {
