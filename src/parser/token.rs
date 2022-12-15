@@ -50,74 +50,85 @@ pub type TokenType = u8;
 lazy_static! {
     static ref TOKEN_DISPLAY: HashMap<TokenType, &'static str> =
         [
+            // Token.
+            (T_EQL, "="),
+            (T_BLANK, "_"),
+            (T_COLON, ":"),
+            (T_COMMA, ","),
+            (T_COMMENT, "#"),
+            (T_DURATION, "[du]"),
+            (T_EOF, "<eof>"),
+            (T_ERROR, "{Err}"),
+            (T_IDENTIFIER, "{ID}"),
+            (T_LEFT_BRACE, "{"),
+            (T_LEFT_BRACKET, "["),
+            (T_LEFT_PAREN, "("),
+            (T_METRIC_IDENTIFIER, "{Metric_ID}"),
+            (T_NUMBER, "{Num}"),
+            (T_RIGHT_BRACE, "}"),
+            (T_RIGHT_BRACKET, "]"),
+            (T_RIGHT_PAREN, ")"),
+            (T_SEMICOLON, ","),
+            (T_SPACE, "<space>"),
+            (T_STRING, "{Str}"),
+            (T_TIMES, "x"),
+
             // Operators.
+            (T_ADD, "+"),
+            (T_DIV, "/"),
+            (T_EQLC, "=="),
+            (T_EQL_REGEX, "=~"),
+            (T_GTE, ">="),
+            (T_GTR, ">"),
             (T_LAND, "and"),
             (T_LOR, "or"),
+            (T_LSS, "<"),
+            (T_LTE, "<="),
             (T_LUNLESS, "unless"),
+            (T_MOD, "%"),
+            (T_MUL, "*"),
+            (T_NEQ, "!="),
+            (T_NEQ_REGEX, "!~"),
+            (T_POW, "^"),
+            (T_SUB, "-"),
+            (T_AT, "@"),
             (T_ATAN2, "atan2"),
 
             // Aggregators.
-            (T_SUM, "sum"),
             (T_AVG, "avg"),
+            (T_BOTTOMK, "bottomk"),
             (T_COUNT, "count"),
-            (T_MIN, "min"),
-            (T_MAX, "max"),
+            (T_COUNT_VALUES, "count_values"),
             (T_GROUP, "group"),
+            (T_MAX, "max"),
+            (T_MIN, "min"),
+            (T_QUANTILE, "quantile"),
             (T_STDDEV, "stddev"),
             (T_STDVAR, "stdvar"),
+            (T_SUM, "sum"),
             (T_TOPK, "topk"),
-            (T_BOTTOMK, "bottomk"),
-            (T_COUNT_VALUES, "count_values"),
-            (T_QUANTILE, "quantile"),
 
             // Keywords.
-            (T_OFFSET, "offset"),
+            (T_BOOL, "bool"),
             (T_BY, "by"),
-            (T_WITHOUT, "without"),
-            (T_ON, "on"),
-            (T_IGNORING, "ignoring"),
             (T_GROUP_LEFT, "group_left"),
             (T_GROUP_RIGHT, "group_right"),
-            (T_BOOL, "bool"),
+            (T_IGNORING, "ignoring"),
+            (T_OFFSET, "offset"),
+            (T_ON, "on"),
+            (T_WITHOUT, "without"),
 
             // Preprocessors.
             (T_START, "start"),
-            (T_END, "end"),
-
-            (T_LEFT_PAREN, "("),
-            (T_RIGHT_PAREN, ")"),
-            (T_LEFT_BRACE, "{"),
-            (T_RIGHT_BRACE, "}"),
-            (T_LEFT_BRACKET, "["),
-            (T_RIGHT_BRACKET, "]"),
-            (T_COMMA, ","),
-            (T_EQL, "="),
-            (T_COLON, ":"),
-            (T_SEMICOLON, ","),
-            (T_BLANK, "_"),
-            (T_TIMES, "x"),
-            (T_SPACE, "<space>"),
-            (T_SUB, "-"),
-            (T_ADD, "+"),
-            (T_MUL, "*"),
-            (T_MOD, "%"),
-            (T_DIV, "/"),
-            (T_EQLC, "=="),
-            (T_NEQ, "!="),
-            (T_LTE, "<="),
-            (T_LSS, "<"),
-            (T_GTE, ">="),
-            (T_GTR, ">"),
-            (T_EQL_REGEX, "=~"),
-            (T_NEQ_REGEX, "!~"),
-            (T_POW, "^")].into_iter().collect();
+            (T_END, "end")
+        ].into_iter().collect();
 
 
     // This is a list of all keywords in PromQL.
     // When changing this list, make sure to also change
     // the maybe_label grammar rule in the generated parser
     // to avoid misinterpretation of labels as keywords.
-    static ref keywords: HashMap<&'static str, TokenType> =
+    static ref KEYWORDS: HashMap<&'static str, TokenType> =
         [
             // Operators.
             ("and", T_LAND),
@@ -167,7 +178,7 @@ pub fn token_display(id: TokenType) -> String {
 }
 
 pub fn get_keyword_token(s: &str) -> Option<TokenType> {
-    keywords.get(s).copied()
+    KEYWORDS.get(s).copied()
 }
 
 #[derive(Debug)]
