@@ -66,7 +66,7 @@ pub enum State {
     Lexeme(TokenType),
     Identifier,
     KeywordOrIdentifier,
-    Number,
+    NumberOrDuration,
     InsideBrackets,
     InsideBraces,
     LineComment,
@@ -258,7 +258,7 @@ impl Lexer {
             State::String(ch) => self.accept_string(ch),
             State::KeywordOrIdentifier => self.accept_keyword_or_identifier(),
             State::Identifier => self.accept_identifier(),
-            State::Number => self.accept_number(),
+            State::NumberOrDuration => self.accept_number_or_duration(),
             State::InsideBrackets => self.inside_brackets(),
             State::InsideBraces => self.inside_braces(),
             State::LineComment => self.ignore_comment_line(),
@@ -317,9 +317,9 @@ impl Lexer {
                 }
                 _ => State::Lexeme(T_GTR),
             },
-            Some(ch) if is_digit(ch) => State::Number,
+            Some(ch) if is_digit(ch) => State::NumberOrDuration,
             Some('.') => match self.peek() {
-                Some(ch) if is_digit(ch) => State::Number,
+                Some(ch) if is_digit(ch) => State::NumberOrDuration,
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
                 None => State::Err("'.' can not be at the end".into()),
             },
@@ -374,18 +374,21 @@ impl Lexer {
     }
 
     /// the first number has been seen, so first backup.
-    fn accept_number(&mut self) -> State {
+    fn accept_number_or_duration(&mut self) -> State {
         self.backup();
-        self.scan_number();
-
-        match self.peek() {
-            Some(ch) if !SPACE_SET.contains(&ch) => State::Err(format!(
-                "unexpected {} after number {}",
-                ch,
-                self.lexeme_string()
-            )),
-            _ => State::Lexeme(T_NUMBER),
+        if self.scan_number() {
+            return State::Lexeme(T_NUMBER);
         }
+
+        // Next two chars must be a valid unit and a non-alphanumeric.
+        if self.accept_remaining_duration() {
+            return State::Lexeme(T_DURATION);
+        }
+
+        State::Err(format!(
+            "bad number or duration syntax: {}",
+            self.lexeme_string()
+        ))
     }
 
     fn accept_keyword_or_identifier(&mut self) -> State {
@@ -456,7 +459,7 @@ impl Lexer {
 
     /// scan_number scans numbers of different formats. The scanned Item is
     /// not necessarily a valid number. This case is caught by the parser.
-    fn scan_number(&mut self) {
+    fn scan_number(&mut self) -> bool {
         let mut digits: &HashSet<char> = &DEC_DIGITS_SET;
 
         if self.accept(|ch| ch == '0') && self.accept(|ch| HEX_CHAR_SET.contains(&ch)) {
@@ -470,6 +473,10 @@ impl Lexer {
             self.accept(|ch| SIGN_CHAR_SET.contains(&ch));
             self.accept_run(|ch| DEC_DIGITS_SET.contains(&ch));
         }
+
+        // Next thing must not be alphanumeric unless it's the times token
+        // for series repetitions.
+        !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
     }
 
     /// number part has already been scanned.
@@ -547,7 +554,7 @@ impl Lexer {
                 Some('~') => State::Lexeme(T_NEQ_REGEX),
                 Some('=') => State::Lexeme(T_NEQ),
                 Some(ch) => State::Err(format!(
-                    "unexpected character after '!' inside braces: {}",
+                    "unexpected character after '!' inside braces: '{}'",
                     ch
                 )),
                 None => State::Err("'!' can not be at the end".into()),
@@ -557,18 +564,44 @@ impl Lexer {
                 self.jump_outof_braces();
                 State::Lexeme(T_RIGHT_BRACE)
             }
-            Some(ch) => State::Err(format!("unexpected character inside braces: {}", ch)),
+            Some(ch) => State::Err(format!("unexpected character inside braces: '{}'", ch)),
             None => State::Err("unexpected end of input inside braces".into()),
         }
     }
 
+    // this won't affect the cursor.
+    fn last_char_matches<F>(&mut self, f: F) -> bool
+    where
+        F: Fn(char) -> bool,
+    {
+        self.backup();
+        let matched = matches!(self.peek(), Some(ch) if f(ch));
+        self.pop();
+        matched
+    }
+
+    // this won't affect the cursor.
+    fn is_colon_the_first_char(&mut self) -> bool {
+        // note: colon has already been seen, so first backup
+        self.backup();
+        let matched = self.last_char_matches(|ch| ch == '[');
+        self.pop();
+        matched
+    }
+
+    // left brackets has already be seen.
     fn inside_brackets(&mut self) -> State {
         match self.pop() {
             Some(ch) if SPACE_SET.contains(&ch) => State::Space,
             Some(':') => {
                 if self.is_colon_scanned() {
-                    return State::Err("unexpected colon".into());
+                    return State::Err("unexpected second colon(:) in brackets".into());
                 }
+
+                if self.is_colon_the_first_char() {
+                    return State::Err("expect duration before first colon(:) in brackets".into());
+                }
+
                 self.set_colon_scanned();
                 State::Lexeme(T_COLON)
             }
@@ -662,13 +695,11 @@ mod tests {
             // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
 
             ////////////////////////////////////// durations
-            // NOTE: diff with Prometheus Go Version
-            // duration is only valid in []
-            ("[5s]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
-            ("[123m]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 4), (T_RIGHT_BRACKET, 5, 1)]),
-            ("[1h]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
-            ("[3w]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
-            ("[1y]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
+            ("5s", vec![(T_DURATION, 0, 2)]),
+            ("123m", vec![(T_DURATION, 0, 4)]),
+            ("1h", vec![(T_DURATION, 0, 2)]),
+            ("3w", vec![(T_DURATION, 0, 2)]),
+            ("1y", vec![(T_DURATION, 0, 2)]),
 
             ////////////////////////////////////// identifiers
             ("abc", vec![(T_IDENTIFIER, 0, 3)]),
@@ -726,9 +757,9 @@ mod tests {
             ("end", vec![(T_END, 0, 3)]),
 
             ////////////////////////////////////// selectors
-            ("伦敦", vec![]),
-            ("伦敦='a'", vec![]),
-            ("0a='a'", vec![]),
+            ("伦敦", vec![]),  // NOTE: Err is ignored in test case
+            ("伦敦='a'", vec![]), // NOTE: Err is ignored in test case
+            ("0a='a'", vec![]), // NOTE: Err is ignored in test case
             ("{foo='bar'}",
              vec![(T_LEFT_BRACE, 0, 1),
                   (T_IDENTIFIER, 1, 3),
@@ -801,104 +832,105 @@ mod tests {
                   (T_DURATION, 24, 2),
                   (T_RIGHT_BRACKET, 26, 1)]),
 
-            // (r#"test:name{on!~"b:ar"}[4m:4s]"#,
-            //  vec![(T_METRIC_IDENTIFIER, 0, 9),
-            //      (T_LEFT_BRACE, 9, 1),
-            //      (T_IDENTIFIER, 10, 2),
-            //      (T_NEQ_REGEX, 12, 2),
-            //      (T_STRING, 14, 6),
-            //      (T_RIGHT_BRACE, 20, 1),
-            //      (T_LEFT_BRACKET, 21, 1),
-            //      (T_DURATION, 22, 2),
-            //      (T_COLON, 24, 1),
-            //      (T_DURATION, 25, 2),
-            //      (T_RIGHT_BRACKET, 27, 1)]),
+            (r#"test:name{on!~"b:ar"}[4m:4s]"#,
+             vec![(T_METRIC_IDENTIFIER, 0, 9),
+                 (T_LEFT_BRACE, 9, 1),
+                 (T_IDENTIFIER, 10, 2),
+                 (T_NEQ_REGEX, 12, 2),
+                 (T_STRING, 14, 6),
+                 (T_RIGHT_BRACE, 20, 1),
+                 (T_LEFT_BRACKET, 21, 1),
+                 (T_DURATION, 22, 2),
+                 (T_COLON, 24, 1),
+                 (T_DURATION, 25, 2),
+                 (T_RIGHT_BRACKET, 27, 1)]),
 
-            // (r#"test:name{on!~"b:ar"}[4m:]"#,
-            //  vec![(T_METRIC_IDENTIFIER, 0, 9),
-            //      (T_LEFT_BRACE, 9, 1),
-            //      (T_IDENTIFIER, 10, 2),
-            //      (T_NEQ_REGEX, 12, 2),
-            //      (T_STRING, 14, 6),
-            //      (T_RIGHT_BRACE, 20, 1),
-            //      (T_LEFT_BRACKET, 21, 1),
-            //      (T_DURATION, 22, 2),
-            //      (T_COLON, 24, 1),
-            //      (T_RIGHT_BRACKET, 25, 1)]),
-            // (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
-            //  vec![(T_IDENTIFIER, 0, 13),
-            //      (T_LEFT_PAREN, 13, 1),
-            //      (T_IDENTIFIER, 14, 4),
-            //      (T_LEFT_PAREN, 18, 1),
-            //      (T_IDENTIFIER, 19, 3),
-            //      (T_LEFT_BRACE, 22, 1),
-            //      (T_IDENTIFIER, 23, 3),
-            //      (T_EQL, 26, 1),
-            //      (T_STRING, 27, 5),
-            //      (T_RIGHT_BRACE, 32, 1),
-            //      (T_LEFT_BRACKET, 33, 1),
-            //      (T_DURATION, 34, 2),
-            //      (T_RIGHT_BRACKET, 36, 1),
-            //      (T_RIGHT_PAREN, 37, 1),
-            //      (T_LEFT_BRACKET, 38, 1),
-            //      (T_DURATION, 39, 2),
-            //      (T_COLON, 41, 1),
-            //      (T_RIGHT_BRACKET, 42, 1),
-            //      (T_RIGHT_PAREN, 43, 1),
-            //      (T_LEFT_BRACKET, 44, 1),
-            //      (T_DURATION, 45, 2),
-            //      (T_COLON, 47, 1),
-            //      (T_DURATION, 48, 2),
-            //      (T_RIGHT_BRACKET, 50, 1)]),
+            (r#"test:name{on!~"b:ar"}[4m:]"#,
+             vec![(T_METRIC_IDENTIFIER, 0, 9),
+                 (T_LEFT_BRACE, 9, 1),
+                 (T_IDENTIFIER, 10, 2),
+                 (T_NEQ_REGEX, 12, 2),
+                 (T_STRING, 14, 6),
+                 (T_RIGHT_BRACE, 20, 1),
+                 (T_LEFT_BRACKET, 21, 1),
+                 (T_DURATION, 22, 2),
+                 (T_COLON, 24, 1),
+                 (T_RIGHT_BRACKET, 25, 1)]),
 
-            // (r#"test:name{on!~"b:ar"}[4m:4s] offset 10m"#,
-            //  vec![(T_METRIC_IDENTIFIER, 0, 9),
-            //      (T_LEFT_BRACE, 9, 1),
-            //      (T_IDENTIFIER, 10, 2),
-            //      (T_NEQ_REGEX, 12, 2),
-            //      (T_STRING, 14, 6),
-            //      (T_RIGHT_BRACE, 20, 1),
-            //      (T_LEFT_BRACKET, 21, 1),
-            //      (T_DURATION, 22, 2),
-            //      (T_COLON, 24, 1),
-            //      (T_DURATION, 25, 2),
-            //      (T_RIGHT_BRACKET, 27, 2),
-            //      (T_OFFSET, 29, 7),
-            //      (T_DURATION, 36, 1)]),
+            (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
+             vec![(T_IDENTIFIER, 0, 13),
+                 (T_LEFT_PAREN, 13, 1),
+                 (T_IDENTIFIER, 14, 4),
+                 (T_LEFT_PAREN, 18, 1),
+                 (T_IDENTIFIER, 19, 3),
+                 (T_LEFT_BRACE, 22, 1),
+                 (T_IDENTIFIER, 23, 3),
+                 (T_EQL, 26, 1),
+                 (T_STRING, 27, 5),
+                 (T_RIGHT_BRACE, 32, 1),
+                 (T_LEFT_BRACKET, 33, 1),
+                 (T_DURATION, 34, 2),
+                 (T_RIGHT_BRACKET, 36, 1),
+                 (T_RIGHT_PAREN, 37, 1),
+                 (T_LEFT_BRACKET, 38, 1),
+                 (T_DURATION, 39, 2),
+                 (T_COLON, 41, 1),
+                 (T_RIGHT_BRACKET, 42, 1),
+                 (T_RIGHT_PAREN, 43, 1),
+                 (T_LEFT_BRACKET, 44, 1),
+                 (T_DURATION, 45, 2),
+                 (T_COLON, 47, 1),
+                 (T_DURATION, 48, 2),
+                 (T_RIGHT_BRACKET, 50, 1)]),
 
-            // (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 6m)[4m:3s]"#,
-            //  vec![(T_IDENTIFIER, 0, 13),
-            //      (T_LEFT_PAREN, 13, 1),
-            //      (T_IDENTIFIER, 14, 4),
-            //      (T_LEFT_PAREN, 18, 1),
-            //      (T_IDENTIFIER, 19, 3),
-            //      (T_LEFT_BRACE, 22, 1),
-            //      (T_IDENTIFIER, 23, 3),
-            //      (T_EQL, 26, 1),
-            //      (T_STRING, 27, 5),
-            //      (T_RIGHT_BRACE, 32, 1),
-            //      (T_LEFT_BRACKET, 33, 1),
-            //      (T_DURATION, 34, 2),
-            //      (T_RIGHT_BRACKET, 36, 1),
-            //      (T_RIGHT_PAREN, 37, 1),
-            //      (T_LEFT_BRACKET, 38, 1),
-            //      (T_DURATION, 39, 2),
-            //      (T_COLON, 41, 1),
-            //      (T_RIGHT_BRACKET, 42, 2),
-            //      (T_OFFSET, 44, 7),
-            //      (T_DURATION, 51, 2),
-            //      (T_RIGHT_PAREN, 53, 1),
-            //      (T_LEFT_BRACKET, 54, 1),
-            //      (T_DURATION, 55, 2),
-            //      (T_COLON, 57, 1),
-            //      (T_DURATION, 58, 2),
-            //      (T_RIGHT_BRACKET, 60, 1)]),
+            (r#"test:name{on!~"b:ar"}[4m:4s] offset 10m"#,
+             vec![(T_METRIC_IDENTIFIER, 0, 9),
+                 (T_LEFT_BRACE, 9, 1),
+                 (T_IDENTIFIER, 10, 2),
+                 (T_NEQ_REGEX, 12, 2),
+                 (T_STRING, 14, 6),
+                 (T_RIGHT_BRACE, 20, 1),
+                 (T_LEFT_BRACKET, 21, 1),
+                 (T_DURATION, 22, 2),
+                 (T_COLON, 24, 1),
+                 (T_DURATION, 25, 2),
+                 (T_RIGHT_BRACKET, 27, 1),
+                 (T_OFFSET, 29, 6),
+                 (T_DURATION, 36, 3)]),
 
-            // (r#"test:name[ 5m]"#,
-            //  vec![(T_METRIC_IDENTIFIER, 0, 9),
-            //      (T_LEFT_BRACKET, 9, 1),
-            //      (T_DURATION, 11, 2),
-            //      (T_RIGHT_BRACKET, 13, 1),]),
+            (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 6m)[4m:3s]"#,
+             vec![(T_IDENTIFIER, 0, 13),
+                 (T_LEFT_PAREN, 13, 1),
+                 (T_IDENTIFIER, 14, 4),
+                 (T_LEFT_PAREN, 18, 1),
+                 (T_IDENTIFIER, 19, 3),
+                 (T_LEFT_BRACE, 22, 1),
+                 (T_IDENTIFIER, 23, 3),
+                 (T_EQL, 26, 1),
+                 (T_STRING, 27, 5),
+                 (T_RIGHT_BRACE, 32, 1),
+                 (T_LEFT_BRACKET, 33, 1),
+                 (T_DURATION, 34, 2),
+                 (T_RIGHT_BRACKET, 36, 1),
+                 (T_RIGHT_PAREN, 37, 1),
+                 (T_LEFT_BRACKET, 38, 1),
+                 (T_DURATION, 39, 2),
+                 (T_COLON, 41, 1),
+                 (T_RIGHT_BRACKET, 42, 1),
+                 (T_OFFSET, 44, 6),
+                 (T_DURATION, 51, 2),
+                 (T_RIGHT_PAREN, 53, 1),
+                 (T_LEFT_BRACKET, 54, 1),
+                 (T_DURATION, 55, 2),
+                 (T_COLON, 57, 1),
+                 (T_DURATION, 58, 2),
+                 (T_RIGHT_BRACKET, 60, 1)]),
+
+            (r#"test:name[ 5m]"#,
+             vec![(T_METRIC_IDENTIFIER, 0, 9),
+                 (T_LEFT_BRACKET, 9, 1),
+                 (T_DURATION, 11, 2),
+                 (T_RIGHT_BRACKET, 13, 1),]),
         ]
         .into_iter()
         .map(|(input, expected)| {
@@ -908,30 +940,19 @@ mod tests {
                 .collect();
             let actual: Vec<LexemeType> = Lexer::new(input)
                 .into_iter()
-                .filter_map(|l| {
-                    match &l {
-                        Ok(t) => println!("token: {:?}", t),
-                        Err(i) => println!("err: {}", i),
-                    }
-                    l.ok()
-                })
+                .filter_map(|l| l.ok())
                 .collect();
 
-            let b = actual == expected;
-            if !b {
-                dbg!(&expected, &actual);
-            }
-            b
+            actual == expected
         })
         .collect();
 
         static ref LAST_ERR_CASES: Vec<bool> = [
-
             ////////////////////////////////////// common errors
             ("=~", "unexpected character after '=': ~"),
             ("!~", "unexpected character after '!': ~"),
             ("!(", "unexpected character after '!': ("),
-            ("1a", "unexpected a after number 1"),
+            ("1a", "bad number or duration syntax: 1"),
 
             ////////////////////////////////////// mismatched parentheses
             ("(", "unbalanced parenthesis"),
@@ -953,42 +974,21 @@ mod tests {
             // FIXME: ("`\xff`", ""),
 
             ////////////////////////////////////// subqueries
-            //      {
-    //          input: `test:name{o:n!~"bar"}[4m:4s]`,
-    //          fail:  true,
-    //      },
-    //      {
-    //          input: `test:name{on!~"bar"}[4m:4s:4h]`,
-    //          fail:  true,
-    //      },
-    //      {
-    //          input: `test:name{on!~"bar"}[4m:4s:]`,
-    //          fail:  true,
-    //      },
-    //      {
-    //          input: `test:name{on!~"bar"}[4m::]`,
-    //          fail:  true,
-    //      },
-    //      {
-    //          input: `test:name{on!~"bar"}[:4s]`,
-    //          fail:  true,
-    //      },
-    //  },
-    // },
-
+            (r#"test:name{o:n!~"bar"}[4m:4s]"#, "unexpected character inside braces: ':'"),
+            (r#"test:name{on!~"bar"}[4m:4s:4h]"#, "unexpected second colon(:) in brackets"),
+            (r#"test:name{on!~"bar"}[4m:4s:]"#, "unexpected second colon(:) in brackets"),
+            (r#"test:name{on!~"bar"}[4m::]"#, "unexpected second colon(:) in brackets"),
+            (r#"test:name{on!~"bar"}[:4s]"#, "expect duration before first colon(:) in brackets"),
         ]
             .into_iter()
             .map(|(input, expected)| {
                 let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(input).into_iter().collect();
                 let actual = match lexemes.last() {
                     Some(Err(info)) => info.to_string(),
-                    _ => "".to_string(),
+                    _ => "this should not happen".to_string(),
                 };
-                let b = !actual.is_empty() && actual.starts_with(expected);
-                if !b {
-                    dbg!(&expected, &actual);
-                }
-                b
+                dbg!(&actual);
+                !actual.is_empty() && actual == expected
             })
             .collect();
 
