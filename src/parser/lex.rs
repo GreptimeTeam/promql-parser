@@ -30,6 +30,7 @@ lazy_static! {
     static ref SCI_CHAR_SET: HashSet<char> = HashSet::from(['e', 'E']);
     static ref SIGN_CHAR_SET: HashSet<char> = HashSet::from(['+', '-']);
     static ref NORMAL_ESCAPE_SYMBOL_SET: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
+    static ref STRING_SYMBOL_SET: HashSet<char> = HashSet::from(['"', '`', '\'']);
 }
 
 pub type LexemeType = DefaultLexeme<TokenType>;
@@ -326,7 +327,7 @@ impl Lexer {
                 self.backup();
                 State::KeywordOrIdentifier
             }
-            Some(ch) if is_string_symbol(ch) => State::String(ch),
+            Some(ch) if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
             Some('(') => {
                 self.inc_paren_depth();
                 State::Lexeme(T_LEFT_PAREN)
@@ -354,7 +355,7 @@ impl Lexer {
             Some(']') => State::Err("unexpected right bracket ']'".into()),
             Some('@') => State::Lexeme(T_AT),
             Some(ch) => State::Err(format!("unexpected character: {}", ch)),
-            None if !self.is_paren_balanced() => State::Err("unclosed left parenthesis".into()),
+            None if !self.is_paren_balanced() => State::Err("unbalanced parenthesis".into()),
             None => State::End,
         }
     }
@@ -409,7 +410,7 @@ impl Lexer {
     /// # has already not been consumed.
     fn ignore_comment_line(&mut self) -> State {
         while let Some(ch) = self.pop() {
-            if is_end_of_line(ch) {
+            if ch == '\r' || ch == '\n' {
                 break;
             }
         }
@@ -534,7 +535,7 @@ impl Lexer {
             Some(',') => State::Lexeme(T_COMMA),
             Some(ch) if SPACE_SET.contains(&ch) => State::Space,
             Some(ch) if is_alpha(ch) => State::Identifier,
-            Some(ch) if is_string_symbol(ch) => State::String(ch),
+            Some(ch) if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
             Some('=') => match self.peek() {
                 Some('~') => {
                     self.pop();
@@ -606,20 +607,12 @@ impl Iterator for Lexer {
     }
 }
 
-fn is_string_symbol(ch: char) -> bool {
-    ch == '"' || ch == '`' || ch == '\''
-}
-
-fn is_end_of_line(ch: char) -> bool {
-    ch == '\r' || ch == '\n'
-}
-
 fn is_alpha_numeric(ch: char) -> bool {
     is_alpha(ch) || is_digit(ch)
 }
 
 fn is_digit(ch: char) -> bool {
-    ('0'..'9').contains(&ch)
+    ('0'..='9').contains(&ch)
 }
 
 fn is_alpha(ch: char) -> bool {
@@ -632,7 +625,7 @@ mod tests {
 
     lazy_static! {
         static ref CASES: Vec<bool> = [
-            // common
+            ////////////////////////////////////// common
             (",", vec![(T_COMMA, 0, 1)]),
             ("()", vec![(T_LEFT_PAREN, 0, 1), (T_RIGHT_PAREN, 1, 1)]),
             ("{}", vec![(T_LEFT_BRACE, 0, 1), (T_RIGHT_BRACE, 1, 1)]),
@@ -642,7 +635,7 @@ mod tests {
             ("[  5m ]", vec![(T_LEFT_BRACKET, 0, 1), (T_DURATION, 3, 2), (T_RIGHT_BRACKET, 6, 1)]),
             ("\r\n\r", vec![]),
 
-            // numbers
+            ////////////////////////////////////// numbers
             ("1", vec![(T_NUMBER, 0, 1)]),
             ("4.23", vec![(T_NUMBER, 0, 4)]),
             (".3", vec![(T_NUMBER, 0, 2)]),
@@ -661,14 +654,14 @@ mod tests {
             ("-Inf 123", vec![(T_SUB, 0, 1), (T_NUMBER, 1, 3), (T_NUMBER, 5, 3)]),
             ("0x123", vec![(T_NUMBER, 0, 5)]),
 
-            // strings
+            ////////////////////////////////////// strings
             ("\"test\\tsequence\"", vec![(T_STRING, 0, 16)]), // "test\tsequence"
             ("\"test\\\\.expression\"", vec![(T_STRING, 0, 19)]), // "test\\.expression"
-            // TODO: "\"test\\.expression\""
+            // FIXME: "\"test\\.expression\""
             ("`test\\.expression`", vec![(T_STRING, 0, 18)]), // `test\.expression`
-            // TODO: ".٩" https://github.com/prometheus/prometheus/issues/939
+            // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
 
-            // durations
+            ////////////////////////////////////// durations
             // NOTE: diff with Prometheus Go Version
             // duration is only valid in []
             ("[5s]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
@@ -677,13 +670,105 @@ mod tests {
             ("[3w]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
             ("[1y]", vec![(T_LEFT_BRACKET, 0, 1),(T_DURATION, 1, 2), (T_RIGHT_BRACKET, 3, 1)]),
 
-            // identifiers
+            ////////////////////////////////////// identifiers
             ("abc", vec![(T_IDENTIFIER, 0, 3)]),
             ("a:bc", vec![(T_METRIC_IDENTIFIER, 0, 4)]),
             ("abc d", vec![(T_IDENTIFIER, 0, 3), (T_IDENTIFIER, 4, 1)]),
             (":bc", vec![(T_METRIC_IDENTIFIER, 0, 3)]),
             ("0a:bc", vec![]),
 
+            ////////////////////////////////////// comments
+            ("# some comment", vec![]),
+            ("5 # 1+1\n5", vec![(T_NUMBER, 0, 1), (T_NUMBER, 8, 1)]),
+
+            ////////////////////////////////////// operators
+            ("=", vec![(T_EQL, 0, 1)]),
+            ("{=}", vec![(T_LEFT_BRACE, 0, 1), (T_EQL, 1, 1), (T_RIGHT_BRACE, 2, 1)]),
+            ("==", vec![(T_EQLC, 0, 2)]),
+            ("!=", vec![(T_NEQ, 0, 2)]),
+            ("<", vec![(T_LSS, 0, 1)]),
+            (">", vec![(T_GTR, 0, 1)]),
+            (">=", vec![(T_GTE, 0, 2)]),
+            ("<=", vec![(T_LTE, 0, 2)]),
+            ("+", vec![(T_ADD, 0, 1)]),
+            ("-", vec![(T_SUB, 0, 1)]),
+            ("*", vec![(T_MUL, 0, 1)]),
+            ("/", vec![(T_DIV, 0, 1)]),
+            ("^", vec![(T_POW, 0, 1)]),
+            ("%", vec![(T_MOD, 0, 1)]),
+            ("AND", vec![(T_LAND, 0, 3)]),
+            ("or", vec![(T_LOR, 0, 2)]),
+            ("unless", vec![(T_LUNLESS, 0, 6)]),
+            ("@", vec![(T_AT, 0, 1)]),
+
+            ////////////////////////////////////// aggregators
+            ("sum", vec![(T_SUM, 0, 3)]),
+            ("AVG", vec![(T_AVG, 0, 3)]),
+            ("Max", vec![(T_MAX, 0, 3)]),
+            ("min", vec![(T_MIN, 0, 3)]),
+            ("count", vec![(T_COUNT, 0, 5)]),
+            ("stdvar", vec![(T_STDVAR, 0, 6)]),
+            ("stddev", vec![(T_STDDEV, 0, 6)]),
+
+            ////////////////////////////////////// keywords
+            ("offset", vec![(T_OFFSET, 0, 6)]),
+            ("by", vec![(T_BY, 0, 2)]),
+            ("without", vec![(T_WITHOUT, 0, 7)]),
+            ("on", vec![(T_ON, 0, 2)]),
+            ("ignoring", vec![(T_IGNORING, 0, 8)]),
+            ("group_left", vec![(T_GROUP_LEFT, 0, 10)]),
+            ("group_right", vec![(T_GROUP_RIGHT, 0, 11)]),
+            ("bool", vec![(T_BOOL, 0, 4)]),
+            ("atan2", vec![(T_ATAN2, 0, 5)]),
+
+            ////////////////////////////////////// preprocessors
+            ("start", vec![(T_START, 0, 5)]),
+            ("end", vec![(T_END, 0, 3)]),
+
+            ////////////////////////////////////// selectors
+            ("伦敦", vec![]),
+            ("伦敦='a'", vec![]),
+            ("0a='a'", vec![]),
+            ("{foo='bar'}",
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 3),
+                  (T_EQL, 4, 1),
+                  (T_STRING, 5, 5),
+                  (T_RIGHT_BRACE, 10, 1)]),
+            (r#"{foo="bar"}"#,
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 3),
+                  (T_EQL, 4, 1),
+                  (T_STRING, 5, 5),
+                  (T_RIGHT_BRACE, 10, 1)]),
+            (r#"{foo="bar\"bar"}"#,
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 3),
+                  (T_EQL, 4, 1),
+                  (T_STRING, 5, 10),
+                  (T_RIGHT_BRACE, 15, 1)]),
+            (r#"{NaN	!= "bar" }"#,
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 3),
+                  (T_NEQ, 5, 2),
+                  (T_STRING, 8, 5),
+                  (T_RIGHT_BRACE, 14, 1)]),
+            (r#"{alert=~"bar" }"#,
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 5),
+                  (T_EQL_REGEX, 6, 2),
+                  (T_STRING, 8, 5),
+                  (T_RIGHT_BRACE, 14, 1)]),
+            (r#"{on!~"bar"}"#,
+             vec![(T_LEFT_BRACE, 0, 1),
+                  (T_IDENTIFIER, 1, 2),
+                  (T_NEQ_REGEX, 3, 2),
+                  (T_STRING, 5, 5),
+                  (T_RIGHT_BRACE, 10, 1)]),
+            // NOTE: the 3rd is Err, it is ignored in test case
+            (r#"{alert!#"bar"}"#, vec![(T_LEFT_BRACE, 0, 1), (T_IDENTIFIER, 1, 5)]),
+            // NOTE: comma is illegal for identifier
+            (r#"{foo:a="bar"}"#, vec![(T_LEFT_BRACE, 0, 1), (T_IDENTIFIER, 1, 3)]),
         ]
         .into_iter()
         .map(|(input, expected)| {
@@ -701,14 +786,98 @@ mod tests {
                     l.ok()
                 })
                 .collect();
-            dbg!(&expected, &actual);
-            actual == expected
+
+            let b = actual == expected;
+            if !b {
+                dbg!(&expected, &actual);
+            }
+            b
         })
         .collect();
+
+        static ref LAST_ERR_CASES: Vec<bool> = [
+
+            ////////////////////////////////////// common errors
+            ("=~", "unexpected character after '=': ~"),
+            ("!~", "unexpected character after '!': ~"),
+            ("!(", "unexpected character after '!': ("),
+            ("1a", "unexpected a after number 1"),
+
+            ////////////////////////////////////// mismatched parentheses
+            ("(", "unbalanced parenthesis"),
+            (")", "unexpected right parenthesis ')'"),
+            ("())", "unexpected right parenthesis ')'"),
+            ("(()", "unbalanced parenthesis"),
+            ("{", "unexpected end of input inside braces"),
+            ("}", "unexpected right bracket '}'"),
+            ("{{", "unexpected left brace '{' inside braces"),
+            ("{{}}", "unexpected left brace '{' inside braces"),
+            ("[", "unexpected end of input inside brackets"),
+            ("[[", "unexpected left brace '[' inside brackets"),
+            ("[]]", "unexpected right bracket ']'"),
+            ("[[]]", "unexpected left brace '[' inside brackets"),
+            ("]", "unexpected right bracket ']'"),
+        ]
+            .into_iter()
+            .map(|(input, expected)| {
+                let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(input).into_iter().collect();
+                let actual = match lexemes.last() {
+                    Some(Err(info)) => info.to_string(),
+                    _ => "".to_string(),
+                };
+                let b = !actual.is_empty() && actual.starts_with(expected);
+                if !b {
+                    dbg!(&expected, &actual);
+                }
+                b
+            })
+            .collect();
+
     }
 
     #[test]
     fn test_lexer() {
         assert!(CASES.iter().all(|&t| t));
+        assert!(LAST_ERR_CASES.iter().all(|&t| t));
+    }
+
+    #[test]
+    fn test_is_alpha() {
+        assert!(is_alpha('_'));
+        assert!(is_alpha('a'));
+        assert!(is_alpha('z'));
+        assert!(is_alpha('A'));
+        assert!(is_alpha('Z'));
+        assert!(!is_alpha('-'));
+        assert!(!is_alpha('@'));
+        assert!(!is_alpha('0'));
+        assert!(!is_alpha('9'));
+    }
+
+    #[test]
+    fn test_is_digit() {
+        assert!(is_digit('0'));
+        assert!(is_digit('9'));
+        assert!(!is_digit('a'));
+        assert!(!is_digit('z'));
+        assert!(!is_digit('A'));
+        assert!(!is_digit('Z'));
+        assert!(!is_digit('x'));
+        assert!(!is_digit('_'));
+        assert!(!is_digit('-'));
+        assert!(!is_digit('@'));
+    }
+
+    #[test]
+    fn test_is_alpha_numeric() {
+        assert!(is_alpha_numeric('_'));
+        assert!(is_alpha_numeric('a'));
+        assert!(is_alpha_numeric('z'));
+        assert!(is_alpha_numeric('A'));
+        assert!(is_alpha_numeric('Z'));
+        assert!(is_alpha_numeric('0'));
+        assert!(is_alpha_numeric('9'));
+        assert!(!is_alpha_numeric('-'));
+        assert!(!is_alpha_numeric('@'));
     }
 }
