@@ -155,7 +155,7 @@ pub fn get_keyword_token(s: &str) -> Option<TokenType> {
     KEYWORDS.get(s).copied()
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     id: TokenType,
     val: String,
@@ -178,5 +178,22 @@ impl Token {
 
     pub fn val(&self) -> String {
         self.val.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_token_display() {
+        assert_eq!("@", token_display(T_AT));
+        assert_eq!("unknown token id <255>", token_display(255));
+    }
+
+    #[test]
+    fn test_get_keyword_tokens() {
+        assert!(matches!(get_keyword_token("quantile"), Some(T_QUANTILE)));
+        assert!(matches!(get_keyword_token("unknown"), None));
     }
 }

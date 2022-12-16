@@ -47,18 +47,6 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
     }
 }
 
-// pub fn lexer<'a>(s: &'a str) -> Result<LRNonStreamingLexer<'a, 'a, LexemeType, TokenType>, String> {
-//     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
-//     match lexemes.last() {
-//         Some(Err(info)) => Err(info.into()),
-//         None => Err(format!("generated empty lexemes for {}", s)),
-//         _ => {
-//             let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
-//             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
-//         }
-//     }
-// }
-
 #[derive(Debug)]
 pub enum State {
     Start,
@@ -834,118 +822,118 @@ mod tests {
 
             (r#"test:name{on!~"b:ar"}[4m:4s]"#,
              vec![(T_METRIC_IDENTIFIER, 0, 9),
-                 (T_LEFT_BRACE, 9, 1),
-                 (T_IDENTIFIER, 10, 2),
-                 (T_NEQ_REGEX, 12, 2),
-                 (T_STRING, 14, 6),
-                 (T_RIGHT_BRACE, 20, 1),
-                 (T_LEFT_BRACKET, 21, 1),
-                 (T_DURATION, 22, 2),
-                 (T_COLON, 24, 1),
-                 (T_DURATION, 25, 2),
-                 (T_RIGHT_BRACKET, 27, 1)]),
+                  (T_LEFT_BRACE, 9, 1),
+                  (T_IDENTIFIER, 10, 2),
+                  (T_NEQ_REGEX, 12, 2),
+                  (T_STRING, 14, 6),
+                  (T_RIGHT_BRACE, 20, 1),
+                  (T_LEFT_BRACKET, 21, 1),
+                  (T_DURATION, 22, 2),
+                  (T_COLON, 24, 1),
+                  (T_DURATION, 25, 2),
+                  (T_RIGHT_BRACKET, 27, 1)]),
 
             (r#"test:name{on!~"b:ar"}[4m:]"#,
              vec![(T_METRIC_IDENTIFIER, 0, 9),
-                 (T_LEFT_BRACE, 9, 1),
-                 (T_IDENTIFIER, 10, 2),
-                 (T_NEQ_REGEX, 12, 2),
-                 (T_STRING, 14, 6),
-                 (T_RIGHT_BRACE, 20, 1),
-                 (T_LEFT_BRACKET, 21, 1),
-                 (T_DURATION, 22, 2),
-                 (T_COLON, 24, 1),
-                 (T_RIGHT_BRACKET, 25, 1)]),
+                  (T_LEFT_BRACE, 9, 1),
+                  (T_IDENTIFIER, 10, 2),
+                  (T_NEQ_REGEX, 12, 2),
+                  (T_STRING, 14, 6),
+                  (T_RIGHT_BRACE, 20, 1),
+                  (T_LEFT_BRACKET, 21, 1),
+                  (T_DURATION, 22, 2),
+                  (T_COLON, 24, 1),
+                  (T_RIGHT_BRACKET, 25, 1)]),
 
             (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
              vec![(T_IDENTIFIER, 0, 13),
-                 (T_LEFT_PAREN, 13, 1),
-                 (T_IDENTIFIER, 14, 4),
-                 (T_LEFT_PAREN, 18, 1),
-                 (T_IDENTIFIER, 19, 3),
-                 (T_LEFT_BRACE, 22, 1),
-                 (T_IDENTIFIER, 23, 3),
-                 (T_EQL, 26, 1),
-                 (T_STRING, 27, 5),
-                 (T_RIGHT_BRACE, 32, 1),
-                 (T_LEFT_BRACKET, 33, 1),
-                 (T_DURATION, 34, 2),
-                 (T_RIGHT_BRACKET, 36, 1),
-                 (T_RIGHT_PAREN, 37, 1),
-                 (T_LEFT_BRACKET, 38, 1),
-                 (T_DURATION, 39, 2),
-                 (T_COLON, 41, 1),
-                 (T_RIGHT_BRACKET, 42, 1),
-                 (T_RIGHT_PAREN, 43, 1),
-                 (T_LEFT_BRACKET, 44, 1),
-                 (T_DURATION, 45, 2),
-                 (T_COLON, 47, 1),
-                 (T_DURATION, 48, 2),
-                 (T_RIGHT_BRACKET, 50, 1)]),
+                  (T_LEFT_PAREN, 13, 1),
+                  (T_IDENTIFIER, 14, 4),
+                  (T_LEFT_PAREN, 18, 1),
+                  (T_IDENTIFIER, 19, 3),
+                  (T_LEFT_BRACE, 22, 1),
+                  (T_IDENTIFIER, 23, 3),
+                  (T_EQL, 26, 1),
+                  (T_STRING, 27, 5),
+                  (T_RIGHT_BRACE, 32, 1),
+                  (T_LEFT_BRACKET, 33, 1),
+                  (T_DURATION, 34, 2),
+                  (T_RIGHT_BRACKET, 36, 1),
+                  (T_RIGHT_PAREN, 37, 1),
+                  (T_LEFT_BRACKET, 38, 1),
+                  (T_DURATION, 39, 2),
+                  (T_COLON, 41, 1),
+                  (T_RIGHT_BRACKET, 42, 1),
+                  (T_RIGHT_PAREN, 43, 1),
+                  (T_LEFT_BRACKET, 44, 1),
+                  (T_DURATION, 45, 2),
+                  (T_COLON, 47, 1),
+                  (T_DURATION, 48, 2),
+                  (T_RIGHT_BRACKET, 50, 1)]),
 
             (r#"test:name{on!~"b:ar"}[4m:4s] offset 10m"#,
              vec![(T_METRIC_IDENTIFIER, 0, 9),
-                 (T_LEFT_BRACE, 9, 1),
-                 (T_IDENTIFIER, 10, 2),
-                 (T_NEQ_REGEX, 12, 2),
-                 (T_STRING, 14, 6),
-                 (T_RIGHT_BRACE, 20, 1),
-                 (T_LEFT_BRACKET, 21, 1),
-                 (T_DURATION, 22, 2),
-                 (T_COLON, 24, 1),
-                 (T_DURATION, 25, 2),
-                 (T_RIGHT_BRACKET, 27, 1),
-                 (T_OFFSET, 29, 6),
-                 (T_DURATION, 36, 3)]),
+                  (T_LEFT_BRACE, 9, 1),
+                  (T_IDENTIFIER, 10, 2),
+                  (T_NEQ_REGEX, 12, 2),
+                  (T_STRING, 14, 6),
+                  (T_RIGHT_BRACE, 20, 1),
+                  (T_LEFT_BRACKET, 21, 1),
+                  (T_DURATION, 22, 2),
+                  (T_COLON, 24, 1),
+                  (T_DURATION, 25, 2),
+                  (T_RIGHT_BRACKET, 27, 1),
+                  (T_OFFSET, 29, 6),
+                  (T_DURATION, 36, 3)]),
 
             (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 6m)[4m:3s]"#,
              vec![(T_IDENTIFIER, 0, 13),
-                 (T_LEFT_PAREN, 13, 1),
-                 (T_IDENTIFIER, 14, 4),
-                 (T_LEFT_PAREN, 18, 1),
-                 (T_IDENTIFIER, 19, 3),
-                 (T_LEFT_BRACE, 22, 1),
-                 (T_IDENTIFIER, 23, 3),
-                 (T_EQL, 26, 1),
-                 (T_STRING, 27, 5),
-                 (T_RIGHT_BRACE, 32, 1),
-                 (T_LEFT_BRACKET, 33, 1),
-                 (T_DURATION, 34, 2),
-                 (T_RIGHT_BRACKET, 36, 1),
-                 (T_RIGHT_PAREN, 37, 1),
-                 (T_LEFT_BRACKET, 38, 1),
-                 (T_DURATION, 39, 2),
-                 (T_COLON, 41, 1),
-                 (T_RIGHT_BRACKET, 42, 1),
-                 (T_OFFSET, 44, 6),
-                 (T_DURATION, 51, 2),
-                 (T_RIGHT_PAREN, 53, 1),
-                 (T_LEFT_BRACKET, 54, 1),
-                 (T_DURATION, 55, 2),
-                 (T_COLON, 57, 1),
-                 (T_DURATION, 58, 2),
-                 (T_RIGHT_BRACKET, 60, 1)]),
+                  (T_LEFT_PAREN, 13, 1),
+                  (T_IDENTIFIER, 14, 4),
+                  (T_LEFT_PAREN, 18, 1),
+                  (T_IDENTIFIER, 19, 3),
+                  (T_LEFT_BRACE, 22, 1),
+                  (T_IDENTIFIER, 23, 3),
+                  (T_EQL, 26, 1),
+                  (T_STRING, 27, 5),
+                  (T_RIGHT_BRACE, 32, 1),
+                  (T_LEFT_BRACKET, 33, 1),
+                  (T_DURATION, 34, 2),
+                  (T_RIGHT_BRACKET, 36, 1),
+                  (T_RIGHT_PAREN, 37, 1),
+                  (T_LEFT_BRACKET, 38, 1),
+                  (T_DURATION, 39, 2),
+                  (T_COLON, 41, 1),
+                  (T_RIGHT_BRACKET, 42, 1),
+                  (T_OFFSET, 44, 6),
+                  (T_DURATION, 51, 2),
+                  (T_RIGHT_PAREN, 53, 1),
+                  (T_LEFT_BRACKET, 54, 1),
+                  (T_DURATION, 55, 2),
+                  (T_COLON, 57, 1),
+                  (T_DURATION, 58, 2),
+                  (T_RIGHT_BRACKET, 60, 1)]),
 
             (r#"test:name[ 5m]"#,
              vec![(T_METRIC_IDENTIFIER, 0, 9),
-                 (T_LEFT_BRACKET, 9, 1),
-                 (T_DURATION, 11, 2),
-                 (T_RIGHT_BRACKET, 13, 1),]),
+                  (T_LEFT_BRACKET, 9, 1),
+                  (T_DURATION, 11, 2),
+                  (T_RIGHT_BRACKET, 13, 1),]),
         ]
-        .into_iter()
-        .map(|(input, expected)| {
-            let expected: Vec<LexemeType> = expected
-                .into_iter()
-                .map(|(token_id, start, len)| LexemeType::new(token_id, start, len))
-                .collect();
-            let actual: Vec<LexemeType> = Lexer::new(input)
-                .into_iter()
-                .filter_map(|l| l.ok())
-                .collect();
+            .into_iter()
+            .map(|(input, expected)| {
+                let expected: Vec<LexemeType> = expected
+                    .into_iter()
+                    .map(|(token_id, start, len)| LexemeType::new(token_id, start, len))
+                    .collect();
+                let actual: Vec<LexemeType> = Lexer::new(input)
+                    .into_iter()
+                    .filter_map(|l| l.ok())
+                    .collect();
 
-            actual == expected
-        })
-        .collect();
+                actual == expected
+            })
+            .collect();
 
         static ref LAST_ERR_CASES: Vec<bool> = [
             ////////////////////////////////////// common errors
