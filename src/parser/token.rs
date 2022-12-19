@@ -144,6 +144,7 @@ lazy_static! {
         ].into_iter().collect();
 }
 
+/// this is for debug so far, maybe pretty feature in the future.
 pub fn token_display(id: TokenType) -> String {
     match TOKEN_DISPLAY.get(&id) {
         Some(&display) => display.into(),
