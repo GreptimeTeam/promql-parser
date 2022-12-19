@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
-use std::collections::HashMap;
 use std::fmt::{self, Display};
 
 lrlex::lrlex_mod!("token_map");
@@ -21,90 +19,8 @@ pub use token_map::*;
 
 pub type TokenType = u8;
 
-lazy_static! {
-    static ref TOKEN_DISPLAY: HashMap<TokenType, &'static str> =
-        [
-            // Token.
-            (T_EQL, "="),
-            (T_BLANK, "_"),
-            (T_COLON, ":"),
-            (T_COMMA, ","),
-            (T_COMMENT, "#"),
-            (T_DURATION, "[du]"),
-            (T_EOF, "<eof>"),
-            (T_ERROR, "{Err}"),
-            (T_IDENTIFIER, "{ID}"),
-            (T_LEFT_BRACE, "{"),
-            (T_LEFT_BRACKET, "["),
-            (T_LEFT_PAREN, "("),
-            (T_METRIC_IDENTIFIER, "{Metric_ID}"),
-            (T_NUMBER, "{Num}"),
-            (T_RIGHT_BRACE, "}"),
-            (T_RIGHT_BRACKET, "]"),
-            (T_RIGHT_PAREN, ")"),
-            (T_SEMICOLON, ","),
-            (T_SPACE, "<space>"),
-            (T_STRING, "{Str}"),
-            (T_TIMES, "x"),
-
-            // Operators.
-            (T_ADD, "+"),
-            (T_DIV, "/"),
-            (T_EQLC, "=="),
-            (T_EQL_REGEX, "=~"),
-            (T_GTE, ">="),
-            (T_GTR, ">"),
-            (T_LAND, "and"),
-            (T_LOR, "or"),
-            (T_LSS, "<"),
-            (T_LTE, "<="),
-            (T_LUNLESS, "unless"),
-            (T_MOD, "%"),
-            (T_MUL, "*"),
-            (T_NEQ, "!="),
-            (T_NEQ_REGEX, "!~"),
-            (T_POW, "^"),
-            (T_SUB, "-"),
-            (T_AT, "@"),
-            (T_ATAN2, "atan2"),
-
-            // Aggregators.
-            (T_AVG, "avg"),
-            (T_BOTTOMK, "bottomk"),
-            (T_COUNT, "count"),
-            (T_COUNT_VALUES, "count_values"),
-            (T_GROUP, "group"),
-            (T_MAX, "max"),
-            (T_MIN, "min"),
-            (T_QUANTILE, "quantile"),
-            (T_STDDEV, "stddev"),
-            (T_STDVAR, "stdvar"),
-            (T_SUM, "sum"),
-            (T_TOPK, "topk"),
-
-            // Keywords.
-            (T_BOOL, "bool"),
-            (T_BY, "by"),
-            (T_GROUP_LEFT, "group_left"),
-            (T_GROUP_RIGHT, "group_right"),
-            (T_IGNORING, "ignoring"),
-            (T_OFFSET, "offset"),
-            (T_ON, "on"),
-            (T_WITHOUT, "without"),
-
-            // Preprocessors.
-            (T_START, "start"),
-            (T_END, "end")
-        ].into_iter().collect();
-}
-
 /// this is for debug so far, maybe pretty feature in the future.
 pub fn token_display(id: TokenType) -> &'static str {
-    // match TOKEN_DISPLAY.get(&id) {
-    //     Some(&display) => display.into(),
-    //     None => format!("unknown token id <{id}>"),
-    // }
-
     match id {
         // Token.
         T_EQL => "=",

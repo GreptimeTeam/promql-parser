@@ -13,18 +13,12 @@
 // limitations under the License.
 
 use crate::parser::token::*;
-use lazy_static::lazy_static;
 use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
-use std::{collections::HashSet, fmt::Debug};
+use std::fmt::Debug;
 
-lazy_static! {
-    static ref ALL_DURATION_UNITS: HashSet<char> = HashSet::from(['s', 'm', 'h', 'd', 'w', 'y']);
-    static ref ALL_DURATION_BUT_YEAR_UNITS: HashSet<char> =
-        HashSet::from(['s', 'm', 'h', 'd', 'w']);
-    static ref NORMAL_ESCAPE_SYMBOL_SET: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
-    static ref STRING_SYMBOL_SET: HashSet<char> = HashSet::from(['"', '`', '\'']);
-}
+const ESCAPE_SYMBOLS: &str = r#"abfnrtv\"#;
+const STRING_SYMBOLS: &str = r#"'"`"#;
 
 pub type LexemeType = DefaultLexeme<TokenType>;
 
@@ -235,7 +229,7 @@ impl Lexer {
         // If different orders result in different states, then it has to be fixed.
         self.state = match self.state {
             State::Start => self.start(),
-            State::End => panic!("End state can not shift forward."),
+            State::End => State::Err("End state can not shift forward.".into()),
             State::Lexeme(_) => State::Start,
             State::String(ch) => self.accept_string(ch),
             State::KeywordOrIdentifier => self.accept_keyword_or_identifier(),
@@ -319,7 +313,7 @@ impl Lexer {
                 self.backup();
                 State::KeywordOrIdentifier
             }
-            ch if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
+            ch if STRING_SYMBOLS.contains(ch) => State::String(ch),
             '(' => {
                 self.inc_paren_depth();
                 State::Lexeme(T_LEFT_PAREN)
@@ -480,7 +474,7 @@ impl Lexer {
     /// true only if the char after duration is not alphanumeric.
     fn accept_remaining_duration(&mut self) -> bool {
         // Next two char must be a valid duration.
-        if !self.accept(|ch| ALL_DURATION_UNITS.contains(&ch)) {
+        if !self.accept(|ch| "smhdwy".contains(ch)) {
             return false;
         }
         // Support for ms. Bad units like hs, ys will be caught when we actually
@@ -491,7 +485,7 @@ impl Lexer {
         while self.accept(|ch| ch.is_ascii_digit()) {
             self.accept_run(|ch| ch.is_ascii_digit());
             // y is no longer in the list as it should always come first in durations.
-            if !self.accept(|ch| ALL_DURATION_BUT_YEAR_UNITS.contains(&ch)) {
+            if !self.accept(|ch| "smhdw".contains(ch)) {
                 return false;
             }
             // Support for ms. Bad units like hs, ys will be caught when we actually
@@ -508,9 +502,7 @@ impl Lexer {
     // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex.go#L552
     fn accept_escape(&mut self, symbol: char) -> State {
         match self.pop() {
-            Some(ch) if ch == symbol || NORMAL_ESCAPE_SYMBOL_SET.contains(&ch) => {
-                State::String(symbol)
-            }
+            Some(ch) if ch == symbol || ESCAPE_SYMBOLS.contains(ch) => State::String(symbol),
             Some(_) => State::String(symbol),
             None => State::Err("escape sequence not terminated".into()),
         }
@@ -539,7 +531,7 @@ impl Lexer {
             Some(',') => State::Lexeme(T_COMMA),
             Some(ch) if ch.is_ascii_whitespace() => State::Space,
             Some(ch) if is_alpha(ch) => State::Identifier,
-            Some(ch) if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
+            Some(ch) if STRING_SYMBOLS.contains(ch) => State::String(ch),
             Some('=') => match self.peek() {
                 Some('~') => {
                     self.pop();
@@ -657,6 +649,7 @@ mod tests {
 
     fn assert_matches(v: Vec<MatchTuple>) {
         let cases: Vec<(
+            &str,
             Vec<Result<LexemeType, String>>,
             Vec<Result<LexemeType, String>>,
         )> = v
@@ -673,12 +666,16 @@ mod tests {
 
                 let actual: Vec<Result<LexemeType, String>> =
                     Lexer::new(input).into_iter().collect();
-                (expected, actual)
+                (input, expected, actual)
             })
             .collect();
 
-        for (expected, actual) in cases.iter() {
-            assert_eq!(expected, actual);
+        for (input, expected, actual) in cases.iter() {
+            assert_eq!(
+                expected, actual,
+                "input: {}, expected: {:?}, actual: {:?}",
+                input, expected, actual
+            );
         }
     }
 
