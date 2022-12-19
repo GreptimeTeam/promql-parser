@@ -76,7 +76,7 @@ pub enum Expr {
     SubqueryExpr {
         expr: Box<Expr>,
         range: Duration,
-        offset: Instant,
+        offset: Duration,
         timestamp: Option<i64>,
         start_or_end: TokenType, // Set when @ is used with start() or end()
         step: Duration,
@@ -96,7 +96,7 @@ pub enum Expr {
         name: Option<String>,
         // offset is the actual offset that was set in the query.
         // This never changes.
-        offset: Option<Instant>,
+        offset: Option<Duration>,
         start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
         label_matchers: Matchers,
     },
