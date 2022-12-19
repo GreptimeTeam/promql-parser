@@ -19,16 +19,9 @@ use lrpar::Lexeme;
 use std::{collections::HashSet, fmt::Debug};
 
 lazy_static! {
-    static ref DEC_DIGITS_SET: HashSet<char> = "0123456789".chars().into_iter().collect();
-    static ref HEX_DIGITS_SET: HashSet<char> =
-        "0123456789abcdefABCDEF".chars().into_iter().collect();
     static ref ALL_DURATION_UNITS: HashSet<char> = HashSet::from(['s', 'm', 'h', 'd', 'w', 'y']);
     static ref ALL_DURATION_BUT_YEAR_UNITS: HashSet<char> =
         HashSet::from(['s', 'm', 'h', 'd', 'w']);
-    static ref SPACE_SET: HashSet<char> = HashSet::from([' ', '\t', '\n', '\r']);
-    static ref HEX_CHAR_SET: HashSet<char> = HashSet::from(['x', 'X']);
-    static ref SCI_CHAR_SET: HashSet<char> = HashSet::from(['e', 'E']);
-    static ref SIGN_CHAR_SET: HashSet<char> = HashSet::from(['+', '-']);
     static ref NORMAL_ESCAPE_SYMBOL_SET: HashSet<char> = "abfnrtv\\".chars().into_iter().collect();
     static ref STRING_SYMBOL_SET: HashSet<char> = HashSet::from(['"', '`', '\'']);
 }
@@ -266,19 +259,29 @@ impl Lexer {
             return State::InsideBrackets;
         }
 
+        let c = match self.pop() {
+            None => {
+                if !self.is_paren_balanced() {
+                    return State::Err("unbalanced parenthesis".into());
+                }
+                return State::End;
+            }
+            Some(ch) => ch,
+        };
+
         // NOTE: the design of the match arms's order is of no importance.
         // If different orders result in different states, then it has to be fixed.
-        match self.pop() {
-            Some('#') => State::LineComment,
-            Some(',') => State::Lexeme(T_COMMA),
-            Some(ch) if SPACE_SET.contains(&ch) => self.ignore_space(),
-            Some('*') => State::Lexeme(T_MUL),
-            Some('/') => State::Lexeme(T_DIV),
-            Some('%') => State::Lexeme(T_MOD),
-            Some('+') => State::Lexeme(T_ADD),
-            Some('-') => State::Lexeme(T_SUB),
-            Some('^') => State::Lexeme(T_POW),
-            Some('=') => match self.peek() {
+        match c {
+            '#' => State::LineComment,
+            ',' => State::Lexeme(T_COMMA),
+            ch if ch.is_ascii_whitespace() => self.ignore_space(),
+            '*' => State::Lexeme(T_MUL),
+            '/' => State::Lexeme(T_DIV),
+            '%' => State::Lexeme(T_MOD),
+            '+' => State::Lexeme(T_ADD),
+            '-' => State::Lexeme(T_SUB),
+            '^' => State::Lexeme(T_POW),
+            '=' => match self.peek() {
                 Some('=') => {
                     self.pop();
                     State::Lexeme(T_EQLC)
@@ -287,41 +290,41 @@ impl Lexer {
                 Some('~') => State::Err("unexpected character after '=': ~".into()),
                 _ => State::Lexeme(T_EQL),
             },
-            Some('!') => match self.pop() {
+            '!' => match self.pop() {
                 Some('=') => State::Lexeme(T_NEQ),
                 Some(ch) => State::Err(format!("unexpected character after '!': {}", ch)),
                 None => State::Err("'!' can not be at the end".into()),
             },
-            Some('<') => match self.peek() {
+            '<' => match self.peek() {
                 Some('=') => {
                     self.pop();
                     State::Lexeme(T_LTE)
                 }
                 _ => State::Lexeme(T_LSS),
             },
-            Some('>') => match self.peek() {
+            '>' => match self.peek() {
                 Some('=') => {
                     self.pop();
                     State::Lexeme(T_GTE)
                 }
                 _ => State::Lexeme(T_GTR),
             },
-            Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
-            Some('.') => match self.peek() {
+            ch if ch.is_ascii_digit() => State::NumberOrDuration,
+            '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
                 None => State::Err("'.' can not be at the end".into()),
             },
-            Some(ch) if is_alpha(ch) || ch == ':' => {
+            ch if is_alpha(ch) || ch == ':' => {
                 self.backup();
                 State::KeywordOrIdentifier
             }
-            Some(ch) if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
-            Some('(') => {
+            ch if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
+            '(' => {
                 self.inc_paren_depth();
                 State::Lexeme(T_LEFT_PAREN)
             }
-            Some(')') => {
+            ')' => {
                 if self.is_paren_balanced() {
                     State::Err("unexpected right parenthesis ')'".into())
                 } else {
@@ -329,23 +332,21 @@ impl Lexer {
                     State::Lexeme(T_RIGHT_PAREN)
                 }
             }
-            Some('{') => {
+            '{' => {
                 self.dive_into_braces();
                 State::Lexeme(T_LEFT_BRACE)
             }
             // the matched } has been consumed inside braces
-            Some('}') => State::Err("unexpected right bracket '}'".into()),
-            Some('[') => {
+            '}' => State::Err("unexpected right bracket '}'".into()),
+            '[' => {
                 self.reset_colon_scanned();
                 self.dive_into_brackets();
                 State::Lexeme(T_LEFT_BRACKET)
             }
             // the matched ] has been consumed inside brackets
-            Some(']') => State::Err("unexpected right bracket ']'".into()),
-            Some('@') => State::Lexeme(T_AT),
-            Some(ch) => State::Err(format!("unexpected character: {}", ch)),
-            None if !self.is_paren_balanced() => State::Err("unbalanced parenthesis".into()),
-            None => State::End,
+            ']' => State::Err("unexpected right bracket ']'".into()),
+            '@' => State::Lexeme(T_AT),
+            ch => State::Err(format!("unexpected character: {}", ch)),
         }
     }
 
@@ -441,7 +442,7 @@ impl Lexer {
     /// consumes a run of space, and ignore them.
     fn ignore_space(&mut self) -> State {
         self.backup(); // backup to include the already spanned space
-        self.accept_run(|ch| SPACE_SET.contains(&ch));
+        self.accept_run(|ch| ch.is_ascii_whitespace());
         self.ignore();
         State::Start
     }
@@ -449,18 +450,25 @@ impl Lexer {
     /// scan_number scans numbers of different formats. The scanned Item is
     /// not necessarily a valid number. This case is caught by the parser.
     fn scan_number(&mut self) -> bool {
-        let mut digits: &HashSet<char> = &DEC_DIGITS_SET;
+        let mut hex_digit = false;
+        if self.accept(|ch| ch == '0') && self.accept(|ch| ch == 'x' || ch == 'X') {
+            hex_digit = true;
+        }
+        let is_valid_digit = |ch: char| -> bool {
+            if hex_digit {
+                ch.is_ascii_hexdigit()
+            } else {
+                ch.is_ascii_digit()
+            }
+        };
 
-        if self.accept(|ch| ch == '0') && self.accept(|ch| HEX_CHAR_SET.contains(&ch)) {
-            digits = &HEX_DIGITS_SET;
-        }
-        self.accept_run(|ch| digits.contains(&ch));
+        self.accept_run(is_valid_digit);
         if self.accept(|ch| ch == '.') {
-            self.accept_run(|ch| digits.contains(&ch));
+            self.accept_run(is_valid_digit);
         }
-        if self.accept(|ch| SCI_CHAR_SET.contains(&ch)) {
-            self.accept(|ch| SIGN_CHAR_SET.contains(&ch));
-            self.accept_run(|ch| DEC_DIGITS_SET.contains(&ch));
+        if self.accept(|ch| ch == 'e' || ch == 'E') {
+            self.accept(|ch| ch == '+' || ch == '-');
+            self.accept_run(|ch| ch.is_ascii_digit());
         }
 
         // Next thing must not be alphanumeric unless it's the times token
@@ -480,10 +488,10 @@ impl Lexer {
         self.accept(|ch| ch == 's');
 
         // Next char can be another number then a unit.
-        while self.accept(|ch| DEC_DIGITS_SET.contains(&ch)) {
-            self.accept_run(|ch| DEC_DIGITS_SET.contains(&ch));
+        while self.accept(|ch| ch.is_ascii_digit()) {
+            self.accept_run(|ch| ch.is_ascii_digit());
             // y is no longer in the list as it should always come first in durations.
-            if !self.accept(|ch| ALL_DURATION_UNITS.contains(&ch)) {
+            if !self.accept(|ch| ALL_DURATION_BUT_YEAR_UNITS.contains(&ch)) {
                 return false;
             }
             // Support for ms. Bad units like hs, ys will be caught when we actually
@@ -529,7 +537,7 @@ impl Lexer {
         match self.pop() {
             Some('#') => State::LineComment,
             Some(',') => State::Lexeme(T_COMMA),
-            Some(ch) if SPACE_SET.contains(&ch) => State::Space,
+            Some(ch) if ch.is_ascii_whitespace() => State::Space,
             Some(ch) if is_alpha(ch) => State::Identifier,
             Some(ch) if STRING_SYMBOL_SET.contains(&ch) => State::String(ch),
             Some('=') => match self.peek() {
@@ -581,7 +589,7 @@ impl Lexer {
     // left brackets has already be seen.
     fn inside_brackets(&mut self) -> State {
         match self.pop() {
-            Some(ch) if SPACE_SET.contains(&ch) => State::Space,
+            Some(ch) if ch.is_ascii_whitespace() => State::Space,
             Some(':') => {
                 if self.is_colon_scanned() {
                     return State::Err("unexpected second colon(:) in brackets".into());
@@ -647,8 +655,12 @@ mod tests {
     /// MatchTuple.2 is the Err info if the input is invalid PromQL query
     type MatchTuple = (&'static str, Vec<LexemeTuple>, Option<&'static str>);
 
-    fn is_matches(v: Vec<MatchTuple>) -> bool {
-        v.into_iter()
+    fn assert_matches(v: Vec<MatchTuple>) {
+        let cases: Vec<(
+            Vec<Result<LexemeType, String>>,
+            Vec<Result<LexemeType, String>>,
+        )> = v
+            .into_iter()
             .map(|(input, lexemes, err)| {
                 let mut expected: Vec<Result<LexemeType, String>> = lexemes
                     .into_iter()
@@ -661,10 +673,13 @@ mod tests {
 
                 let actual: Vec<Result<LexemeType, String>> =
                     Lexer::new(input).into_iter().collect();
-
-                actual == expected
+                (expected, actual)
             })
-            .all(|b| b == true)
+            .collect();
+
+        for (expected, actual) in cases.iter() {
+            assert_eq!(expected, actual);
+        }
     }
 
     #[test]
@@ -720,7 +735,7 @@ mod tests {
             ("\r\n\r", vec![], None),
         ];
 
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -756,7 +771,7 @@ mod tests {
             ),
             ("0x123", vec![(T_NUMBER, 0, 5)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -768,7 +783,7 @@ mod tests {
             ("`test\\.expression`", vec![(T_STRING, 0, 18)], None),
             // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -780,7 +795,7 @@ mod tests {
             ("3w", vec![(T_DURATION, 0, 2)], None),
             ("1y", vec![(T_DURATION, 0, 2)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -796,7 +811,7 @@ mod tests {
             (":bc", vec![(T_METRIC_IDENTIFIER, 0, 3)], None),
             ("0a:bc", vec![], Some("bad number or duration syntax: 0")),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -805,7 +820,7 @@ mod tests {
             ("# some comment", vec![], None),
             ("5 # 1+1\n5", vec![(T_NUMBER, 0, 1), (T_NUMBER, 8, 1)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -834,7 +849,7 @@ mod tests {
             ("unless", vec![(T_LUNLESS, 0, 6)], None),
             ("@", vec![(T_AT, 0, 1)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -848,7 +863,7 @@ mod tests {
             ("stdvar", vec![(T_STDVAR, 0, 6)], None),
             ("stddev", vec![(T_STDDEV, 0, 6)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -864,7 +879,7 @@ mod tests {
             ("bool", vec![(T_BOOL, 0, 4)], None),
             ("atan2", vec![(T_ATAN2, 0, 5)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -873,7 +888,7 @@ mod tests {
             ("start", vec![(T_START, 0, 5)], None),
             ("end", vec![(T_END, 0, 3)], None),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -959,7 +974,7 @@ mod tests {
                 Some("unexpected character inside braces: ':'"),
             ),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     // TODO: this is supported yet.
@@ -976,7 +991,7 @@ mod tests {
             ("!(", vec![], Some("unexpected character after '!': (")),
             ("1a", vec![], Some("bad number or duration syntax: 1")),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
@@ -1040,7 +1055,7 @@ mod tests {
             ),
             ("]", vec![], Some("unexpected right bracket ']'")),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[ignore]
@@ -1281,7 +1296,7 @@ mod tests {
                 Some("expect duration before first colon(:) in brackets"),
             ),
         ];
-        assert!(is_matches(cases));
+        assert_matches(cases);
     }
 
     #[test]
