@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 
 lrlex::lrlex_mod!("token_map");
@@ -19,8 +21,52 @@ pub use token_map::*;
 
 pub type TokenType = u8;
 
+lazy_static! {
+    static ref KEYWORDS: HashMap<&'static str, TokenType> =
+        [
+            // Operators.
+            ("and", T_LAND),
+            ("or", T_LOR),
+            ("unless", T_LUNLESS),
+            ("atan2", T_ATAN2),
+
+            // Aggregators.
+            ("sum", T_SUM),
+            ("avg", T_AVG),
+            ("count", T_COUNT),
+            ("min", T_MIN),
+            ("max", T_MAX),
+            ("group", T_GROUP),
+            ("stddev", T_STDDEV),
+            ("stdvar", T_STDVAR),
+            ("topk", T_TOPK),
+            ("bottomk", T_BOTTOMK),
+            ("count_values", T_COUNT_VALUES),
+            ("quantile", T_QUANTILE),
+
+            // Keywords.
+            ("offset", T_OFFSET),
+            ("by", T_BY),
+            ("without", T_WITHOUT),
+            ("on", T_ON),
+            ("ignoring", T_IGNORING),
+            ("group_left", T_GROUP_LEFT),
+            ("group_right", T_GROUP_RIGHT),
+            ("bool", T_BOOL),
+
+            // Preprocessors.
+            ("start", T_START),
+            ("end", T_END),
+
+            // Special numbers.
+            ("inf", T_NUMBER),
+            ("nan", T_NUMBER),
+        ].into_iter().collect();
+}
+
 /// this is for debug so far, maybe pretty feature in the future.
-pub fn token_display(id: TokenType) -> &'static str {
+#[allow(dead_code)]
+pub(crate) fn token_display(id: TokenType) -> &'static str {
     match id {
         // Token.
         T_EQL => "=",
@@ -103,47 +149,7 @@ pub fn token_display(id: TokenType) -> &'static str {
 /// the maybe_label grammar rule in the generated parser
 /// to avoid misinterpretation of labels as keywords.
 pub fn get_keyword_token(s: &str) -> Option<TokenType> {
-    match s {
-        // Operators.
-        "and" => Some(T_LAND),
-        "or" => Some(T_LOR),
-        "unless" => Some(T_LUNLESS),
-        "atan2" => Some(T_ATAN2),
-
-        // Aggregators.
-        "sum" => Some(T_SUM),
-        "avg" => Some(T_AVG),
-        "count" => Some(T_COUNT),
-        "min" => Some(T_MIN),
-        "max" => Some(T_MAX),
-        "group" => Some(T_GROUP),
-        "stddev" => Some(T_STDDEV),
-        "stdvar" => Some(T_STDVAR),
-        "topk" => Some(T_TOPK),
-        "bottomk" => Some(T_BOTTOMK),
-        "count_values" => Some(T_COUNT_VALUES),
-        "quantile" => Some(T_QUANTILE),
-
-        // Keywords.
-        "offset" => Some(T_OFFSET),
-        "by" => Some(T_BY),
-        "without" => Some(T_WITHOUT),
-        "on" => Some(T_ON),
-        "ignoring" => Some(T_IGNORING),
-        "group_left" => Some(T_GROUP_LEFT),
-        "group_right" => Some(T_GROUP_RIGHT),
-        "bool" => Some(T_BOOL),
-
-        // Preprocessors.
-        "start" => Some(T_START),
-        "end" => Some(T_END),
-
-        // Special numbers.
-        "inf" => Some(T_NUMBER),
-        "nan" => Some(T_NUMBER),
-
-        _ => None,
-    }
+    KEYWORDS.get(s).copied()
 }
 
 #[derive(Debug, PartialEq, Eq)]
