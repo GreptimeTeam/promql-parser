@@ -60,7 +60,7 @@ struct Context {
     start: usize, // Start position of one Token, increment by char.len_utf8.
     pos: usize,   // Current position in the input, increment by char.len_utf8.
 
-    paren_depth: u8,    // Nesting depth of ( ) exprs, 0 means no parens.
+    paren_depth: usize, // Nesting depth of ( ) exprs, 0 means no parens.
     brace_open: bool,   // Whether a { is opened.
     bracket_open: bool, // Whether a [ is opened.
     got_colon: bool,    // Whether we got a ':' after [ was opened.
@@ -181,8 +181,13 @@ impl Lexer {
         self.ctx.got_colon = false;
     }
 
-    fn inc_paren_depth(&mut self) {
-        self.ctx.paren_depth += 1;
+    /// true only if paren depth less than MAX
+    fn inc_paren_depth(&mut self) -> bool {
+        if self.ctx.paren_depth < usize::MAX {
+            self.ctx.paren_depth += 1;
+            return true;
+        }
+        false
     }
 
     /// true only if paren depth larger than 1
@@ -272,8 +277,8 @@ impl Lexer {
         // If different orders result in different states, then it has to be fixed.
         match c {
             '#' => State::LineComment,
+            '@' => State::Lexeme(T_AT),
             ',' => State::Lexeme(T_COMMA),
-            ch if ch.is_ascii_whitespace() => self.ignore_space(),
             '*' => State::Lexeme(T_MUL),
             '/' => State::Lexeme(T_DIV),
             '%' => State::Lexeme(T_MOD),
@@ -308,6 +313,7 @@ impl Lexer {
                 }
                 _ => State::Lexeme(T_GTR),
             },
+            ch if ch.is_ascii_whitespace() => self.ignore_space(),
             ch if ch.is_ascii_digit() => State::NumberOrDuration,
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
@@ -320,8 +326,10 @@ impl Lexer {
             }
             ch if STRING_SYMBOLS.contains(ch) => State::String(ch),
             '(' => {
-                self.inc_paren_depth();
-                State::Lexeme(T_LEFT_PAREN)
+                if self.inc_paren_depth() {
+                    return State::Lexeme(T_LEFT_PAREN);
+                }
+                State::Err("too many left parentheses".into())
             }
             ')' => {
                 if self.is_paren_balanced() {
@@ -345,7 +353,6 @@ impl Lexer {
             }
             // the matched ] has been consumed inside brackets
             ']' => State::Err("unexpected right bracket ']'".into()),
-            '@' => State::Lexeme(T_AT),
             ch => State::Err(format!("unexpected character: {}", ch)),
         }
     }
