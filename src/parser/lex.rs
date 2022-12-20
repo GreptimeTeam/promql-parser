@@ -185,8 +185,13 @@ impl Lexer {
         self.ctx.paren_depth += 1;
     }
 
-    fn dec_paren_depth(&mut self) {
-        self.ctx.paren_depth -= 1;
+    /// true only if paren depth larger than 1
+    fn dec_paren_depth(&mut self) -> bool {
+        if self.ctx.paren_depth >= 1 {
+            self.ctx.paren_depth -= 1;
+            return true;
+        }
+        false
     }
 
     fn is_paren_balanced(&self) -> bool {
@@ -320,11 +325,12 @@ impl Lexer {
             }
             ')' => {
                 if self.is_paren_balanced() {
-                    State::Err("unexpected right parenthesis ')'".into())
-                } else {
-                    self.dec_paren_depth();
-                    State::Lexeme(T_RIGHT_PAREN)
+                    return State::Err("unexpected right parenthesis ')'".into());
                 }
+                if self.dec_paren_depth() {
+                    return State::Lexeme(T_RIGHT_PAREN);
+                }
+                State::Err("unexpected right parenthesis ')'".into())
             }
             '{' => {
                 self.dive_into_braces();
