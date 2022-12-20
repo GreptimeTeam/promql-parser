@@ -89,12 +89,15 @@ impl Context {
         Some(ch)
     }
 
-    // backup steps back one char. If cursor is at the beginning, it does nothing.
-    fn backup(&mut self) {
+    /// backup steps back one char. If cursor is at the beginning, it does nothing.
+    /// caller should pay attention if the backup is successful or not.
+    fn backup(&mut self) -> bool {
         if let Some(ch) = self.chars.get(self.idx - 1) {
             self.pos -= ch.len_utf8();
             self.idx -= 1;
+            return true;
         };
+        false
     }
 
     /// get the char at the pos to check, this won't consume it.
@@ -207,8 +210,8 @@ impl Lexer {
         self.ctx.pop()
     }
 
-    fn backup(&mut self) {
-        self.ctx.backup();
+    fn backup(&mut self) -> bool {
+        self.ctx.backup()
     }
 
     fn peek(&self) -> Option<char> {
@@ -320,10 +323,7 @@ impl Lexer {
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
                 None => State::Err("'.' can not be at the end".into()),
             },
-            ch if is_alpha(ch) || ch == ':' => {
-                self.backup();
-                State::KeywordOrIdentifier
-            }
+            ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
             ch if STRING_SYMBOLS.contains(ch) => State::String(ch),
             '(' => {
                 if self.inc_paren_depth() {
@@ -388,6 +388,7 @@ impl Lexer {
         ))
     }
 
+    /// the first character has been consumed, but no need to backup.
     fn accept_keyword_or_identifier(&mut self) -> State {
         while let Some(ch) = self.pop() {
             if !is_alpha_numeric(ch) && ch != ':' {
@@ -395,6 +396,8 @@ impl Lexer {
             }
         }
 
+        // if neither keyword nor identifier character has been consumed,
+        // it has to be backed up.
         if self.peek().is_some() {
             self.backup();
         }
@@ -576,14 +579,17 @@ impl Lexer {
     where
         F: Fn(char) -> bool,
     {
-        self.backup();
+        // if cursor is at the beginning, then do nothing.
+        if !self.backup() {
+            return false;
+        }
         let matched = matches!(self.peek(), Some(ch) if f(ch));
         self.pop();
         matched
     }
 
     // this won't affect the cursor.
-    fn is_colon_the_first_char(&mut self) -> bool {
+    fn is_colon_the_first_char_in_brackets(&mut self) -> bool {
         // note: colon has already been seen, so first backup
         self.backup();
         let matched = self.last_char_matches(|ch| ch == '[');
@@ -600,7 +606,7 @@ impl Lexer {
                     return State::Err("unexpected second colon(:) in brackets".into());
                 }
 
-                if self.is_colon_the_first_char() {
+                if self.is_colon_the_first_char_in_brackets() {
                     return State::Err("expect duration before first colon(:) in brackets".into());
                 }
 
