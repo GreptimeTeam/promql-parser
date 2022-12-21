@@ -35,3 +35,39 @@ pub fn lexeme_to_token(
     let lexeme = lexeme.unwrap();
     Token::new(lexeme.tok_id(), span_to_string(lexer, lexeme.span()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::{lex, token};
+
+    #[test]
+    fn test_span_to_string() {
+        let input = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+        let span = Span::new(43, 43 + 3);
+        let lexer = lex::lexer(input);
+        assert!(lexer.is_ok());
+        let span_str = span_to_string(&lexer.unwrap(), span);
+        assert_eq!(span_str, "job");
+    }
+
+    #[test]
+    fn test_lexeme_to_string() {
+        let input = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+        let lexeme = LexemeType::new(token::T_IDENTIFIER, 43, 3);
+        let lexer = lex::lexer(input);
+        assert!(lexer.is_ok());
+        let lexeme_str = lexeme_to_string(&lexer.unwrap(), &Ok(lexeme));
+        assert_eq!(lexeme_str, "job");
+    }
+
+    #[test]
+    fn test_lexeme_to_token() {
+        let input = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+        let lexeme = LexemeType::new(token::T_IDENTIFIER, 43, 3);
+        let lexer = lex::lexer(input);
+        assert!(lexer.is_ok());
+        let token = lexeme_to_token(&lexer.unwrap(), Ok(lexeme));
+        assert_eq!(Token::new(token::T_IDENTIFIER, "job".into()), token);
+    }
+}

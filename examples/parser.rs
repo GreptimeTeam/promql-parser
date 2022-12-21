@@ -15,9 +15,10 @@
 use promql_parser::parser;
 
 fn main() {
-    let promql = "node_cpu_seconds_total{cpu=0,mode=idle}";
+    let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
 
-    let ast = parser::parse(promql).unwrap();
-
-    println!("AST: {:?}", ast);
+    match parser::parse(promql) {
+        Ok(ast) => println!("AST: {:?}", ast),
+        Err(info) => println!("Err: {:?}", info),
+    }
 }
