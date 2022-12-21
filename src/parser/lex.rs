@@ -993,7 +993,7 @@ mod tests {
         assert_matches(cases);
     }
 
-    // TODO: this is supported yet.
+    // TODO: this is not supported yet.
     // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex_test.go#L498
     #[test]
     #[ignore]
