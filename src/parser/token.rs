@@ -152,7 +152,7 @@ pub fn get_keyword_token(s: &str) -> Option<TokenType> {
     KEYWORDS.get(s).copied()
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     id: TokenType,
     val: String,

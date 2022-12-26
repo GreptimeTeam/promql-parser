@@ -125,9 +125,76 @@ START_METRIC_SELECTOR
 %%
 
 start -> Result<Expr, String>:
-                vector_selector { $1 }
-                | string_literal { $1 }
+                expr { $1 }
+                /* If none of the more detailed error messages are triggered, we fall back to this. */
+                | error { Err($1) }
+                ;
+
+expr -> Result<Expr, String>:
+                /* aggregate_expr */
+                /* | binary_expr */
+                /* | function_call */
+                matrix_selector { $1 }
                 | number_literal { $1 }
+                /* | offset_expr */
+                /* | paren_expr */
+                | string_literal { $1 }
+                | subquery_expr { $1 }
+                /* | unary_expr  { $1 } */
+                | vector_selector  { $1 }
+                /* | step_invariant_expr */
+                ;
+
+/*
+ * @ modifiers.
+ */
+
+/* step_invariant_expr: expr AT signed_or_unsigned_number */
+/*                         { */
+/*                         yylex.(*parser).setTimestamp($1, $3) */
+/*                         $$ = $1 */
+/*                         } */
+/*                 | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN */
+/*                         { */
+/*                         yylex.(*parser).setAtModifierPreprocessor($1, $3) */
+/*                         $$ = $1 */
+/*                         } */
+/*                 | expr AT error */
+/*                         { yylex.(*parser).unexpected("@", "timestamp"); $$ = $1 } */
+/*                 ; */
+
+at_modifier_preprocessors -> Token:
+                START { lexeme_to_token($lexer, $1) }
+                | END { lexeme_to_token($lexer, $1) }
+                ;
+
+
+/*
+ * Subquery and range selectors.
+ */
+
+matrix_selector -> Result<Expr, String>:
+                expr LEFT_BRACKET duration RIGHT_BRACKET
+                { Expr::new_matrix_selector($1?, $3?) }
+                ;
+
+subquery_expr -> Result<Expr, String>:
+                expr LEFT_BRACKET duration COLON duration RIGHT_BRACKET
+                { Expr::new_subquery_expr($1?, $3?, $5?) }
+                | expr LEFT_BRACKET duration COLON duration error { Err($6) }
+                | expr LEFT_BRACKET duration COLON error { Err($5) }
+                | expr LEFT_BRACKET duration error { Err($4) }
+                | expr LEFT_BRACKET error { Err($3) }
+                ;
+
+/*
+ * Unary expressions.
+ */
+
+unary_expr -> Result<Expr, String>:
+                /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
+                /* FIXME: unary_op has same precedence with MUL, or Rule Conflict */
+                unary_op expr { Expr::new_unary_expr($2?, &$1) }
                 ;
 
 /*
@@ -140,16 +207,16 @@ vector_selector -> Result<Expr, String>:
                         let name = $1.val();
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = $2?.append(matcher);
-                        Ok(Expr::new_vector_selector(Some(name), matchers))
+                        Expr::new_vector_selector(Some(name), matchers)
                 }
                 | metric_identifier
                 {
                         let name = $1.val();
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = Matchers::empty().append(matcher);
-                        Ok(Expr::new_vector_selector(Some(name), matchers))
+                        Expr::new_vector_selector(Some(name), matchers)
                 }
-                | label_matchers { Ok(Expr::new_vector_selector(None, $1?)) }
+                | label_matchers { Expr::new_vector_selector(None, $1?) }
                 ;
 
 label_matchers -> Result<Matchers, String>:
@@ -161,7 +228,7 @@ label_matchers -> Result<Matchers, String>:
 label_match_list -> Result<Matchers, String>:
                 label_match_list COMMA label_matcher { Ok($1?.append($3?)) }
                 | label_matcher { Ok(Matchers::empty().append($1?)) }
-                | label_match_list error { $1 } // FIXME: error ignored
+                | label_match_list error { Err($2) }
                 ;
 
 label_matcher -> Result<Matcher, String>:
@@ -249,6 +316,11 @@ label_set_item -> Result<Label, String>:
 error -> String:
                 ERROR { span_to_string($lexer, $span) }
                 ;
+
+/*
+ * Series descriptions (only used by unit tests).
+ * Note: this is not supported yet.
+ */
 
 /*
  * Keyword lists.
