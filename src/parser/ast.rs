@@ -15,7 +15,7 @@
 #![allow(dead_code)]
 use lrpar::Span;
 use std::fmt::{self, Display};
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 
 use crate::label::Matchers;
 use crate::parser::{Function, TokenType};
@@ -27,8 +27,8 @@ pub struct EvalStmt {
 
     // The time boundaries for the evaluation. If start equals end an instant
     // is evaluated.
-    start: Instant,
-    end: Instant,
+    start: SystemTime,
+    end: SystemTime,
     // Time between two evaluated instants for the range [start:end].
     interval: Duration,
     // Lookback delta to use for this evaluation.
