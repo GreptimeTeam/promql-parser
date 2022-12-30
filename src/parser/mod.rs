@@ -20,7 +20,7 @@ pub mod production;
 pub mod token;
 pub mod value;
 
-pub use ast::Expr;
+pub use ast::{EvalStmt, Expr};
 pub use function::{get_function, Function};
 pub use lex::{lexer, LexemeType};
 pub use parse::parse;
