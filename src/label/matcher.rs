@@ -26,9 +26,9 @@ pub enum MatchOp {
 // Matcher models the matching of a label.
 #[derive(Debug, Clone)]
 pub struct Matcher {
-    op: MatchOp,
-    name: String,
-    value: String,
+    pub op: MatchOp,
+    pub name: String,
+    pub value: String,
 }
 
 impl Matcher {
@@ -53,7 +53,7 @@ impl Matcher {
 
 #[derive(Debug, Clone)]
 pub struct Matchers {
-    matchers: Vec<Matcher>,
+    pub matchers: Vec<Matcher>,
 }
 
 impl Matchers {
