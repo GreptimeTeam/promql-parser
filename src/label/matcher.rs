@@ -15,7 +15,7 @@
 use crate::parser::token::{Token, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MatchOp {
     Equal,
     NotEqual,
@@ -24,7 +24,7 @@ pub enum MatchOp {
 }
 
 // Matcher models the matching of a label.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Matcher {
     op: MatchOp,
     name: String,
@@ -51,7 +51,7 @@ impl Matcher {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Matchers {
     matchers: Vec<Matcher>,
 }

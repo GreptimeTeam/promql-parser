@@ -35,7 +35,7 @@ pub struct EvalStmt {
     lookback_delta: Duration,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     /// AggregateExpr represents an aggregation operation on a Vector.
     AggregateExpr {
@@ -136,7 +136,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne,
@@ -157,7 +157,7 @@ impl Display for VectorMatchCardinality {
 
 // VectorMatching describes how elements from two Vectors in a binary
 // operation are supposed to be matched.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VectorMatching {
     // The cardinality of the two Vectors.
     card: VectorMatchCardinality,

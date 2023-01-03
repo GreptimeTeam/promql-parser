@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 
 use crate::parser::ValueType;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
