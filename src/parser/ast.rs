@@ -23,16 +23,16 @@ use crate::parser::{Function, TokenType};
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
 pub struct EvalStmt {
-    expr: Expr, // Expression to be evaluated.
+    pub expr: Expr, // Expression to be evaluated.
 
     // The time boundaries for the evaluation. If start equals end an instant
     // is evaluated.
-    start: SystemTime,
-    end: SystemTime,
+    pub start: SystemTime,
+    pub end: SystemTime,
     // Time between two evaluated instants for the range [start:end].
-    interval: Duration,
+    pub interval: Duration,
     // Lookback delta to use for this evaluation.
-    lookback_delta: Duration,
+    pub lookback_delta: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -160,14 +160,14 @@ impl Display for VectorMatchCardinality {
 #[derive(Debug, Clone)]
 pub struct VectorMatching {
     // The cardinality of the two Vectors.
-    card: VectorMatchCardinality,
+    pub card: VectorMatchCardinality,
     // MatchingLabels contains the labels which define equality of a pair of
     // elements from the Vectors.
-    matching_labels: Vec<String>,
+    pub matching_labels: Vec<String>,
     // On includes the given label names from matching,
     // rather than excluding them.
-    on: bool,
+    pub on: bool,
     // Include contains additional labels that should be included in
     // the result from the side with the lower cardinality.
-    include: Vec<String>,
+    pub include: Vec<String>,
 }
