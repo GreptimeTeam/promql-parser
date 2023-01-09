@@ -22,6 +22,7 @@ use crate::parser::{Function, TokenType};
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
+#[derive(Debug, Clone)]
 pub struct EvalStmt {
     pub expr: Expr, // Expression to be evaluated.
 
