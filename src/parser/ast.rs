@@ -18,7 +18,7 @@ use std::fmt::{self, Display};
 use std::time::{Duration, SystemTime};
 
 use crate::label::Matchers;
-use crate::parser::{Function, TokenType};
+use crate::parser::{Function, Token, TokenType};
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
@@ -76,10 +76,9 @@ pub enum Expr {
 
     SubqueryExpr {
         expr: Box<Expr>,
+        offset: Option<Duration>,
+        start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
         range: Duration,
-        offset: Duration,
-        timestamp: Option<i64>,
-        start_or_end: TokenType, // Set when @ is used with start() or end()
         step: Duration,
     },
 
@@ -95,9 +94,8 @@ pub enum Expr {
 
     VectorSelector {
         name: Option<String>,
-        // offset is the actual offset that was set in the query.
-        // This never changes.
         offset: Option<Duration>,
+        at: Option<Instant>,
         start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
         label_matchers: Matchers,
     },
@@ -118,21 +116,53 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn empty_vector_selector() -> Self {
-        Self::VectorSelector {
-            name: None,
-            offset: None,
-            start_or_end: None,
-            label_matchers: Matchers::empty(),
-        }
-    }
-
-    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
-        Self::VectorSelector {
+    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
+        let vs = Expr::VectorSelector {
             name,
             offset: None,
+            at: None,
             start_or_end: None,
             label_matchers: matchers,
+        };
+        Ok(vs)
+    }
+
+    pub fn new_unary_expr(expr: Expr, op: &Token) -> Result<Self, String> {
+        let ue = match expr {
+            Expr::NumberLiteral { val, span } => Expr::NumberLiteral { val: -val, span },
+            _ => Expr::UnaryExpr {
+                op: op.id(),
+                expr: Box::new(expr),
+            },
+        };
+        Ok(ue)
+    }
+
+    pub fn new_subquery_expr(expr: Expr, range: Duration, step: Duration) -> Result<Self, String> {
+        let se = Expr::SubqueryExpr {
+            expr: Box::new(expr),
+            offset: None,
+            start_or_end: None,
+            range,
+            step,
+        };
+        Ok(se)
+    }
+
+    pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
+        match expr {
+            Expr::VectorSelector {
+                offset: Some(_), ..
+            } => Err("".into()),
+            Expr::VectorSelector { at: Some(_), .. } => Err("".into()),
+            Expr::VectorSelector { .. } => {
+                let ms = Expr::MatrixSelector {
+                    vector_selector: Box::new(expr),
+                    range,
+                };
+                Ok(ms)
+            }
+            _ => Err("".into()),
         }
     }
 }
