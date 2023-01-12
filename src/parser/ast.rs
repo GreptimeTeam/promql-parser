@@ -37,103 +37,135 @@ pub struct EvalStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct Aggregate {
+    pub op: TokenType,         // The used aggregation operation.
+    pub expr: Box<Expr>,       // The Vector expression over which is aggregated.
+    pub param: Box<Expr>,      // Parameter used by some aggregators.
+    pub grouping: Vec<String>, // The labels by which to group the Vector.
+    pub without: bool,         // Whether to drop the given labels rather than keep them.
+}
+
+#[derive(Debug, Clone)]
+pub struct Unary {
+    pub op: TokenType,
+    pub expr: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Binary {
+    pub op: TokenType,  // The operation of the expression.
+    pub lhs: Box<Expr>, // The operands on the left sides of the operator.
+    pub rhs: Box<Expr>, // The operands on the right sides of the operator.
+
+    // The matching behavior for the operation if both operands are Vectors.
+    // If they are not this field is None.
+    pub matching: Option<VectorMatching>,
+
+    // If a comparison operator, return 0/1 rather than filtering.
+    pub return_bool: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Paren {
+    pub expr: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Subquery {
+    pub expr: Box<Expr>,
+    pub range: Duration,
+    pub offset: Duration,
+    pub timestamp: Option<i64>,
+    pub start_or_end: TokenType, // Set when @ is used with start() or end()
+    pub step: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct NumberLiteral {
+    pub val: f64,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct StringLiteral {
+    pub val: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct VectorSelector {
+    pub name: Option<String>,
+    // offset is the actual offset that was set in the query.
+    // This never changes.
+    pub offset: Option<Duration>,
+    pub start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
+    pub label_matchers: Matchers,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatrixSelector {
+    // It is safe to assume that this is an VectorSelector
+    // if the parser hasn't returned an error.
+    pub vector_selector: Box<Expr>,
+    pub range: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct Call {
+    pub func: Function,       // The function that was called.
+    pub args: Vec<Box<Expr>>, // Arguments used in the call.
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
-    /// AggregateExpr represents an aggregation operation on a Vector.
-    AggregateExpr {
-        op: TokenType,         // The used aggregation operation.
-        expr: Box<Expr>,       // The Vector expression over which is aggregated.
-        param: Box<Expr>,      // Parameter used by some aggregators.
-        grouping: Vec<String>, // The labels by which to group the Vector.
-        without: bool,         // Whether to drop the given labels rather than keep them.
-    },
+    /// Aggregate represents an aggregation operation on a Vector.
+    Aggregate(Aggregate),
 
-    /// UnaryExpr represents a unary operation on another expression.
+    /// Unary represents a unary operation on another expression.
     /// Currently unary operations are only supported for Scalars.
-    UnaryExpr {
-        op: TokenType,
-        expr: Box<Expr>,
-    },
+    Unary(Unary),
 
-    /// BinaryExpr represents a binary expression between two child expressions.
-    BinaryExpr {
-        op: TokenType,  // The operation of the expression.
-        lhs: Box<Expr>, // The operands on the left sides of the operator.
-        rhs: Box<Expr>, // The operands on the right sides of the operator.
+    /// Binary represents a binary expression between two child expressions.
+    Binary(Binary),
 
-        // The matching behavior for the operation if both operands are Vectors.
-        // If they are not this field is None.
-        matching: Option<VectorMatching>,
-
-        // If a comparison operator, return 0/1 rather than filtering.
-        return_bool: bool,
-    },
-
-    /// ParenExpr wraps an expression so it cannot be disassembled as a consequence
+    /// Paren wraps an expression so it cannot be disassembled as a consequence
     /// of operator precedence.
-    ParenExpr {
-        expr: Box<Expr>,
-    },
+    Paren(Paren),
 
-    SubqueryExpr {
-        expr: Box<Expr>,
-        range: Duration,
-        offset: Duration,
-        timestamp: Option<i64>,
-        start_or_end: TokenType, // Set when @ is used with start() or end()
-        step: Duration,
-    },
+    Subquery(Subquery),
 
-    NumberLiteral {
-        val: f64,
-        span: Span,
-    },
+    NumberLiteral(NumberLiteral),
 
-    StringLiteral {
-        val: String,
-        span: Span,
-    },
+    StringLiteral(StringLiteral),
 
-    VectorSelector {
-        name: Option<String>,
-        // offset is the actual offset that was set in the query.
-        // This never changes.
-        offset: Option<Duration>,
-        start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
-        label_matchers: Matchers,
-    },
+    VectorSelector(VectorSelector),
 
-    MatrixSelector {
-        // It is safe to assume that this is an VectorSelector
-        // if the parser hasn't returned an error.
-        vector_selector: Box<Expr>,
-        range: Duration,
-    },
+    MatrixSelector(MatrixSelector),
 
     /// Call represents a function call.
     // TODO: need more descriptions
-    Call {
-        func: Function,       // The function that was called.
-        args: Vec<Box<Expr>>, // Arguments used in the call.
-    },
+    Call(Call),
 }
 
 impl Expr {
     pub fn empty_vector_selector() -> Self {
-        Self::VectorSelector {
+        let vs = VectorSelector {
             name: None,
             offset: None,
             start_or_end: None,
             label_matchers: Matchers::empty(),
-        }
+        };
+        Self::VectorSelector(vs)
     }
 
     pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
-        Self::VectorSelector {
+        let vs = VectorSelector {
             name,
             offset: None,
             start_or_end: None,
             label_matchers: matchers,
-        }
+        };
+        Self::VectorSelector(vs)
     }
 }
 
