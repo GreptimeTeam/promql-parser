@@ -36,7 +36,7 @@ pub struct EvalStmt {
 }
 
 #[derive(Debug, Clone)]
-pub struct Aggregate {
+pub struct AggregateExpr {
     pub op: TokenType,         // The used aggregation operation.
     pub expr: Box<Expr>,       // The Vector expression over which is aggregated.
     pub param: Box<Expr>,      // Parameter used by some aggregators.
@@ -45,13 +45,13 @@ pub struct Aggregate {
 }
 
 #[derive(Debug, Clone)]
-pub struct Unary {
+pub struct UnaryExpr {
     pub op: TokenType,
     pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Binary {
+pub struct BinaryExpr {
     pub op: TokenType,  // The operation of the expression.
     pub lhs: Box<Expr>, // The operands on the left sides of the operator.
     pub rhs: Box<Expr>, // The operands on the right sides of the operator.
@@ -65,12 +65,12 @@ pub struct Binary {
 }
 
 #[derive(Debug, Clone)]
-pub struct Paren {
+pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Subquery {
+pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub range: Duration,
     pub offset: Duration,
@@ -116,20 +116,20 @@ pub struct Call {
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
-    Aggregate(Aggregate),
+    Aggregate(AggregateExpr),
 
     /// Unary represents a unary operation on another expression.
     /// Currently unary operations are only supported for Scalars.
-    Unary(Unary),
+    Unary(UnaryExpr),
 
     /// Binary represents a binary expression between two child expressions.
-    Binary(Binary),
+    Binary(BinaryExpr),
 
     /// Paren wraps an expression so it cannot be disassembled as a consequence
     /// of operator precedence.
-    Paren(Paren),
+    Paren(ParenExpr),
 
-    Subquery(Subquery),
+    Subquery(SubqueryExpr),
 
     NumberLiteral(NumberLiteral),
 
