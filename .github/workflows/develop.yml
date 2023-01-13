@@ -27,6 +27,7 @@ env:
 
 jobs:
   typos:
+    if: github.event.pull_request.draft == false
     name: Spell Check with Typos
     runs-on: ubuntu-latest
     steps:
@@ -34,6 +35,7 @@ jobs:
       - uses: crate-ci/typos@v1.0.4
 
   check:
+    if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
     steps:
@@ -47,6 +49,7 @@ jobs:
       - run: cargo check
 
   fmt:
+    if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -61,6 +64,7 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
+    if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
     steps:

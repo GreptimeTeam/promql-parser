@@ -9,6 +9,7 @@ on:
 
 jobs:
   license-header-check:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     name: license-header-check
     steps:

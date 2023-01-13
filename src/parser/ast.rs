@@ -73,7 +73,7 @@ pub struct ParenExpr {
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Duration>,
-    pub start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
+    pub at: Option<Instant>,
     pub range: Duration,
     pub step: Duration,
 }
@@ -93,15 +93,12 @@ pub struct VectorSelector {
     pub name: Option<String>,
     pub offset: Option<Duration>,
     pub at: Option<Instant>,
-    pub start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
     pub label_matchers: Matchers,
 }
 
 #[derive(Debug, Clone)]
 pub struct MatrixSelector {
-    // It is safe to assume that this is an VectorSelector
-    // if the parser hasn't returned an error.
-    pub vector_selector: Box<Expr>,
+    pub vector_selector: VectorSelector,
     pub range: Duration,
 }
 
@@ -143,20 +140,21 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
+    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
         let vs = VectorSelector {
             name,
             offset: None,
             at: None,
-            start_or_end: None,
             label_matchers: matchers,
         };
-        Self::VectorSelector(vs)
+        Ok(Self::VectorSelector(vs))
     }
 
     pub fn new_unary_expr(expr: Expr, op: &Token) -> Result<Self, String> {
         let ue = match expr {
-            Expr::NumberLiteral(number) => Expr::NumberLiteral(NumberLiteral { val: -number.val }),
+            Expr::NumberLiteral(NumberLiteral { val }) => {
+                Expr::NumberLiteral(NumberLiteral { val: -val })
+            }
             _ => Expr::Unary(UnaryExpr {
                 op: op.id(),
                 expr: Box::new(expr),
@@ -169,7 +167,7 @@ impl Expr {
         let se = Expr::Subquery(SubqueryExpr {
             expr: Box::new(expr),
             offset: None,
-            start_or_end: None,
+            at: None,
             range,
             step,
         });
@@ -178,18 +176,20 @@ impl Expr {
 
     pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
         match expr {
-            Expr::VectorSelector {
+            Expr::VectorSelector(VectorSelector {
                 offset: Some(_), ..
-            } => Err("".into()),
-            Expr::VectorSelector { at: Some(_), .. } => Err("".into()),
-            Expr::VectorSelector { .. } => {
-                let ms = Expr::MatrixSelector {
-                    vector_selector: Box::new(expr),
+            }) => Err("no offset modifiers allowed before range".into()),
+            Expr::VectorSelector(VectorSelector { at: Some(_), .. }) => {
+                Err("no @ modifiers allowed before range".into())
+            }
+            Expr::VectorSelector(vs) => {
+                let ms = Expr::MatrixSelector(MatrixSelector {
+                    vector_selector: vs,
                     range,
-                };
+                });
                 Ok(ms)
             }
-            _ => Err("".into()),
+            _ => Err("ranges only allowed for vector selectors".into()),
         }
     }
 }

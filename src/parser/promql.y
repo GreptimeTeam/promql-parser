@@ -193,7 +193,7 @@ subquery_expr -> Result<Expr, String>:
 
 unary_expr -> Result<Expr, String>:
                 /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
-                /* FIXME: unary_op has same precedence with MUL, or Rule Conflict */
+                /* FIXME: unary_op has same precedence with MUL, otherwise Rule Conflict */
                 unary_op expr { Expr::new_unary_expr($2?, &$1) }
                 ;
 
