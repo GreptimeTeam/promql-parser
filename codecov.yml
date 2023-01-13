@@ -6,7 +6,7 @@ coverage:
         target: 80% # increase the target in the future
         paths:
           - "src"
-        informational: true
+        informational: false
     patch:
       default:
         threshold: 1%
@@ -22,4 +22,3 @@ profiling:
   critical_files_paths:
     - src/parser/lex.rs
     - src/parser/parse.rs
-    - src/parser/promql.y
