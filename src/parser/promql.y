@@ -319,7 +319,7 @@ match_op -> Token:
 number_literal -> Result<Expr, String>:
                 number
                 {
-                        let nl = NumberLiteral { span: $span, val: $1?};
+                        let nl = NumberLiteral { val: $1?};
                         Ok(Expr::NumberLiteral(nl))
                 }
                 ;
@@ -359,7 +359,7 @@ duration -> Result<Duration, String>:
 string_literal -> Result<Expr, String>:
                 STRING
                 {
-                        let sl = StringLiteral { span: $span, val: span_to_string($lexer, $span) };
+                        let sl = StringLiteral { val: span_to_string($lexer, $span) };
                         Ok(Expr::StringLiteral(sl))
                 }
                 ;

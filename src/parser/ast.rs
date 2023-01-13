@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(dead_code)]
-use lrpar::Span;
 use std::fmt::{self, Display};
 use std::time::{Duration, SystemTime};
 
@@ -83,13 +82,11 @@ pub struct Subquery {
 #[derive(Debug, Clone)]
 pub struct NumberLiteral {
     pub val: f64,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct StringLiteral {
     pub val: String,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
