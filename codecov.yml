@@ -3,6 +3,23 @@ coverage:
     project:
       default:
         threshold: 1%
+        target: 80% # increase the target in the future
+        paths:
+          - "src"
+        informational: true
     patch:
       default:
         threshold: 1%
+        target: 80% # increase the target in the future
+        paths:
+          - "src"
+        informational: true
+
+comment:
+  show_critical_paths: true
+
+profiling:
+  critical_files_paths:
+    - src/parser/lex.rs
+    - src/parser/parse.rs
+    - src/parser/promql.y
