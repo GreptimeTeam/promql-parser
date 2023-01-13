@@ -317,7 +317,11 @@ match_op -> Token:
  */
 
 number_literal -> Result<Expr, String>:
-                number { Ok(Expr::NumberLiteral { span: $span, val: $1?}) }
+                number
+                {
+                        let nl = NumberLiteral { val: $1?};
+                        Ok(Expr::NumberLiteral(nl))
+                }
                 ;
 
 
@@ -354,7 +358,10 @@ duration -> Result<Duration, String>:
 
 string_literal -> Result<Expr, String>:
                 STRING
-                { Ok(Expr::StringLiteral { span: $span, val: span_to_string($lexer, $span) }) }
+                {
+                        let sl = StringLiteral { val: span_to_string($lexer, $span) };
+                        Ok(Expr::StringLiteral(sl))
+                }
                 ;
 
 // TODO
@@ -375,6 +382,6 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-use crate::parser::{Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::parser::{Expr, Token, StringLiteral, NumberLiteral, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 use crate::util::parse_duration;

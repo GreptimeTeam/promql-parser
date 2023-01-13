@@ -20,7 +20,10 @@ pub mod production;
 pub mod token;
 pub mod value;
 
-pub use ast::{EvalStmt, Expr};
+pub use ast::{
+    AggregateExpr, BinaryExpr, Call, EvalStmt, Expr, MatrixSelector, NumberLiteral, ParenExpr,
+    StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
+};
 pub use function::{get_function, Function};
 pub use lex::{lexer, LexemeType};
 pub use parse::parse;
