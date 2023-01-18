@@ -21,6 +21,12 @@ use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, Token, TokenType};
 
 #[derive(Debug, Clone)]
+pub enum Offset {
+    Pos(Duration),
+    Neg(Duration),
+}
+
+#[derive(Debug, Clone)]
 pub enum AtModifier {
     Start,
     End,
@@ -112,7 +118,7 @@ pub struct ParenExpr {
 #[derive(Debug, Clone)]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
-    pub offset: Option<Duration>,
+    pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
     pub range: Duration,
     pub step: Duration,
@@ -132,7 +138,7 @@ pub struct StringLiteral {
 pub struct VectorSelector {
     pub name: Option<String>,
     pub label_matchers: Matchers,
-    pub offset: Option<Duration>,
+    pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
 }
 
@@ -213,6 +219,13 @@ impl Expr {
         Ok(se)
     }
 
+    pub fn new_paren_expr(expr: Expr) -> Result<Self, String> {
+        let ex = Expr::Paren(ParenExpr {
+            expr: Box::new(expr),
+        });
+        Ok(ex)
+    }
+
     pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
         match expr {
             Expr::VectorSelector(VectorSelector {
@@ -233,31 +246,61 @@ impl Expr {
     }
 
     pub fn step_invariant_expr(self, at_modifier: AtModifier) -> Result<Self, String> {
-        let at_already_set_err = Err("@ <timestamp> may not be set multiple times".into());
+        let already_set_err = Err("@ <timestamp> may not be set multiple times".into());
         match self {
             Expr::VectorSelector(mut vs) => match vs.at {
                 None => {
                     vs.at = Some(at_modifier);
                     Ok(Expr::VectorSelector(vs))
                 }
-                Some(_) => at_already_set_err,
+                Some(_) => already_set_err,
             },
             Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
                 None => {
                     ms.vector_selector.at = Some(at_modifier);
                     Ok(Expr::MatrixSelector(ms))
                 }
-                Some(_) => at_already_set_err,
+                Some(_) => already_set_err,
             },
             Expr::Subquery(mut s) => match s.at {
                 None => {
                     s.at = Some(at_modifier);
                     Ok(Expr::Subquery(s))
                 }
-                Some(_) => at_already_set_err,
+                Some(_) => already_set_err,
             },
             _ => {
                 Err("@ modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+            }
+        }
+    }
+
+    pub fn offset_expr(self, offset: Offset) -> Result<Self, String> {
+        let already_set_err = Err("offset may not be set multiple times".into());
+        match self {
+            Expr::VectorSelector(mut vs) => match vs.at {
+                None => {
+                    vs.offset = Some(offset);
+                    Ok(Expr::VectorSelector(vs))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+                None => {
+                    ms.vector_selector.offset = Some(offset);
+                    Ok(Expr::MatrixSelector(ms))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::Subquery(mut s) => match s.at {
+                None => {
+                    s.offset = Some(offset);
+                    Ok(Expr::Subquery(s))
+                }
+                Some(_) => already_set_err,
+            },
+            _ => {
+                Err("offset modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
             }
         }
     }

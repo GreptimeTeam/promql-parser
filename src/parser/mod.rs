@@ -22,7 +22,7 @@ pub mod value;
 
 pub use ast::{
     AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, MatrixSelector, NumberLiteral,
-    ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
+    Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
 };
 pub use function::{get_function, Function};
 pub use lex::{lexer, LexemeType};

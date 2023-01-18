@@ -136,8 +136,8 @@ expr -> Result<Expr, String>:
                 /* | function_call */
                 matrix_selector { $1 }
                 | number_literal { $1 }
-                /* | offset_expr */
-                /* | paren_expr */
+                | offset_expr { $1 }
+                | paren_expr { $1 }
                 | string_literal { $1 }
                 | subquery_expr { $1 }
                 /* | unary_expr  { $1 } */
@@ -146,9 +146,24 @@ expr -> Result<Expr, String>:
                 ;
 
 /*
+ * Expressions inside parentheses.
+ */
+paren_expr -> Result<Expr, String>:
+                LEFT_PAREN expr RIGHT_PAREN { Expr::new_paren_expr($2?) }
+                ;
+
+/*
+ * Offset modifiers.
+ */
+offset_expr -> Result<Expr, String>:
+                expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
+                | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
+                | expr OFFSET error { Err($3) }
+                ;
+
+/*
  * @ modifiers.
  */
-
 step_invariant_expr -> Result<Expr, String>:
                 expr AT signed_or_unsigned_number
                 {
@@ -171,7 +186,6 @@ at_modifier_preprocessors -> Token:
 /*
  * Subquery and range selectors.
  */
-
 matrix_selector -> Result<Expr, String>:
                 expr LEFT_BRACKET duration RIGHT_BRACKET
                 { Expr::new_matrix_selector($1?, $3?) }
@@ -454,6 +468,8 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-use crate::parser::{AtModifier, Expr, Token, StringLiteral, NumberLiteral, lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::parser::{AtModifier, Expr, Offset, Token};
+use crate::parser::{StringLiteral, NumberLiteral};
+use crate::parser::{lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 use crate::util::parse_duration;
