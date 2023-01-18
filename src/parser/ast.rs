@@ -14,10 +14,50 @@
 
 #![allow(dead_code)]
 use std::fmt::{self, Display};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use crate::label::Matchers;
+use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, Token, TokenType};
+
+#[derive(Debug, Clone)]
+pub enum AtModifier {
+    Start,
+    End,
+    At(SystemTime),
+}
+
+impl AtModifier {
+    pub fn from_float(secs: f64) -> Result<Self, String> {
+        let err = Err(format!("timestamp out of bounds for @ modifier: {secs}"));
+
+        if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
+            return err;
+        }
+
+        let duration = Duration::from_secs(secs.round().abs() as u64);
+        let mut st = Some(SystemTime::UNIX_EPOCH);
+        if secs.is_sign_positive() {
+            st = SystemTime::UNIX_EPOCH.checked_add(duration);
+        }
+        if secs.is_sign_negative() {
+            st = SystemTime::UNIX_EPOCH.checked_sub(duration);
+        }
+
+        match st {
+            Some(st) => Ok(Self::At(st)),
+            None => err,
+        }
+    }
+
+    pub fn from_token(token: Token) -> Result<Self, String> {
+        match token.id() {
+            T_START => Ok(AtModifier::Start),
+            T_END => Ok(AtModifier::End),
+            _ => Err(format!("invalid at modifier preprocessor {}", token.val())),
+        }
+    }
+}
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
@@ -73,7 +113,7 @@ pub struct ParenExpr {
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Duration>,
-    pub at: Option<Instant>,
+    pub at: Option<AtModifier>,
     pub range: Duration,
     pub step: Duration,
 }
@@ -91,9 +131,9 @@ pub struct StringLiteral {
 #[derive(Debug, Clone)]
 pub struct VectorSelector {
     pub name: Option<String>,
-    pub offset: Option<Duration>,
-    pub at: Option<Instant>,
     pub label_matchers: Matchers,
+    pub offset: Option<Duration>,
+    pub at: Option<AtModifier>,
 }
 
 #[derive(Debug, Clone)]
@@ -135,7 +175,6 @@ pub enum Expr {
     MatrixSelector(MatrixSelector),
 
     /// Call represents a function call.
-    // TODO: need more descriptions
     Call(Call),
 }
 
@@ -192,6 +231,36 @@ impl Expr {
             _ => Err("ranges only allowed for vector selectors".into()),
         }
     }
+
+    pub fn step_invariant_expr(self, at_modifier: AtModifier) -> Result<Self, String> {
+        let at_already_set_err = Err("@ <timestamp> may not be set multiple times".into());
+        match self {
+            Expr::VectorSelector(mut vs) => match vs.at {
+                None => {
+                    vs.at = Some(at_modifier);
+                    Ok(Expr::VectorSelector(vs))
+                }
+                Some(_) => at_already_set_err,
+            },
+            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+                None => {
+                    ms.vector_selector.at = Some(at_modifier);
+                    Ok(Expr::MatrixSelector(ms))
+                }
+                Some(_) => at_already_set_err,
+            },
+            Expr::Subquery(mut s) => match s.at {
+                None => {
+                    s.at = Some(at_modifier);
+                    Ok(Expr::Subquery(s))
+                }
+                Some(_) => at_already_set_err,
+            },
+            _ => {
+                Err("@ modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -228,4 +297,35 @@ pub struct VectorMatching {
     // Include contains additional labels that should be included in
     // the result from the side with the lower cardinality.
     pub include: Vec<String>,
+}
+
+#[test]
+fn test_valid_at_modifier() {
+    // tuple: (seconds, elapsed based on UNIX_EPOCH)
+    let cases = vec![
+        (0.0, 0),
+        (1000.3, 1000),  // after UNIX_EPOCH
+        (1000.9, 1001),  // after UNIX_EPOCH
+        (-1000.3, 1000), // before UNIX_EPOCH
+        (-1000.9, 1001), // before UNIX_EPOCH
+    ];
+
+    for (secs, elapsed) in cases {
+        match AtModifier::from_float(secs).unwrap() {
+            AtModifier::At(st) => {
+                if secs.is_sign_positive() || secs == 0.0 {
+                    assert_eq!(
+                        elapsed,
+                        st.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
+                    )
+                } else if secs.is_sign_negative() {
+                    assert_eq!(
+                        elapsed,
+                        SystemTime::UNIX_EPOCH.duration_since(st).unwrap().as_secs()
+                    )
+                }
+            }
+            _ => panic!(),
+        }
+    }
 }

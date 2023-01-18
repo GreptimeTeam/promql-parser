@@ -142,32 +142,31 @@ expr -> Result<Expr, String>:
                 | subquery_expr { $1 }
                 /* | unary_expr  { $1 } */
                 | vector_selector  { $1 }
-                /* | step_invariant_expr */
+                | step_invariant_expr { $1 }
                 ;
 
 /*
  * @ modifiers.
  */
 
-/* step_invariant_expr: expr AT signed_or_unsigned_number */
-/*                         { */
-/*                         yylex.(*parser).setTimestamp($1, $3) */
-/*                         $$ = $1 */
-/*                         } */
-/*                 | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN */
-/*                         { */
-/*                         yylex.(*parser).setAtModifierPreprocessor($1, $3) */
-/*                         $$ = $1 */
-/*                         } */
-/*                 | expr AT error */
-/*                         { yylex.(*parser).unexpected("@", "timestamp"); $$ = $1 } */
-/*                 ; */
+step_invariant_expr -> Result<Expr, String>:
+                expr AT signed_or_unsigned_number
+                {
+                        let at = AtModifier::from_float($3?)?;
+                        $1?.step_invariant_expr(at)
+                }
+                | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
+                {
+                        let at = AtModifier::from_token($3)?;
+                        $1?.step_invariant_expr(at)
+                }
+                | expr AT error { Err($3) }
+                ;
 
 at_modifier_preprocessors -> Token:
                 START { lexeme_to_token($lexer, $1) }
                 | END { lexeme_to_token($lexer, $1) }
                 ;
-
 
 /*
  * Subquery and range selectors.
@@ -416,6 +415,7 @@ signed_number -> Result<f64, String>:
                 | SUB number { $2.map(|i| -i) }
                 ;
 
+// TODO: If unit is not used, delete this rule. by @yuanbohan
 uint -> Result<u64, String>:
                 NUMBER
                 {
@@ -454,6 +454,6 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-use crate::parser::{Expr, Token, StringLiteral, NumberLiteral, lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::parser::{AtModifier, Expr, Token, StringLiteral, NumberLiteral, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 use crate::util::parse_duration;
