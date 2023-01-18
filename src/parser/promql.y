@@ -133,8 +133,8 @@ start -> Result<Expr, String>:
 expr -> Result<Expr, String>:
                 /* aggregate_expr */
                 /* | binary_expr */
-                /* | function_call */
-                matrix_selector { $1 }
+                function_call { $1 }
+                | matrix_selector { $1 }
                 | number_literal { $1 }
                 | offset_expr { $1 }
                 | paren_expr { $1 }
@@ -143,6 +143,31 @@ expr -> Result<Expr, String>:
                 /* | unary_expr  { $1 } */
                 | vector_selector  { $1 }
                 | step_invariant_expr { $1 }
+                ;
+
+/*
+ * Function calls.
+ */
+function_call -> Result<Expr, String>:
+                IDENTIFIER function_call_body
+                {
+                        let name = lexeme_to_string($lexer, &$1);
+                        match get_function(&name) {
+                            None => Err(format!("unknown function with name {}", name)),
+                            Some(func) => Expr::new_call(func, $2?)
+                        }
+                }
+                ;
+
+function_call_body -> Result<FunctionArgs, String>:
+                LEFT_PAREN function_call_args RIGHT_PAREN { $2 }
+                | LEFT_PAREN RIGHT_PAREN { Ok(Call::empty_args()) }
+                ;
+
+function_call_args -> Result<FunctionArgs, String>:
+                function_call_args COMMA expr { Ok(Call::append_args($1?, $3?)) }
+                | expr { Ok(Call::new_args($1?)) }
+                | function_call_args COMMA { Err("trailing commas not allowed in function call args".into()) }
                 ;
 
 /*
@@ -203,7 +228,6 @@ subquery_expr -> Result<Expr, String>:
 /*
  * Unary expressions.
  */
-
 unary_expr -> Result<Expr, String>:
                 /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
                 /* FIXME: unary_op has same precedence with MUL, otherwise Rule Conflict */
@@ -213,7 +237,6 @@ unary_expr -> Result<Expr, String>:
 /*
  * Vector selectors.
  */
-
 vector_selector -> Result<Expr, String>:
                 metric_identifier label_matchers
                 {
@@ -267,7 +290,6 @@ label_matcher -> Result<Matcher, String>:
 /*
  * Metric descriptions.
  */
-
 metric -> Result<Labels, String>:
                 metric_identifier label_set
                 {
@@ -338,7 +360,6 @@ error -> String:
 /*
  * Keyword lists.
  */
-
 aggregate_op -> Token:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
@@ -400,13 +421,8 @@ match_op -> Token:
 /*
  * Literals.
  */
-
 number_literal -> Result<Expr, String>:
-                number
-                {
-                        let nl = NumberLiteral { val: $1?};
-                        Ok(Expr::NumberLiteral(nl))
-                }
+                number { Expr::new_number_literal($1?) }
                 ;
 
 
@@ -443,11 +459,7 @@ duration -> Result<Duration, String>:
                 ;
 
 string_literal -> Result<Expr, String>:
-                STRING
-                {
-                        let sl = StringLiteral { val: span_to_string($lexer, $span) };
-                        Ok(Expr::StringLiteral(sl))
-                }
+                STRING { Expr::new_string_literal(span_to_string($lexer, $span)) }
                 ;
 
 // TODO
@@ -468,8 +480,7 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-use crate::parser::{AtModifier, Expr, Offset, Token};
-use crate::parser::{StringLiteral, NumberLiteral};
-use crate::parser::{lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::parser::{AtModifier, Call, Expr, FunctionArgs, Offset, Token};
+use crate::parser::{get_function, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 use crate::util::parse_duration;

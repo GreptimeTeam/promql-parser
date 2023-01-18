@@ -21,8 +21,8 @@ pub mod token;
 pub mod value;
 
 pub use ast::{
-    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, MatrixSelector, NumberLiteral,
-    Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
+    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, FunctionArgs, MatrixSelector,
+    NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
 };
 pub use function::{get_function, Function};
 pub use lex::{lexer, LexemeType};

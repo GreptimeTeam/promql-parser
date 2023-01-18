@@ -148,10 +148,28 @@ pub struct MatrixSelector {
     pub range: Duration,
 }
 
+/// args called by func in Call
+pub type FunctionArgs = Vec<Box<Expr>>;
+
 #[derive(Debug, Clone)]
 pub struct Call {
-    pub func: Function,       // The function that was called.
-    pub args: Vec<Box<Expr>>, // Arguments used in the call.
+    pub func: Function,
+    pub args: FunctionArgs,
+}
+
+impl Call {
+    pub fn empty_args() -> FunctionArgs {
+        vec![]
+    }
+
+    pub fn new_args(expr: Expr) -> FunctionArgs {
+        vec![Box::new(expr)]
+    }
+
+    pub fn append_args(mut args: FunctionArgs, expr: Expr) -> FunctionArgs {
+        args.push(Box::new(expr));
+        args
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -223,6 +241,16 @@ impl Expr {
         let ex = Expr::Paren(ParenExpr {
             expr: Box::new(expr),
         });
+        Ok(ex)
+    }
+
+    pub fn new_number_literal(val: f64) -> Result<Self, String> {
+        let ex = Expr::NumberLiteral(NumberLiteral { val });
+        Ok(ex)
+    }
+
+    pub fn new_string_literal(val: String) -> Result<Self, String> {
+        let ex = Expr::StringLiteral(StringLiteral { val });
         Ok(ex)
     }
 
@@ -303,6 +331,11 @@ impl Expr {
                 Err("offset modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
             }
         }
+    }
+
+    pub fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
+        let ex = Expr::Call(Call { func, args });
+        Ok(ex)
     }
 }
 

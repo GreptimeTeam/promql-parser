@@ -20,11 +20,13 @@ pub enum ValueType {
     Scalar,
     Matrix,
     String,
+    None,
 }
 
 impl Display for ValueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            ValueType::None => write!(f, "none"),
             ValueType::Scalar => write!(f, "scalar"),
             ValueType::String => write!(f, "string"),
             ValueType::Vector => write!(f, "instant vector"),
@@ -43,6 +45,7 @@ mod tests {
 
     #[test]
     fn test_value_type() {
+        assert_eq!(ValueType::None.to_string(), "none");
         assert_eq!(ValueType::Scalar.to_string(), "scalar");
         assert_eq!(ValueType::String.to_string(), "string");
         assert_eq!(ValueType::Vector.to_string(), "instant vector");

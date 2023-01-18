@@ -18,6 +18,7 @@ use lazy_static::lazy_static;
 
 use crate::parser::ValueType;
 
+/// Functions is a list of all functions supported by PromQL, including their types.
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: &'static str,
@@ -322,6 +323,7 @@ lazy_static! {
             ),
         );
 
+        // -1 in Go version
         m.insert(
             "label_join",
             Function::new(
@@ -559,6 +561,6 @@ lazy_static! {
 }
 
 // get_function returns a predefined Function object for the given name.
-pub fn get_function(name: &str) -> Option<&Function> {
-    FUNCTIONS.get(name)
+pub fn get_function(name: &str) -> Option<Function> {
+    FUNCTIONS.get(name).cloned()
 }
