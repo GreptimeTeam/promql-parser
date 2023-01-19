@@ -161,12 +161,12 @@ function_call -> Result<Expr, String>:
 
 function_call_body -> Result<FunctionArgs, String>:
                 LEFT_PAREN function_call_args RIGHT_PAREN { $2 }
-                | LEFT_PAREN RIGHT_PAREN { Ok(Call::empty_args()) }
+                | LEFT_PAREN RIGHT_PAREN { Ok(FunctionArgs::empty_args()) }
                 ;
 
 function_call_args -> Result<FunctionArgs, String>:
-                function_call_args COMMA expr { Ok(Call::append_args($1?, $3?)) }
-                | expr { Ok(Call::new_args($1?)) }
+                function_call_args COMMA expr { Ok($1?.append_args($3?)) }
+                | expr { Ok(FunctionArgs::new_args($1?)) }
                 | function_call_args COMMA { Err("trailing commas not allowed in function call args".into()) }
                 ;
 
@@ -480,7 +480,7 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-use crate::parser::{AtModifier, Call, Expr, FunctionArgs, Offset, Token};
+use crate::parser::{AtModifier, Expr, FunctionArgs, Offset, Token};
 use crate::parser::{get_function, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
 use crate::util::parse_duration;

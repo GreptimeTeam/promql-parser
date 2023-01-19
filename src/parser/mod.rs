@@ -21,10 +21,10 @@ pub mod token;
 pub mod value;
 
 pub use ast::{
-    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, FunctionArgs, MatrixSelector,
-    NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
+    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, MatrixSelector, NumberLiteral,
+    Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
 };
-pub use function::{get_function, Function};
+pub use function::{get_function, Function, FunctionArgs};
 pub use lex::{lexer, LexemeType};
 pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};

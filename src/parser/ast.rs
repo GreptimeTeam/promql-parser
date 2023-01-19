@@ -18,7 +18,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::label::Matchers;
 use crate::parser::token::{T_END, T_START};
-use crate::parser::{Function, Token, TokenType};
+use crate::parser::{Function, FunctionArgs, Token, TokenType};
 
 #[derive(Debug, Clone)]
 pub enum Offset {
@@ -157,28 +157,10 @@ pub struct MatrixSelector {
     pub range: Duration,
 }
 
-/// args called by func in Call
-pub type FunctionArgs = Vec<Box<Expr>>;
-
 #[derive(Debug, Clone)]
 pub struct Call {
     pub func: Function,
     pub args: FunctionArgs,
-}
-
-impl Call {
-    pub fn empty_args() -> FunctionArgs {
-        vec![]
-    }
-
-    pub fn new_args(expr: Expr) -> FunctionArgs {
-        vec![Box::new(expr)]
-    }
-
-    pub fn append_args(mut args: FunctionArgs, expr: Expr) -> FunctionArgs {
-        args.push(Box::new(expr));
-        args
-    }
 }
 
 #[derive(Debug, Clone)]

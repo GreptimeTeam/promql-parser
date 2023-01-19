@@ -16,7 +16,30 @@ use std::collections::{HashMap, HashSet};
 
 use lazy_static::lazy_static;
 
-use crate::parser::ValueType;
+use crate::parser::{Expr, ValueType};
+
+/// called by func in Call
+#[derive(Debug, Clone)]
+pub struct FunctionArgs {
+    pub args: Vec<Box<Expr>>,
+}
+
+impl FunctionArgs {
+    pub fn empty_args() -> Self {
+        Self { args: vec![] }
+    }
+
+    pub fn new_args(expr: Expr) -> Self {
+        Self {
+            args: vec![Box::new(expr)],
+        }
+    }
+
+    pub fn append_args(mut self: Self, expr: Expr) -> Self {
+        self.args.push(Box::new(expr));
+        self
+    }
+}
 
 /// Functions is a list of all functions supported by PromQL, including their types.
 #[derive(Debug, Clone)]
