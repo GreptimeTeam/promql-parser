@@ -125,6 +125,8 @@ pub struct ParenExpr {
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Offset>,
+
+    /// at modifier can be earlier than UNIX_EPOCH
     pub at: Option<AtModifier>,
     pub range: Duration,
     pub step: Duration,
@@ -145,6 +147,7 @@ pub struct VectorSelector {
     pub name: Option<String>,
     pub label_matchers: Matchers,
     pub offset: Option<Offset>,
+    /// at modifier can be earlier than UNIX_EPOCH
     pub at: Option<AtModifier>,
 }
 
@@ -251,13 +254,11 @@ impl Expr {
     }
 
     pub fn new_number_literal(val: f64) -> Result<Self, String> {
-        let ex = Expr::NumberLiteral(NumberLiteral { val });
-        Ok(ex)
+        Ok(Expr::NumberLiteral(NumberLiteral { val }))
     }
 
     pub fn new_string_literal(val: String) -> Result<Self, String> {
-        let ex = Expr::StringLiteral(StringLiteral { val });
-        Ok(ex)
+        Ok(Expr::StringLiteral(StringLiteral { val }))
     }
 
     pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
@@ -279,6 +280,7 @@ impl Expr {
         }
     }
 
+    /// set at_modifier for specified Expr, but CAN ONLY be set once.
     pub fn step_invariant_expr(self, at_modifier: AtModifier) -> Result<Self, String> {
         let already_set_err = Err("@ <timestamp> may not be set multiple times".into());
         match self {
@@ -309,6 +311,7 @@ impl Expr {
         }
     }
 
+    /// set offset field for specified Expr, but CAN ONLY be set once.
     pub fn offset_expr(self, offset: Offset) -> Result<Self, String> {
         let already_set_err = Err("offset may not be set multiple times".into());
         match self {
@@ -340,8 +343,7 @@ impl Expr {
     }
 
     pub fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
-        let ex = Expr::Call(Call { func, args });
-        Ok(ex)
+        Ok(Expr::Call(Call { func, args }))
     }
 }
 
@@ -387,8 +389,8 @@ mod tests {
 
     #[test]
     fn test_valid_at_modifier() {
-        // tuple: (seconds, elapsed before/after UNIX_EPOCH)
         let cases = vec![
+            // tuple: (seconds, elapsed before/after UNIX_EPOCH)
             (0.0, 0),
             (1000.3, 1000),  // after UNIX_EPOCH
             (1000.9, 1001),  // after UNIX_EPOCH

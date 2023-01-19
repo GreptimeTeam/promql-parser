@@ -43,7 +43,7 @@ impl Function {
     }
 }
 
-macro_rules! put {
+macro_rules! map {
     ($(($name:literal, $arg:expr, $ret:expr)),*) => (
         {
             let mut m:HashMap<&'static str, Function> = HashMap::new();
@@ -73,7 +73,7 @@ lazy_static! {
         "round",
     ]);
 
-    static ref FUNCTIONS: HashMap<&'static str, Function> = put!(
+    static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
         ("abs", vec![ValueType::Vector], ValueType::Vector),
         ("absent", vec![ValueType::Vector], ValueType::Vector),
         ("absent_over_time", vec![ValueType::Matrix], ValueType::Vector),
