@@ -192,12 +192,12 @@ offset_expr -> Result<Expr, String>:
 step_invariant_expr -> Result<Expr, String>:
                 expr AT signed_or_unsigned_number
                 {
-                        let at = AtModifier::from_float($3?)?;
+                        let at = AtModifier::try_from($3?)?;
                         $1?.step_invariant_expr(at)
                 }
                 | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
                 {
-                        let at = AtModifier::from_token($3)?;
+                        let at = AtModifier::try_from($3)?;
                         $1?.step_invariant_expr(at)
                 }
                 | expr AT error { Err($3) }

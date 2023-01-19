@@ -33,8 +33,22 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
-impl AtModifier {
-    pub fn from_float(secs: f64) -> Result<Self, String> {
+impl TryFrom<Token> for AtModifier {
+    type Error = String;
+
+    fn try_from(token: Token) -> Result<Self, Self::Error> {
+        match token.id() {
+            T_START => Ok(AtModifier::Start),
+            T_END => Ok(AtModifier::End),
+            _ => Err(format!("invalid at modifier preprocessor {}", token.val())),
+        }
+    }
+}
+
+impl TryFrom<f64> for AtModifier {
+    type Error = String;
+
+    fn try_from(secs: f64) -> Result<Self, Self::Error> {
         let err = Err(format!("timestamp out of bounds for @ modifier: {secs}"));
 
         if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
@@ -53,14 +67,6 @@ impl AtModifier {
         match st {
             Some(st) => Ok(Self::At(st)),
             None => err,
-        }
-    }
-
-    pub fn from_token(token: Token) -> Result<Self, String> {
-        match token.id() {
-            T_START => Ok(AtModifier::Start),
-            T_END => Ok(AtModifier::End),
-            _ => Err(format!("invalid at modifier preprocessor {}", token.val())),
         }
     }
 }
@@ -375,33 +381,53 @@ pub struct VectorMatching {
     pub include: Vec<String>,
 }
 
-#[test]
-fn test_valid_at_modifier() {
-    // tuple: (seconds, elapsed based on UNIX_EPOCH)
-    let cases = vec![
-        (0.0, 0),
-        (1000.3, 1000),  // after UNIX_EPOCH
-        (1000.9, 1001),  // after UNIX_EPOCH
-        (-1000.3, 1000), // before UNIX_EPOCH
-        (-1000.9, 1001), // before UNIX_EPOCH
-    ];
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    for (secs, elapsed) in cases {
-        match AtModifier::from_float(secs).unwrap() {
-            AtModifier::At(st) => {
-                if secs.is_sign_positive() || secs == 0.0 {
-                    assert_eq!(
-                        elapsed,
-                        st.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
-                    )
-                } else if secs.is_sign_negative() {
-                    assert_eq!(
-                        elapsed,
-                        SystemTime::UNIX_EPOCH.duration_since(st).unwrap().as_secs()
-                    )
+    #[test]
+    fn test_valid_at_modifier() {
+        // tuple: (seconds, elapsed before/after UNIX_EPOCH)
+        let cases = vec![
+            (0.0, 0),
+            (1000.3, 1000),  // after UNIX_EPOCH
+            (1000.9, 1001),  // after UNIX_EPOCH
+            (-1000.3, 1000), // before UNIX_EPOCH
+            (-1000.9, 1001), // before UNIX_EPOCH
+        ];
+
+        for (secs, elapsed) in cases {
+            match AtModifier::try_from(secs).unwrap() {
+                AtModifier::At(st) => {
+                    if secs.is_sign_positive() || secs == 0.0 {
+                        assert_eq!(
+                            elapsed,
+                            st.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
+                        )
+                    } else if secs.is_sign_negative() {
+                        assert_eq!(
+                            elapsed,
+                            SystemTime::UNIX_EPOCH.duration_since(st).unwrap().as_secs()
+                        )
+                    }
                 }
+                _ => panic!(),
             }
-            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn test_invalid_at_modifier() {
+        let cases = vec![
+            f64::MAX,
+            f64::MIN,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ];
+
+        for secs in cases {
+            assert!(AtModifier::try_from(secs).is_err())
         }
     }
 }
