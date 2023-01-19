@@ -35,9 +35,27 @@ impl FunctionArgs {
         }
     }
 
-    pub fn append_args(mut self: Self, expr: Expr) -> Self {
+    pub fn append_args(mut self: FunctionArgs, expr: Expr) -> Self {
         self.args.push(Box::new(expr));
         self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.args.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.args.len()
+    }
+
+    /// caller SHOULD take care of the boundary
+    pub fn first(&self) -> Box<Expr> {
+        self.args[0].clone()
+    }
+
+    /// caller SHOULD take care of the boundary
+    pub fn last(&self) -> Box<Expr> {
+        self.args[self.len() - 1].clone()
     }
 }
 

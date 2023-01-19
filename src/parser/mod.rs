@@ -21,9 +21,9 @@ pub mod token;
 pub mod value;
 
 pub use ast::{
-    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, GroupModifier, MatrixSelector,
-    NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr,
-    VectorMatchCardinality, VectorMatching, VectorSelector,
+    AggregateExpr, AggregateModifier, AggregateOps, AtModifier, BinaryExpr, Call, EvalStmt, Expr,
+    GroupModifier, MatchingOps, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral,
+    SubqueryExpr, UnaryExpr, VectorMatchCardinality, VectorMatching, VectorSelector,
 };
 pub use function::{get_function, Function, FunctionArgs};
 pub use lex::{is_label, lexer, LexemeType};

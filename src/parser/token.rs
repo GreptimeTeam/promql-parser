@@ -176,6 +176,13 @@ impl Token {
     pub fn val(&self) -> String {
         self.val.clone()
     }
+
+    pub fn is_aggregator_with_param(&self) -> bool {
+        self.id == T_TOPK
+            || self.id == T_BOTTOMK
+            || self.id == T_COUNT_VALUES
+            || self.id == T_QUANTILE
+    }
 }
 
 #[cfg(test)]

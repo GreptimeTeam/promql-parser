@@ -131,9 +131,9 @@ start -> Result<Expr, String>:
                 ;
 
 expr -> Result<Expr, String>:
-                /* aggregate_expr */
+                aggregate_expr { $1 }
                 /* binary_expr { $1 } */
-                function_call { $1 }
+                | function_call { $1 }
                 | matrix_selector { $1 }
                 | number_literal { $1 }
                 | offset_expr { $1 }
@@ -143,6 +143,25 @@ expr -> Result<Expr, String>:
                 /* | unary_expr  { $1 } */
                 | vector_selector  { $1 }
                 | step_invariant_expr { $1 }
+                ;
+
+/*
+ * Aggregations.
+ */
+aggregate_expr -> Result<Expr, String>:
+                aggregate_op aggregate_modifier function_call_body { Expr::new_aggregate_expr($1, $2?, $3?) }
+                | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1, $3?, $2?) }
+                | aggregate_op function_call_body
+                {
+                        let modifier = (vec![], AggregateOps::By);
+                        Expr::new_aggregate_expr($1, modifier, $2?)
+                }
+                | aggregate_op error { Err($2) }
+                ;
+
+aggregate_modifier -> Result<AggregateModifier, String>:
+                BY grouping_labels { Ok(($2?, AggregateOps::By)) }
+                | WITHOUT grouping_labels { Ok(($2?, AggregateOps::Without)) }
                 ;
 
 /*
@@ -197,7 +216,7 @@ on_or_ignoring -> Result<GroupModifier, String>:
                 {
                         let (mut matching, b) = $1?;
                         matching.labels = $3?;
-                        matching.on = true;
+                        matching.how = MatchingOps::On;
                         Ok((matching, b))
                 }
                 ;
@@ -481,7 +500,8 @@ aggregate_op -> Token:
                 | TOPK { lexeme_to_token($lexer, $1) }
                 ;
 
-// inside of grouping options label names can be recognized as keywords by the lexer. This is a list of keywords that could also be a label name.
+// inside of grouping options label names can be recognized as keywords by the lexer.
+// This is a list of keywords that could also be a label name.
 maybe_label -> Token:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOOL { lexeme_to_token($lexer, $1) }
@@ -585,8 +605,8 @@ maybe_grouping_labels -> Result<Vec<String>, String>:
 use std::time::Duration;
 
 use crate::parser::{
-    AtModifier, Expr, FunctionArgs, GroupModifier, Offset,
-    Token, VectorMatchCardinality, VectorMatching,
+    AggregateModifier, AggregateOps, AtModifier, Expr, FunctionArgs, GroupModifier,
+    MatchingOps, Offset, Token, VectorMatchCardinality, VectorMatching,
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};

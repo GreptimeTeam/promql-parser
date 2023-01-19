@@ -21,6 +21,19 @@ use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
 
 pub type GroupModifier = (VectorMatching, bool);
+pub type AggregateModifier = (Vec<String>, AggregateOps);
+
+#[derive(Debug, Clone)]
+pub enum MatchingOps {
+    On,
+    Ignoring,
+}
+
+#[derive(Debug, Clone)]
+pub enum AggregateOps {
+    By,
+    Without,
+}
 
 #[derive(Debug, Clone)]
 pub enum Offset {
@@ -89,13 +102,18 @@ pub struct EvalStmt {
     pub lookback_delta: Duration,
 }
 
+/// <aggr-op> [without|by (<label list>)] ([parameter,] <vector expression>)
+/// or
+/// <aggr-op>([parameter,] <vector expression>) [without|by (<label list>)]
+///
+/// parameter is only required for count_values, quantile, topk and bottomk.
 #[derive(Debug, Clone)]
 pub struct AggregateExpr {
-    pub op: TokenType,         // The used aggregation operation.
-    pub expr: Box<Expr>,       // The Vector expression over which is aggregated.
-    pub param: Box<Expr>,      // Parameter used by some aggregators.
-    pub grouping: Vec<String>, // The labels by which to group the Vector.
-    pub without: bool,         // Whether to drop the given labels rather than keep them.
+    pub op: TokenType,            // The used aggregation operation.
+    pub expr: Box<Expr>,          // The Vector expression over which is aggregated.
+    pub param: Option<Box<Expr>>, // Parameter used by some aggregators.
+    pub grouping: Vec<String>,    // The labels by which to group the Vector.
+    pub how: AggregateOps,        // Whether to drop the given labels rather than keep them.
 }
 
 #[derive(Debug, Clone)]
@@ -345,6 +363,38 @@ impl Expr {
         };
         Ok(Expr::Binary(ex))
     }
+
+    pub fn new_aggregate_expr(
+        token: Token,
+        (grouping, how): AggregateModifier,
+        args: FunctionArgs,
+    ) -> Result<Expr, String> {
+        if args.is_empty() {
+            return Err("no arguments for aggregate expression provided".into());
+        }
+
+        let mut desired_args_count = 1;
+        let mut param = None;
+        if token.is_aggregator_with_param() {
+            desired_args_count = 2;
+            param = Some(args.first());
+        }
+        if args.len() != desired_args_count {
+            return Err(format!(
+                "wrong number of arguments for aggregate expression provided, expected {}, got {}",
+                desired_args_count,
+                args.len()
+            ));
+        }
+        let ex = AggregateExpr {
+            op: token.id(),
+            expr: args.last(),
+            param,
+            grouping,
+            how,
+        };
+        Ok(Expr::Aggregate(ex))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -370,16 +420,9 @@ impl Display for VectorMatchCardinality {
 // operation are supposed to be matched.
 #[derive(Debug, Clone)]
 pub struct VectorMatching {
-    // The cardinality of the two Vectors.
     pub card: VectorMatchCardinality,
-    // labels contains the labels which define equality of a pair of
-    // elements from the Vectors.
     pub labels: Vec<String>,
-    // on includes the given label names from matching,
-    // rather than excluding them.
-    pub on: bool,
-    // Include contains additional labels that should be included in
-    // the result from the side with the lower cardinality.
+    pub how: MatchingOps, // on, ignoring
     pub include: Vec<String>,
 }
 
@@ -388,7 +431,7 @@ impl VectorMatching {
         Self {
             card,
             labels: vec![],
-            on: false,
+            how: MatchingOps::On,
             include: vec![],
         }
     }
