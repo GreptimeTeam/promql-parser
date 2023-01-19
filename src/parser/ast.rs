@@ -20,6 +20,8 @@ use crate::label::Matchers;
 use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
 
+pub type GroupModifier = (VectorMatching, bool);
+
 #[derive(Debug, Clone)]
 pub enum Offset {
     Pos(Duration),
@@ -110,7 +112,7 @@ pub struct BinaryExpr {
 
     // The matching behavior for the operation if both operands are Vectors.
     // If they are not this field is None.
-    pub matching: Option<VectorMatching>,
+    pub matching: VectorMatching,
 
     // If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
@@ -327,6 +329,22 @@ impl Expr {
     pub fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
         Ok(Expr::Call(Call { func, args }))
     }
+
+    pub fn new_binary_expr(
+        lhs: Expr,
+        op: TokenType,
+        (matching, return_bool): GroupModifier,
+        rhs: Expr,
+    ) -> Result<Expr, String> {
+        let ex = BinaryExpr {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            matching,
+            return_bool,
+        };
+        Ok(Expr::Binary(ex))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -354,15 +372,26 @@ impl Display for VectorMatchCardinality {
 pub struct VectorMatching {
     // The cardinality of the two Vectors.
     pub card: VectorMatchCardinality,
-    // MatchingLabels contains the labels which define equality of a pair of
+    // labels contains the labels which define equality of a pair of
     // elements from the Vectors.
-    pub matching_labels: Vec<String>,
-    // On includes the given label names from matching,
+    pub labels: Vec<String>,
+    // on includes the given label names from matching,
     // rather than excluding them.
     pub on: bool,
     // Include contains additional labels that should be included in
     // the result from the side with the lower cardinality.
     pub include: Vec<String>,
+}
+
+impl VectorMatching {
+    pub fn new(card: VectorMatchCardinality) -> Self {
+        Self {
+            card,
+            labels: vec![],
+            on: false,
+            include: vec![],
+        }
+    }
 }
 
 #[cfg(test)]

@@ -656,6 +656,25 @@ fn is_alpha(ch: char) -> bool {
     ch == '_' || ch.is_ascii_alphabetic()
 }
 
+pub fn is_label(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let mut chars = s.chars();
+    match chars.next() {
+        None => false,
+        Some(ch) if !is_alpha(ch) => false,
+        Some(_) => {
+            for ch in chars {
+                if !is_alpha_numeric(ch) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1339,5 +1358,19 @@ mod tests {
         assert!(is_alpha_numeric('9'));
         assert!(!is_alpha_numeric('-'));
         assert!(!is_alpha_numeric('@'));
+    }
+
+    #[test]
+    fn test_is_label() {
+        assert!(is_label("_"));
+        assert!(is_label("_up"));
+        assert!(is_label("up"));
+        assert!(is_label("up_"));
+        assert!(is_label("up_system_1"));
+
+        assert!(!is_label(""));
+        assert!(!is_label("0"));
+        assert!(!is_label("0up"));
+        assert!(!is_label("0_up"));
     }
 }

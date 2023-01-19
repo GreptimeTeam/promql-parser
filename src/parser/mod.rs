@@ -21,11 +21,12 @@ pub mod token;
 pub mod value;
 
 pub use ast::{
-    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, MatrixSelector, NumberLiteral,
-    Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
+    AggregateExpr, AtModifier, BinaryExpr, Call, EvalStmt, Expr, GroupModifier, MatrixSelector,
+    NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr,
+    VectorMatchCardinality, VectorMatching, VectorSelector,
 };
 pub use function::{get_function, Function, FunctionArgs};
-pub use lex::{lexer, LexemeType};
+pub use lex::{is_label, lexer, LexemeType};
 pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
 pub use token::{Token, TokenType};
