@@ -86,20 +86,21 @@ lazy_static! {
         "day_of_year",
         "day_of_month",
         "day_of_week",
-
         "year",
         "month",
         "hour",
         "minute",
-
         "label_join",
         "round",
     ]);
-
     static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
         ("abs", vec![ValueType::Vector], ValueType::Vector),
         ("absent", vec![ValueType::Vector], ValueType::Vector),
-        ("absent_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        (
+            "absent_over_time",
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
         ("acos", vec![ValueType::Vector], ValueType::Vector),
         ("acosh", vec![ValueType::Vector], ValueType::Vector),
         ("asin", vec![ValueType::Vector], ValueType::Vector),
@@ -109,12 +110,28 @@ lazy_static! {
         ("avg_over_time", vec![ValueType::Matrix], ValueType::Vector),
         ("ceil", vec![ValueType::Vector], ValueType::Vector),
         ("changes", vec![ValueType::Matrix], ValueType::Vector),
-        ("clamp", vec![ValueType::Vector, ValueType::Scalar, ValueType::Scalar], ValueType::Vector),
-        ("clamp_max", vec![ValueType::Vector, ValueType::Scalar], ValueType::Vector),
-        ("clamp_min", vec![ValueType::Vector, ValueType::Scalar], ValueType::Vector),
+        (
+            "clamp",
+            vec![ValueType::Vector, ValueType::Scalar, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
+            "clamp_max",
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
+            "clamp_min",
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
         ("cos", vec![ValueType::Vector], ValueType::Vector),
         ("cosh", vec![ValueType::Vector], ValueType::Vector),
-        ("count_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        (
+            "count_over_time",
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
         ("days_in_month", vec![ValueType::Vector], ValueType::Vector),
         ("day_of_month", vec![ValueType::Vector], ValueType::Vector),
         ("day_of_week", vec![ValueType::Vector], ValueType::Vector),
@@ -124,23 +141,50 @@ lazy_static! {
         ("deriv", vec![ValueType::Matrix], ValueType::Vector),
         ("exp", vec![ValueType::Vector], ValueType::Vector),
         ("floor", vec![ValueType::Vector], ValueType::Vector),
-        ("histogram_count", vec![ValueType::Vector], ValueType::Vector),
+        (
+            "histogram_count",
+            vec![ValueType::Vector],
+            ValueType::Vector
+        ),
         ("histogram_sum", vec![ValueType::Vector], ValueType::Vector),
-        ("histogram_fraction", vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector], ValueType::Vector),
-        ("histogram_quantile", vec![ValueType::Scalar, ValueType::Vector], ValueType::Vector),
-        ("holt_winters", vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar], ValueType::Vector),
+        (
+            "histogram_fraction",
+            vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector],
+            ValueType::Vector
+        ),
+        (
+            "histogram_quantile",
+            vec![ValueType::Scalar, ValueType::Vector],
+            ValueType::Vector
+        ),
+        (
+            "holt_winters",
+            vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
+            ValueType::Vector
+        ),
         ("hour", vec![ValueType::Vector], ValueType::Vector),
         ("idelta", vec![ValueType::Matrix], ValueType::Vector),
         ("increase", vec![ValueType::Matrix], ValueType::Vector),
         ("irate", vec![ValueType::Matrix], ValueType::Vector),
         (
             "label_replace",
-            vec![ValueType::Vector, ValueType::String, ValueType::String, ValueType::String, ValueType::String,],
+            vec![
+                ValueType::Vector,
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+            ],
             ValueType::Vector
         ),
         (
-            "label_join", // -1 in Go version
-            vec![ValueType::Vector, ValueType::String, ValueType::String, ValueType::String,],
+            "label_join",
+            vec![
+                ValueType::Vector,
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+            ],
             ValueType::Vector
         ),
         ("last_over_time", vec![ValueType::Matrix], ValueType::Vector),
@@ -152,13 +196,29 @@ lazy_static! {
         ("minute", vec![ValueType::Vector], ValueType::Vector),
         ("month", vec![ValueType::Vector], ValueType::Vector),
         ("pi", vec![], ValueType::Scalar),
-        ("predict_linear", vec![ValueType::Matrix, ValueType::Scalar], ValueType::Vector),
-        ("present_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("quantile_over_time", vec![ValueType::Scalar, ValueType::Matrix], ValueType::Vector),
+        (
+            "predict_linear",
+            vec![ValueType::Matrix, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
+            "present_over_time",
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        (
+            "quantile_over_time",
+            vec![ValueType::Scalar, ValueType::Matrix],
+            ValueType::Vector
+        ),
         ("rad", vec![ValueType::Vector], ValueType::Vector),
         ("rate", vec![ValueType::Matrix], ValueType::Vector),
         ("resets", vec![ValueType::Matrix], ValueType::Vector),
-        ("round", vec![ValueType::Vector, ValueType::Scalar], ValueType::Vector),
+        (
+            "round",
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
         ("scalar", vec![ValueType::Vector], ValueType::Scalar),
         ("sgn", vec![ValueType::Vector], ValueType::Vector),
         ("sin", vec![ValueType::Vector], ValueType::Vector),
@@ -166,8 +226,16 @@ lazy_static! {
         ("sort", vec![ValueType::Vector], ValueType::Vector),
         ("sort_desc", vec![ValueType::Vector], ValueType::Vector),
         ("sqrt", vec![ValueType::Vector], ValueType::Vector),
-        ("stddev_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("stdvar_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        (
+            "stddev_over_time",
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        (
+            "stdvar_over_time",
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
         ("sum_over_time", vec![ValueType::Matrix], ValueType::Vector),
         ("tan", vec![ValueType::Vector], ValueType::Vector),
         ("tanh", vec![ValueType::Vector], ValueType::Vector),
