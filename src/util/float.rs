@@ -12,8 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod duration;
-pub mod float;
+/// to put it simple, if diff < 0.000000001, they are equal
+pub fn f64_equals(x: f64, y: f64) -> bool {
+    x - y < 0.000_000_001
+}
 
-pub use duration::parse_duration;
-pub use float::f64_equals;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_f64_eqlaus() {
+        assert!(f64_equals(0.1, 0.05 + 0.05));
+        assert!(f64_equals(0.01, 0.005 + 0.005));
+        assert!(f64_equals(0.001, 0.0005 + 0.0005));
+        assert!(f64_equals(0.15 + 0.15 + 0.15, 0.1 + 0.1 + 0.25));
+    }
+}

@@ -19,29 +19,30 @@ use std::time::{Duration, SystemTime};
 use crate::label::Matchers;
 use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use crate::util::float;
 
 pub type GroupModifier = (VectorMatching, bool);
 pub type AggregateModifier = (Vec<String>, AggregateOps);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchingOps {
     On,
     Ignoring,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateOps {
     By,
     Without,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Offset {
     Pos(Duration),
     Neg(Duration),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AtModifier {
     Start,
     End,
@@ -157,7 +158,21 @@ pub struct NumberLiteral {
     pub val: f64,
 }
 
-#[derive(Debug, Clone)]
+impl NumberLiteral {
+    pub fn new(val: f64) -> Self {
+        Self { val }
+    }
+}
+
+impl PartialEq for NumberLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        float::f64_equals(self.val, other.val)
+    }
+}
+
+impl Eq for NumberLiteral {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
 }
