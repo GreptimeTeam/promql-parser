@@ -534,7 +534,7 @@ maybe_label -> Token:
 
 unary_op -> Token:
                 ADD { lexeme_to_token($lexer, $1) }
-|               SUB { lexeme_to_token($lexer, $1) }
+                /* | SUB { lexeme_to_token($lexer, $1) } */
                 ;
 
 match_op -> Token:
@@ -557,26 +557,20 @@ signed_or_unsigned_number -> Result<f64, String>:
                 | signed_number  { $1 }
                 ;
 
+signed_number -> Result<f64, String>:
+                ADD number { $2 }
+                | SUB number
+                {
+                  println!("==== $2 {:?}", $2);
+                  $2.map(|i| -i)
+                }
+                ;
 
 number -> Result<f64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
-                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
-                }
-                ;
-
-signed_number -> Result<f64, String>:
-                ADD number { $2 }
-                | SUB number { $2.map(|i| -i) }
-                ;
-
-// TODO: If unit is not used, delete this rule. by @yuanbohan
-uint -> Result<u64, String>:
-                NUMBER
-                {
-                        let s = $lexer.span_str($span);
-                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
+                        parse_golang_str_radix(&s)
                 }
                 ;
 
@@ -610,4 +604,4 @@ use crate::parser::{
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
-use crate::util::parse_duration;
+use crate::util::{parse_duration, parse_golang_str_radix};

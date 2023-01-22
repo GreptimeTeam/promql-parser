@@ -115,8 +115,8 @@ mod tests {
             ),
             ("5e-3", Expr::new_number_literal(0.005).unwrap(), false, ""),
             ("5e3", Expr::new_number_literal(5000.0).unwrap(), false, ""),
-            // ("0xc", Expr::new_number_literal(12.0).unwrap(), false, ""),
-            // ("0755", Expr::new_number_literal(493.0).unwrap(), false, ""),
+            ("0xc", Expr::new_number_literal(12.0).unwrap(), false, ""),
+            ("0755", Expr::new_number_literal(493.0).unwrap(), false, ""),
             (
                 "+5.5e-3",
                 Expr::new_number_literal(0.0055).unwrap(),
