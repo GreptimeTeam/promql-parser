@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use crate::parser::token::{Token, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
@@ -23,8 +25,22 @@ pub enum MatchOp {
     NotRe(Regex),
 }
 
+impl PartialEq for MatchOp {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MatchOp::Equal, MatchOp::Equal) => true,
+            (MatchOp::NotEqual, MatchOp::NotEqual) => true,
+            (MatchOp::Re(s), MatchOp::Re(o)) => s.as_str().eq(o.as_str()),
+            (MatchOp::NotRe(s), MatchOp::NotRe(o)) => s.as_str().eq(o.as_str()),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for MatchOp {}
+
 // Matcher models the matching of a label.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matcher {
     pub op: MatchOp,
     pub name: String,
@@ -71,6 +87,33 @@ impl Matchers {
     }
 }
 
+impl PartialEq for Matchers {
+    fn eq(&self, other: &Self) -> bool {
+        if self.matchers.len() != other.matchers.len() {
+            return false;
+        }
+
+        let selfs: HashMap<_, _> = self.matchers.iter().map(|m| (m.name.clone(), m)).collect();
+        let others: HashMap<_, _> = other.matchers.iter().map(|m| (m.name.clone(), m)).collect();
+
+        if selfs.len() != others.len() {
+            return false;
+        }
+
+        for (name, s_matcher) in selfs {
+            match others.get(&name) {
+                Some(o_matcher) if s_matcher.eq(o_matcher) => continue,
+                Some(_) => return false,
+                None => return false,
+            };
+        }
+        return true;
+    }
+}
+
+impl Eq for Matchers {}
+
+// TODO: move into struct
 pub fn new_matcher(token: Token, name: String, value: String) -> Result<Matcher, String> {
     match token.id() {
         T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
@@ -92,7 +135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_eq_ne() {
+    fn test_matcher_eq_ne() {
         let op = MatchOp::Equal;
         let matcher = Matcher::new(op, "name".into(), "up".into());
         assert!(matcher.is_match("up"));
@@ -106,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn test_re() {
+    fn test_matcher_re() {
         let value = "api/v1/.*".to_string();
         let re = Regex::new(&value).unwrap();
         let op = MatchOp::Re(re);
@@ -114,5 +157,42 @@ mod tests {
         assert!(matcher.is_match("api/v1/query"));
         assert!(matcher.is_match("api/v1/range_query"));
         assert!(!matcher.is_match("api/v2"));
+    }
+
+    #[test]
+    fn test_matcher_equality() {
+        let eq_matcher1 = Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"));
+        let eq_matcher2 = Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"));
+        assert_eq!(eq_matcher1, eq_matcher2);
+
+        let ne_matcher1 =
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"));
+        let ne_matcher2 =
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"));
+        assert_eq!(ne_matcher1, ne_matcher2);
+
+        let re_matcher1 = Matcher::new(
+            MatchOp::Re(Regex::new("2??").unwrap()),
+            String::from("code"),
+            String::from("2??"),
+        );
+        let re_matcher2 = Matcher::new(
+            MatchOp::Re(Regex::new("2??").unwrap()),
+            String::from("code"),
+            String::from("2??"),
+        );
+        assert_eq!(re_matcher1, re_matcher2);
+
+        let not_re_matcher1 = Matcher::new(
+            MatchOp::NotRe(Regex::new("2??").unwrap()),
+            String::from("code"),
+            String::from("2??"),
+        );
+        let not_re_matcher2 = Matcher::new(
+            MatchOp::NotRe(Regex::new("2??").unwrap()),
+            String::from("code"),
+            String::from("2??"),
+        );
+        assert_eq!(not_re_matcher1, not_re_matcher2);
     }
 }

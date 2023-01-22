@@ -19,7 +19,7 @@ use lazy_static::lazy_static;
 use crate::parser::{Expr, ValueType};
 
 /// called by func in Call
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionArgs {
     pub args: Vec<Box<Expr>>,
 }
@@ -60,7 +60,7 @@ impl FunctionArgs {
 }
 
 /// Functions is a list of all functions supported by PromQL, including their types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
@@ -267,4 +267,36 @@ lazy_static! {
 // get_function returns a predefined Function object for the given name.
 pub fn get_function(name: &str) -> Option<Function> {
     FUNCTIONS.get(name).cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::*;
+
+    #[test]
+    fn test_function_equality() {
+        let func = "month";
+        assert!(get_function(func).is_some());
+        assert_eq!(get_function(func), get_function(func));
+    }
+
+    #[test]
+    fn test_function_args_equality() {
+        assert_eq!(FunctionArgs::empty_args(), FunctionArgs::empty_args());
+
+        let arg1 = Expr::NumberLiteral(NumberLiteral::new(1.0));
+        let arg2 = Expr::StringLiteral(StringLiteral {
+            val: "prometheus".into(),
+        });
+        let args1 = FunctionArgs::new_args(arg1).append_args(arg2);
+
+        let arg1 = Expr::NumberLiteral(NumberLiteral::new(0.5 + 0.5));
+        let arg2 = Expr::StringLiteral(StringLiteral {
+            val: String::from("prometheus"),
+        });
+        let args2 = FunctionArgs::new_args(arg1).append_args(arg2);
+
+        assert_eq!(args1, args2);
+    }
 }

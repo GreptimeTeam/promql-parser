@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /// to put it simple, if diff < 0.000000001, they are equal
+/// TODO: better solution
 pub fn f64_equals(x: f64, y: f64) -> bool {
     x - y < 0.000_000_001
 }

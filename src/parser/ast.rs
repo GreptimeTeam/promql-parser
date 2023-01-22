@@ -108,7 +108,7 @@ pub struct EvalStmt {
 /// <aggr-op>([parameter,] <vector expression>) [without|by (<label list>)]
 ///
 /// parameter is only required for count_values, quantile, topk and bottomk.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     pub op: TokenType,            // The used aggregation operation.
     pub expr: Box<Expr>,          // The Vector expression over which is aggregated.
@@ -117,13 +117,13 @@ pub struct AggregateExpr {
     pub how: AggregateOps,        // Whether to drop the given labels rather than keep them.
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
     pub op: TokenType,
     pub expr: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
     pub op: TokenType,  // The operation of the expression.
     pub lhs: Box<Expr>, // The operands on the left sides of the operator.
@@ -137,12 +137,12 @@ pub struct BinaryExpr {
     pub return_bool: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Offset>,
@@ -177,7 +177,7 @@ pub struct StringLiteral {
     pub val: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
     pub name: Option<String>,
     pub label_matchers: Matchers,
@@ -186,19 +186,19 @@ pub struct VectorSelector {
     pub at: Option<AtModifier>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
     pub vector_selector: VectorSelector,
     pub range: Duration,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     pub func: Function,
     pub args: FunctionArgs,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
     Aggregate(AggregateExpr),
@@ -412,7 +412,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne,
@@ -433,7 +433,7 @@ impl Display for VectorMatchCardinality {
 
 // VectorMatching describes how elements from two Vectors in a binary
 // operation are supposed to be matched.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorMatching {
     pub card: VectorMatchCardinality,
     pub labels: Vec<String>,

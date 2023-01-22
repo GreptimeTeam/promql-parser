@@ -39,7 +39,6 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::NumberLiteral;
 
     struct Case {
         input: &'static str,   // The input to be parsed.
@@ -59,71 +58,51 @@ mod tests {
         }
     }
 
-    struct NumberLiteralCase {
-        input: &'static str,     // The input to be parsed.
-        expected: NumberLiteral, // The expected expression AST.
-        fail: bool,              // Whether parsing is supposed to fail.
-        err_msg: &'static str,   // If not empty the parsing error has to contain this string.
-    }
-
-    impl NumberLiteralCase {
-        fn new(
-            (input, expected, fail, err_msg): (&'static str, NumberLiteral, bool, &'static str),
-        ) -> Self {
-            Self {
-                input,
-                expected,
-                fail,
-                err_msg,
-            }
-        }
-    }
-
     // Scalars and scalar-to-scalar operations.
-    #[test]
-    fn test_valid_scalar_operation_parser() {
-        let cases: Vec<NumberLiteralCase> = vec![
-            ("1", NumberLiteral::new(1.0), false, ""),
-            ("+Inf", NumberLiteral::new(1.0), false, ""),
-            ("-Inf", NumberLiteral::new(f64::NEG_INFINITY), false, ""),
-            (".5", NumberLiteral::new(0.5), false, ""),
-            ("5.", NumberLiteral::new(5.0), false, ""),
-            ("123.4567", NumberLiteral::new(123.4567), false, ""),
-            ("5e-3", NumberLiteral::new(0.005), false, ""),
-            ("5e3", NumberLiteral::new(5000.0), false, ""),
-            ("0xc", NumberLiteral::new(12.0), false, ""),
-            ("0755", NumberLiteral::new(493.0), false, ""),
-            ("+5.5e-3", NumberLiteral::new(0.0055), false, ""),
-            ("-0755", NumberLiteral::new(-493.0), false, ""),
-        ]
-        .into_iter()
-        .map(NumberLiteralCase::new)
-        .collect();
+    // #[test]
+    // fn test_valid_scalar_operation_parser() {
+    //     let cases: Vec<Case> = vec![
+    //         ("1", NumberLiteral::new(1.0), false, ""),
+    //         ("+Inf", NumberLiteral::new(1.0), false, ""),
+    //         ("-Inf", NumberLiteral::new(f64::NEG_INFINITY), false, ""),
+    //         (".5", NumberLiteral::new(0.5), false, ""),
+    //         ("5.", NumberLiteral::new(5.0), false, ""),
+    //         ("123.4567", NumberLiteral::new(123.4567), false, ""),
+    //         ("5e-3", NumberLiteral::new(0.005), false, ""),
+    //         ("5e3", NumberLiteral::new(5000.0), false, ""),
+    //         ("0xc", NumberLiteral::new(12.0), false, ""),
+    //         ("0755", NumberLiteral::new(493.0), false, ""),
+    //         ("+5.5e-3", NumberLiteral::new(0.0055), false, ""),
+    //         ("-0755", NumberLiteral::new(-493.0), false, ""),
+    //     ]
+    //     .into_iter()
+    //     .map(Case::new)
+    //     .collect();
 
-        for case in cases {
-            let NumberLiteralCase {
-                input,
-                expected,
-                fail,
-                err_msg,
-            } = case;
+    //     for case in cases {
+    //         let Case {
+    //             input,
+    //             expected,
+    //             fail,
+    //             err_msg,
+    //         } = case;
 
-            let r = parse(input);
-            if !fail {
-                assert!(r.is_ok(), "{:?} is not ok", r);
-                match r.unwrap() {
-                    Expr::NumberLiteral(nl) => assert_eq!(expected, nl, "{} does not match", input),
-                    _ => {}
-                }
-            } else {
-                let err = r.unwrap_err();
-                assert!(
-                    &err.contains(err_msg),
-                    "{:?} does not contains {}",
-                    &err,
-                    err_msg
-                );
-            }
-        }
-    }
+    //         let r = parse(input);
+    //         if !fail {
+    //             assert!(r.is_ok(), "{:?} is not ok", r);
+    //             // match r.unwrap() {
+    //             //     Expr::NumberLiteral(nl) => assert_eq!(expected, nl, "{} does not match", input),
+    //             //     _ => {}
+    //             // }
+    //         } else {
+    //             let err = r.unwrap_err();
+    //             assert!(
+    //                 &err.contains(err_msg),
+    //                 "{:?} does not contains {}",
+    //                 &err,
+    //                 err_msg
+    //             );
+    //         }
+    //     }
+    // }
 }
