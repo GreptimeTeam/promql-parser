@@ -36,9 +36,16 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
     expr
 }
 
+/// cases in original prometheus is a huge slices which are constructed more than 3000 lines,
+/// and it is hard to split them based on the original order. So here is the Note:
+///
+/// - all cases SHOULD be covered, and the same literal float and literal
+///   string SHOULD be the same with the original prometheus.
+/// - all cases will be splitted into different blocks based on the type of parsed Expr.
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::*;
 
     struct Case {
         input: &'static str,   // The input to be parsed.
@@ -58,51 +65,75 @@ mod tests {
         }
     }
 
-    // Scalars and scalar-to-scalar operations.
-    // #[test]
-    // fn test_valid_scalar_operation_parser() {
-    //     let cases: Vec<Case> = vec![
-    //         ("1", NumberLiteral::new(1.0), false, ""),
-    //         ("+Inf", NumberLiteral::new(1.0), false, ""),
-    //         ("-Inf", NumberLiteral::new(f64::NEG_INFINITY), false, ""),
-    //         (".5", NumberLiteral::new(0.5), false, ""),
-    //         ("5.", NumberLiteral::new(5.0), false, ""),
-    //         ("123.4567", NumberLiteral::new(123.4567), false, ""),
-    //         ("5e-3", NumberLiteral::new(0.005), false, ""),
-    //         ("5e3", NumberLiteral::new(5000.0), false, ""),
-    //         ("0xc", NumberLiteral::new(12.0), false, ""),
-    //         ("0755", NumberLiteral::new(493.0), false, ""),
-    //         ("+5.5e-3", NumberLiteral::new(0.0055), false, ""),
-    //         ("-0755", NumberLiteral::new(-493.0), false, ""),
-    //     ]
-    //     .into_iter()
-    //     .map(Case::new)
-    //     .collect();
+    fn assert_cases(cases: Vec<Case>) {
+        for Case {
+            input,
+            expected,
+            fail,
+            err_msg,
+        } in cases
+        {
+            let r = parse(input);
+            if !fail {
+                assert!(r.is_ok(), "{:?} is not ok", r);
+                assert_eq!(expected, r.unwrap(), "{} does not match", input);
+            } else {
+                let err = r.unwrap_err();
+                assert!(
+                    &err.contains(err_msg),
+                    "{:?} does not contains {}",
+                    &err,
+                    err_msg
+                );
+            }
+        }
+    }
 
-    //     for case in cases {
-    //         let Case {
-    //             input,
-    //             expected,
-    //             fail,
-    //             err_msg,
-    //         } = case;
+    #[test]
+    fn test_number_literal_parser() {
+        let cases: Vec<Case> = vec![
+            ("1", Expr::new_number_literal(1.0).unwrap(), false, ""),
+            (
+                "+Inf",
+                Expr::new_number_literal(f64::INFINITY).unwrap(),
+                false,
+                "",
+            ),
+            // (
+            //     "-Inf",
+            //     Expr::new_number_literal(f64::NEG_INFINITY).unwrap(),
+            //     false,
+            //     "",
+            // ),
+            (".5", Expr::new_number_literal(0.5).unwrap(), false, ""),
+            ("5.", Expr::new_number_literal(5.0).unwrap(), false, ""),
+            (
+                "123.4567",
+                Expr::new_number_literal(123.4567).unwrap(),
+                false,
+                "",
+            ),
+            ("5e-3", Expr::new_number_literal(0.005).unwrap(), false, ""),
+            ("5e3", Expr::new_number_literal(5000.0).unwrap(), false, ""),
+            // ("0xc", Expr::new_number_literal(12.0).unwrap(), false, ""),
+            // ("0755", Expr::new_number_literal(493.0).unwrap(), false, ""),
+            (
+                "+5.5e-3",
+                Expr::new_number_literal(0.0055).unwrap(),
+                false,
+                "",
+            ),
+            // (
+            //     "-0755",
+            //     Expr::new_number_literal(-493.0).unwrap(),
+            //     false,
+            //     "",
+            // ),
+        ]
+        .into_iter()
+        .map(Case::new)
+        .collect();
 
-    //         let r = parse(input);
-    //         if !fail {
-    //             assert!(r.is_ok(), "{:?} is not ok", r);
-    //             // match r.unwrap() {
-    //             //     Expr::NumberLiteral(nl) => assert_eq!(expected, nl, "{} does not match", input),
-    //             //     _ => {}
-    //             // }
-    //         } else {
-    //             let err = r.unwrap_err();
-    //             assert!(
-    //                 &err.contains(err_msg),
-    //                 "{:?} does not contains {}",
-    //                 &err,
-    //                 err_msg
-    //             );
-    //         }
-    //     }
-    // }
+        assert_cases(cases);
+    }
 }
