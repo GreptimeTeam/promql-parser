@@ -19,7 +19,6 @@ use std::time::{Duration, SystemTime};
 use crate::label::Matchers;
 use crate::parser::token::{T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
-use crate::util::float;
 
 pub type GroupModifier = (VectorMatching, bool);
 pub type AggregateModifier = (Vec<String>, AggregateOps);
@@ -166,7 +165,7 @@ impl NumberLiteral {
 
 impl PartialEq for NumberLiteral {
     fn eq(&self, other: &Self) -> bool {
-        float::f64_equals(self.val, other.val)
+        self.val == other.val
     }
 }
 

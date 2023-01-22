@@ -13,7 +13,5 @@
 // limitations under the License.
 
 pub mod duration;
-pub mod float;
 
 pub use duration::parse_duration;
-pub use float::f64_equals;
