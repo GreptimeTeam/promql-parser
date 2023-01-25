@@ -47,93 +47,87 @@ mod tests {
     use super::*;
     use crate::parser::*;
 
-    struct Case {
-        input: &'static str,   // The input to be parsed.
-        expected: Expr,        // The expected expression AST.
-        fail: bool,            // Whether parsing is supposed to fail.
-        err_msg: &'static str, // If not empty the parsing error has to contain this string.
+    enum Case {
+        Success {
+            input: &'static str,
+            expected: Expr,
+        },
+        Fail {
+            input: &'static str,
+            err_msg: &'static str,
+        },
     }
 
     impl Case {
-        fn new((input, expected, fail, err_msg): (&'static str, Expr, bool, &'static str)) -> Self {
-            Self {
-                input,
-                expected,
-                fail,
-                err_msg,
-            }
+        fn new_success_case(input: &'static str, expected: Expr) -> Self {
+            Case::Success { input, expected }
+        }
+        fn new_fail_case(input: &'static str, err_msg: &'static str) -> Self {
+            Case::Fail { input, err_msg }
+        }
+
+        fn new_success_cases(cases: Vec<(&'static str, Expr)>) -> Vec<Case> {
+            cases
+                .into_iter()
+                .map(|(input, expected)| Case::new_success_case(input, expected))
+                .collect()
+        }
+
+        fn new_fail_cases(cases: Vec<(&'static str, &'static str)>) -> Vec<Case> {
+            cases
+                .into_iter()
+                .map(|(input, err_msg)| Case::new_fail_case(input, err_msg))
+                .collect()
         }
     }
 
     fn assert_cases(cases: Vec<Case>) {
-        for Case {
-            input,
-            expected,
-            fail,
-            err_msg,
-        } in cases
-        {
-            let r = parse(input);
-            if !fail {
-                assert!(r.is_ok(), "{:?} is not ok", r);
-                assert_eq!(expected, r.unwrap(), "{} does not match", input);
-            } else {
-                let err = r.unwrap_err();
-                assert!(
-                    &err.contains(err_msg),
-                    "{:?} does not contains {}",
-                    &err,
-                    err_msg
-                );
+        for case in cases {
+            match case {
+                Case::Success { input, expected } => {
+                    let r = parse(input);
+                    assert!(r.is_ok(), "parse {input} failed, err {:?} ", r);
+                    assert_eq!(
+                        r.unwrap(),
+                        expected,
+                        "parse {} does not match, expected: {:?}",
+                        input,
+                        expected
+                    );
+                }
+
+                Case::Fail { input, err_msg } => {
+                    let r = parse(input);
+                    assert!(r.is_err(), "parse {input} should failed, actually {:?} ", r);
+                    let err = r.unwrap_err();
+                    assert!(
+                        &err.contains(err_msg),
+                        "{:?} does not contains {}",
+                        &err,
+                        err_msg
+                    );
+                }
             }
         }
     }
 
     #[test]
     fn test_number_literal_parser() {
-        let cases: Vec<Case> = vec![
-            ("1", Expr::new_number_literal(1.0).unwrap(), false, ""),
-            (
-                "+Inf",
-                Expr::new_number_literal(f64::INFINITY).unwrap(),
-                false,
-                "",
-            ),
-            // (
-            //     "-Inf",
-            //     Expr::new_number_literal(f64::NEG_INFINITY).unwrap(),
-            //     false,
-            //     "",
-            // ),
-            (".5", Expr::new_number_literal(0.5).unwrap(), false, ""),
-            ("5.", Expr::new_number_literal(5.0).unwrap(), false, ""),
-            (
-                "123.4567",
-                Expr::new_number_literal(123.4567).unwrap(),
-                false,
-                "",
-            ),
-            ("5e-3", Expr::new_number_literal(0.005).unwrap(), false, ""),
-            ("5e3", Expr::new_number_literal(5000.0).unwrap(), false, ""),
-            ("0xc", Expr::new_number_literal(12.0).unwrap(), false, ""),
-            ("0755", Expr::new_number_literal(493.0).unwrap(), false, ""),
-            (
-                "+5.5e-3",
-                Expr::new_number_literal(0.0055).unwrap(),
-                false,
-                "",
-            ),
-            // (
-            //     "-0755",
-            //     Expr::new_number_literal(-493.0).unwrap(),
-            //     false,
-            //     "",
-            // ),
-        ]
-        .into_iter()
-        .map(Case::new)
-        .collect();
+        let cases = vec![
+            ("1", Expr::new_number_literal(1.0).unwrap()),
+            ("+Inf", Expr::new_number_literal(f64::INFINITY).unwrap()),
+            ("-Inf", Expr::new_number_literal(f64::NEG_INFINITY).unwrap()),
+            (".5", Expr::new_number_literal(0.5).unwrap()),
+            ("5.", Expr::new_number_literal(5.0).unwrap()),
+            ("123.4567", Expr::new_number_literal(123.4567).unwrap()),
+            ("5e-3", Expr::new_number_literal(0.005).unwrap()),
+            ("5e3", Expr::new_number_literal(5000.0).unwrap()),
+            ("0xc", Expr::new_number_literal(12.0).unwrap()),
+            ("0755", Expr::new_number_literal(493.0).unwrap()),
+            ("+5.5e-3", Expr::new_number_literal(0.0055).unwrap()),
+            ("-0755", Expr::new_number_literal(-493.0).unwrap()),
+        ];
 
-        assert_cases(cases);
+        assert_cases(Case::new_success_cases(cases));
     }
 }

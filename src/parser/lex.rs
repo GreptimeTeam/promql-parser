@@ -30,15 +30,6 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
             // TODO: use better error mechanism, instead of filtering the err.
             let lexemes: Vec<Result<_, _>> =
                 lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
-
-            for lexeme in &lexemes {
-                println!(
-                    "==== {}, {:?}",
-                    lexeme.unwrap().tok_id(),
-                    token_display(lexeme.unwrap().tok_id())
-                );
-            }
-
             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
         }
         None => Err(format!("generated empty lexemes for {}", s)),

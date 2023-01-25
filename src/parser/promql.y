@@ -534,7 +534,7 @@ maybe_label -> Token:
 
 unary_op -> Token:
                 ADD { lexeme_to_token($lexer, $1) }
-                /* | SUB { lexeme_to_token($lexer, $1) } */
+                | SUB { lexeme_to_token($lexer, $1) }
                 ;
 
 match_op -> Token:
@@ -548,7 +548,7 @@ match_op -> Token:
  * Literals.
  */
 number_literal -> Result<Expr, String>:
-                number { Expr::new_number_literal($1?) }
+                signed_or_unsigned_number { Expr::new_number_literal($1?) }
                 ;
 
 
@@ -559,11 +559,7 @@ signed_or_unsigned_number -> Result<f64, String>:
 
 signed_number -> Result<f64, String>:
                 ADD number { $2 }
-                | SUB number
-                {
-                  println!("==== $2 {:?}", $2);
-                  $2.map(|i| -i)
-                }
+                | SUB number { $2.map(|i| -i) }
                 ;
 
 number -> Result<f64, String>:
