@@ -24,6 +24,7 @@ pub type LexemeType = DefaultLexeme<TokenType>;
 
 pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
+    dbg!(&lexemes);
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         Some(Ok(_)) => {
@@ -32,7 +33,7 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
                 lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
         }
-        None => Err(format!("generated empty lexemes for {}", s)),
+        None => Err(format!("no expression found in input: '{s}'")),
     }
 }
 
@@ -322,7 +323,7 @@ impl Lexer {
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
                 Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
-                None => State::Err("'.' can not be at the end".into()),
+                None => State::Err("unexpected character: '.'".into()),
             },
             ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
             ch if STRING_SYMBOLS.contains(ch) => State::String(ch),
@@ -383,6 +384,8 @@ impl Lexer {
             return State::Lexeme(T_DURATION);
         }
 
+        // the next char is invalid, so it should be captured in the err info.
+        self.pop();
         State::Err(format!(
             "bad number or duration syntax: {}",
             self.lexeme_string()
@@ -482,9 +485,10 @@ impl Lexer {
             self.accept_run(|ch| ch.is_ascii_digit());
         }
 
-        // Next thing must not be alphanumeric unless it's the times token
-        // for series repetitions.
-        !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
+        // Next thing must not be alpha or '.'
+        // if alpha: it maybe a duration
+        // if '.': invalid number
+        !matches!(self.peek(), Some(ch) if is_alpha(ch) || ch == '.')
     }
 
     /// number part has already been scanned.
@@ -845,7 +849,7 @@ mod tests {
                 None,
             ),
             (":bc", vec![(T_METRIC_IDENTIFIER, 0, 3)], None),
-            ("0a:bc", vec![], Some("bad number or duration syntax: 0")),
+            ("0a:bc", vec![], Some("bad number or duration syntax: 0a")),
         ];
         assert_matches(cases);
     }
@@ -932,7 +936,7 @@ mod tests {
         let cases = vec![
             ("北京", vec![], Some("unexpected character: 北")),
             ("北京='a'", vec![], Some("unexpected character: 北")),
-            ("0a='a'", vec![], Some("bad number or duration syntax: 0")),
+            ("0a='a'", vec![], Some("bad number or duration syntax: 0a")),
             (
                 "{foo='bar'}",
                 vec![
@@ -1025,7 +1029,7 @@ mod tests {
             ("=~", vec![], Some("unexpected character after '=': ~")),
             ("!~", vec![], Some("unexpected character after '!': ~")),
             ("!(", vec![], Some("unexpected character after '!': (")),
-            ("1a", vec![], Some("bad number or duration syntax: 1")),
+            ("1a", vec![], Some("bad number or duration syntax: 1a")),
         ];
         assert_matches(cases);
     }

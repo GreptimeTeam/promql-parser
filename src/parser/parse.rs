@@ -98,11 +98,15 @@ mod tests {
 
                 Case::Fail { input, err_msg } => {
                     let r = parse(input);
-                    assert!(r.is_err(), "parse {input} should failed, actually {:?} ", r);
+                    assert!(
+                        r.is_err(),
+                        "parse '{input}' should failed, actually '{:?}' ",
+                        r
+                    );
                     let err = r.unwrap_err();
                     assert!(
                         &err.contains(err_msg),
-                        "{:?} does not contains {}",
+                        "{:?} does not contains '{}'",
                         &err,
                         err_msg
                     );
@@ -129,5 +133,73 @@ mod tests {
         ];
 
         assert_cases(Case::new_success_cases(cases));
+    }
+
+    #[test]
+    fn test_binary_expr_parser() {
+        // "1 + 1"
+        // "1 - 1"
+        // "1 * 1"
+        // "1 / 1"
+        // "1 % 1"
+        // "1 != bool 1"
+        // "1 > bool 1"
+        // "1 >= bool 1"
+        // "1 < bool 1"
+        // "1 <= bool 1"
+        // "-1^2"
+        // "-1*2"
+        // "-1+2"
+        // "-1^-2"
+        // "+1 + -2 * 1"
+        // "1 + 2/(3*1)"
+        // "1 < bool 2 - 1 * 2"
+    }
+
+    #[test]
+    fn test_unary_expr_parser() {
+        // "-some_metric"
+        // "+some_metric"
+        // " +some_metric"
+    }
+
+    #[test]
+    fn test_fail_parser() {
+        let cases = vec![
+            ("", "no expression found in input"),
+            ("# just a comment\n\n", "no expression found in input"),
+            // ("1+", "unexpected end of input"),
+            (".", "unexpected character: '.'"),
+            ("2.5.", "bad number or duration syntax: 2.5."),
+            // slightly different from Prometheus
+            ("100..4", "bad number or duration syntax: 100."),
+            ("0deadbeef", "bad number or duration syntax: 0de"),
+            // ("1 /", "unexpected end of input"),
+            // ("*1", "unexpected <op:*>"),
+            // ("(1))", "unexpected right parenthesis ')'"),
+            // ("((1)", "unclosed left parenthesis"),
+            // ("999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "out of range"),
+            // ("(", "unclosed left parenthesis"),
+            // ("1 and 1", "set operator \"and\" not allowed in binary scalar expression"),
+            // ("1 == 1", "1:3: parse error: comparisons between scalars must use BOOL modifier"),
+            // ("1 or 1", "set operator \"or\" not allowed in binary scalar expression"),
+            // ("1 unless 1", "set operator \"unless\" not allowed in binary scalar expression"),
+            // ("1 !~ 1", `unexpected character after '!': '~'`),
+            // ("1 =~ 1", `unexpected character after '=': '~'`),
+            // (`-"string"`, `unary expression only allowed on expressions of type scalar or instant vector, got "string"`),
+            // (`-test[5m]`, `unary expression only allowed on expressions of type scalar or instant vector, got "range vector"`),
+            // ("*test", "unexpected <op:*>"),
+            // ("1 offset 1d", "1:1: parse error: offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"),
+            // (
+            //     "foo offset 1s offset 2s",
+            //     "offset may not be set multiple times",
+            // ),
+            // (
+            //     "a - on(b) ignoring(c) d",
+            //     "1:11: parse error: unexpected <ignoring>",
+            // ),
+        ];
+
+        assert_cases(Case::new_fail_cases(cases));
     }
 }
