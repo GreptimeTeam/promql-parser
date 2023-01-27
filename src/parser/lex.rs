@@ -24,7 +24,7 @@ pub type LexemeType = DefaultLexeme<TokenType>;
 
 pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
-    dbg!(&lexemes);
+    // dbg!(&lexemes);
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         Some(Ok(_)) => {
@@ -107,8 +107,15 @@ impl Context {
         self.chars.get(self.idx).copied()
     }
 
+    /// string lexeme SHOULD trim the surrounding string symbols, ' or " or `
     fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
-        DefaultLexeme::new(token_id, self.start, self.pos - self.start)
+        let mut start = self.start;
+        let mut len = self.pos - self.start;
+        if token_id == T_STRING {
+            start += 1;
+            len -= 2;
+        }
+        DefaultLexeme::new(token_id, start, len)
     }
 
     /// ignore the text between start and pos
@@ -714,11 +721,7 @@ mod tests {
             .collect();
 
         for (input, expected, actual) in cases.iter() {
-            assert_eq!(
-                expected, actual,
-                "input: {}, expected: {:?}, actual: {:?}",
-                input, expected, actual
-            );
+            assert_eq!(expected, actual, "\n<input>: {}", input);
         }
     }
 
@@ -817,10 +820,10 @@ mod tests {
     #[test]
     fn test_strings() {
         let cases = vec![
-            ("\"test\\tsequence\"", vec![(T_STRING, 0, 16)], None),
-            ("\"test\\\\.expression\"", vec![(T_STRING, 0, 19)], None),
+            ("\"test\\tsequence\"", vec![(T_STRING, 1, 14)], None),
+            ("\"test\\\\.expression\"", vec![(T_STRING, 1, 17)], None),
             // FIXME: "\"test\\.expression\""
-            ("`test\\.expression`", vec![(T_STRING, 0, 18)], None),
+            ("`test\\.expression`", vec![(T_STRING, 1, 16)], None),
             // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
         ];
         assert_matches(cases);
@@ -943,7 +946,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -954,7 +957,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -965,7 +968,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 10),
+                    (T_STRING, 6, 8),
                     (T_RIGHT_BRACE, 15, 1),
                 ],
                 None,
@@ -976,7 +979,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_NEQ, 5, 2),
-                    (T_STRING, 8, 5),
+                    (T_STRING, 9, 3),
                     (T_RIGHT_BRACE, 14, 1),
                 ],
                 None,
@@ -987,7 +990,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 5),
                     (T_EQL_REGEX, 6, 2),
-                    (T_STRING, 8, 5),
+                    (T_STRING, 9, 3),
                     (T_RIGHT_BRACE, 14, 1),
                 ],
                 None,
@@ -998,7 +1001,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 2),
                     (T_NEQ_REGEX, 3, 2),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -1115,7 +1118,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1132,7 +1135,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1149,7 +1152,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1166,7 +1169,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1186,7 +1189,7 @@ mod tests {
                     (T_LEFT_BRACE, 22, 1),
                     (T_IDENTIFIER, 23, 3),
                     (T_EQL, 26, 1),
-                    (T_STRING, 27, 5),
+                    (T_STRING, 28, 3),
                     (T_RIGHT_BRACE, 32, 1),
                     (T_LEFT_BRACKET, 33, 1),
                     (T_DURATION, 34, 2),
@@ -1212,7 +1215,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1235,7 +1238,7 @@ mod tests {
                     (T_LEFT_BRACE, 22, 1),
                     (T_IDENTIFIER, 23, 3),
                     (T_EQL, 26, 1),
-                    (T_STRING, 27, 5),
+                    (T_STRING, 28, 3),
                     (T_RIGHT_BRACE, 32, 1),
                     (T_LEFT_BRACKET, 33, 1),
                     (T_DURATION, 34, 2),
@@ -1282,7 +1285,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1298,7 +1301,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1314,7 +1317,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1329,7 +1332,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                 ],

@@ -14,7 +14,6 @@
 
 /// parse str radix from golang format
 pub fn parse_golang_str_radix(s: &str) -> Result<f64, String> {
-    println!("==== {s}");
     if s.starts_with("0x") || s.starts_with("0X") {
         u64::from_str_radix(s.to_lowercase().strip_prefix("0x").unwrap(), 16)
             .map(|x| x as f64)

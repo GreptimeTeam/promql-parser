@@ -397,7 +397,7 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1);
                         let value = lexeme_to_string($lexer, &$3);
-                        new_matcher($2, name, value)
+                        Matcher::new_matcher($2.id(), name, value)
                 }
                 | IDENTIFIER match_op error
                 {
@@ -599,5 +599,5 @@ use crate::parser::{
     MatchingOps, Offset, Token, VectorMatchCardinality, VectorMatching,
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
-use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
+use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
 use crate::util::{parse_duration, parse_golang_str_radix};

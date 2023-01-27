@@ -14,7 +14,7 @@
 
 mod matcher;
 
-pub use matcher::{new_matcher, MatchOp, Matcher, Matchers};
+pub use matcher::{MatchOp, Matcher, Matchers};
 use std::collections::HashSet;
 
 // Well-known label names used by Prometheus components.

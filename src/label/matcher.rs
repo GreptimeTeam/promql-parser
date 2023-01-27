@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use crate::parser::token::{Token, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::parser::token::{TokenType, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -65,6 +65,22 @@ impl Matcher {
             MatchOp::NotRe(r) => !r.is_match(s),
         }
     }
+
+    pub fn new_matcher(id: TokenType, name: String, value: String) -> Result<Matcher, String> {
+        match id {
+            T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
+            T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
+            T_EQL_REGEX => {
+                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+                Ok(Matcher::new(MatchOp::Re(re), name, value))
+            }
+            T_NEQ_REGEX => {
+                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+                Ok(Matcher::new(MatchOp::NotRe(re), name, value))
+            }
+            _ => Err(format!("invalid match op {}", id)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -112,23 +128,6 @@ impl PartialEq for Matchers {
 }
 
 impl Eq for Matchers {}
-
-// TODO: move into struct
-pub fn new_matcher(token: Token, name: String, value: String) -> Result<Matcher, String> {
-    match token.id() {
-        T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
-        T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
-        T_EQL_REGEX => {
-            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-            Ok(Matcher::new(MatchOp::Re(re), name, value))
-        }
-        T_NEQ_REGEX => {
-            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-            Ok(Matcher::new(MatchOp::NotRe(re), name, value))
-        }
-        _ => Err(format!("invalid match op {}", token.val())),
-    }
-}
 
 #[cfg(test)]
 mod tests {

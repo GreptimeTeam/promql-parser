@@ -45,38 +45,37 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::label::{self, MatchOp, Matcher, Matchers};
+    use crate::parser::token::{T_EQL_REGEX, T_NEQ_REGEX};
     use crate::parser::*;
+    use std::time::Duration;
 
     enum Case {
-        Success {
-            input: &'static str,
-            expected: Expr,
-        },
-        Fail {
-            input: &'static str,
-            err_msg: &'static str,
-        },
+        Success { input: String, expected: Expr },
+        Fail { input: String, err_msg: String },
     }
 
     impl Case {
-        fn new_success_case(input: &'static str, expected: Expr) -> Self {
+        fn new_success_case(input: String, expected: Expr) -> Self {
             Case::Success { input, expected }
         }
-        fn new_fail_case(input: &'static str, err_msg: &'static str) -> Self {
+        fn new_fail_case(input: String, err_msg: String) -> Self {
             Case::Fail { input, err_msg }
         }
 
-        fn new_success_cases(cases: Vec<(&'static str, Expr)>) -> Vec<Case> {
+        fn new_success_cases(cases: Vec<(&str, Expr)>) -> Vec<Case> {
             cases
                 .into_iter()
-                .map(|(input, expected)| Case::new_success_case(input, expected))
+                .map(|(input, expected)| Case::new_success_case(String::from(input), expected))
                 .collect()
         }
 
-        fn new_fail_cases(cases: Vec<(&'static str, &'static str)>) -> Vec<Case> {
+        fn new_fail_cases(cases: Vec<(&str, &str)>) -> Vec<Case> {
             cases
                 .into_iter()
-                .map(|(input, err_msg)| Case::new_fail_case(input, err_msg))
+                .map(|(input, err_msg)| {
+                    Case::new_fail_case(String::from(input), String::from(err_msg))
+                })
                 .collect()
         }
     }
@@ -85,19 +84,13 @@ mod tests {
         for case in cases {
             match case {
                 Case::Success { input, expected } => {
-                    let r = parse(input);
+                    let r = parse(&input);
                     assert!(r.is_ok(), "parse {input} failed, err {:?} ", r);
-                    assert_eq!(
-                        r.unwrap(),
-                        expected,
-                        "parse {} does not match, expected: {:?}",
-                        input,
-                        expected
-                    );
+                    assert_eq!(r.unwrap(), expected, "parse {} does not match", input);
                 }
 
                 Case::Fail { input, err_msg } => {
-                    let r = parse(input);
+                    let r = parse(&input);
                     assert!(
                         r.is_err(),
                         "parse '{input}' should failed, actually '{:?}' ",
@@ -105,7 +98,7 @@ mod tests {
                     );
                     let err = r.unwrap_err();
                     assert!(
-                        &err.contains(err_msg),
+                        &err.contains(&err_msg),
                         "{:?} does not contains '{}'",
                         &err,
                         err_msg
@@ -131,17 +124,17 @@ mod tests {
             ("+5.5e-3", Expr::new_number_literal(0.0055).unwrap()),
             ("-0755", Expr::new_number_literal(-493.0).unwrap()),
         ];
-
         assert_cases(Case::new_success_cases(cases));
     }
 
     #[test]
-    fn test_binary_expr_parser() {
+    fn test_vector_binary_expr_parser() {
         // "1 + 1"
         // "1 - 1"
         // "1 * 1"
         // "1 / 1"
         // "1 % 1"
+        // "1 == bool 1"
         // "1 != bool 1"
         // "1 > bool 1"
         // "1 >= bool 1"
@@ -150,10 +143,110 @@ mod tests {
         // "-1^2"
         // "-1*2"
         // "-1+2"
-        // "-1^-2"
+        // "-1^-2" // unary on binary expr
         // "+1 + -2 * 1"
         // "1 + 2/(3*1)"
         // "1 < bool 2 - 1 * 2"
+        // "foo * bar"
+        // "foo * sum"
+        // "foo == 1"
+        // "foo == bool 1"
+        // "2.5 / bar"
+        // "foo and bar"
+        // "foo or bar"
+        // "foo unless bar"
+        // "foo + bar or bla and blub"
+        // "foo and bar unless baz or qux"
+        // "bar + on(foo) bla / on(baz, buz) group_right(test) blub"
+        // "foo * on(test,blub) bar"
+        // "foo * on(test,blub) group_left bar"
+        // "foo and on(test,blub) bar"
+        // "foo and on() bar"
+        // "foo and ignoring(test,blub) bar"
+        // "foo and ignoring() bar"
+        // "foo unless on(bar) baz"
+        // "foo / on(test,blub) group_left(bar) bar"
+        // "foo / ignoring(test,blub) group_left(blub) bar"
+        // "foo / ignoring(test,blub) group_left(bar) bar"
+        // "foo - on(test,blub) group_right(bar,foo) bar"
+        // "foo - ignoring(test,blub) group_right(bar,foo) bar"
+
+        let fail_cases = vec![
+            // (
+            //     "foo and 1",
+            //     "set operator \"and\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "1 and foo",
+            //     "set operator \"and\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "foo or 1",
+            //     "set operator \"or\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "1 or foo",
+            //     "set operator \"or\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "foo unless 1",
+            //     "set operator \"unless\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "1 unless foo",
+            //     "set operator \"unless\" not allowed in binary scalar expression",
+            // ),
+            // (
+            //     "1 or on(bar) foo",
+            //     "vector matching only allowed between instant vectors",
+            // ),
+            // (
+            //     "foo == on(bar) 10",
+            //     "vector matching only allowed between instant vectors",
+            // ),
+            // ("foo + group_left(baz) bar", "unexpected <group_left>"),
+            // (
+            //     "foo and on(bar) group_left(baz) bar",
+            //     "no grouping allowed for \"and\" operation",
+            // ),
+            // (
+            //     "foo and on(bar) group_right(baz) bar",
+            //     "no grouping allowed for \"and\" operation",
+            // ),
+            // (
+            //     "foo or on(bar) group_left(baz) bar",
+            //     "no grouping allowed for \"or\" operation",
+            // ),
+            // (
+            //     "foo or on(bar) group_right(baz) bar",
+            //     "no grouping allowed for \"or\" operation",
+            // ),
+            // (
+            //     "foo unless on(bar) group_left(baz) bar",
+            //     "no grouping allowed for \"unless\" operation",
+            // ),
+            // (
+            //     "foo unless on(bar) group_right(baz) bar",
+            //     "no grouping allowed for \"unless\" operation",
+            // ),
+            // (
+            //     r#"http_requests(group="production"} + on(instance) group_left(job,instance) cpu_count(type="smp"}"#,
+            //     "label \"instance\" must not occur in ON and GROUP clause at once",
+            // ),
+            // (
+            //     "foo + bool bar",
+            //     "bool modifier can only be used on comparison operators",
+            // ),
+            // (
+            //     "foo + bool 10",
+            //     "bool modifier can only be used on comparison operators",
+            // ),
+            // (
+            //     "foo and bool 10",
+            //     "bool modifier can only be used on comparison operators",
+            // ),
+        ];
+        assert_cases(Case::new_fail_cases(fail_cases));
     }
 
     #[test]
@@ -164,15 +257,393 @@ mod tests {
     }
 
     #[test]
-    fn test_fail_parser() {
+    fn test_vector_selector_parser() {
         let cases = vec![
+            ("foo", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap()
+            }),
+            ("min", {
+                let name = String::from("min");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap()
+            }),
+            ("foo offset 5m", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.offset_expr(Offset::Pos(Duration::from_secs(60 * 5))))
+                    .unwrap()
+            }),
+            ("foo offset -7m", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let offset = Duration::from_secs(60 * 7);
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.offset_expr(Offset::Neg(offset)))
+                    .unwrap()
+            }),
+            ("foo OFFSET 1h30m", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let offset = Duration::from_secs(60 * 90);
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.offset_expr(Offset::Pos(offset)))
+                    .unwrap()
+            }),
+            ("foo OFFSET 1h30ms", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let offset = Duration::from_secs(60 * 60) + Duration::from_millis(30);
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.offset_expr(Offset::Pos(offset)))
+                    .unwrap()
+            }),
+            ("foo @ 1603774568", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(1603774568f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ -100", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(-100f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ .3", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(0.3f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3.", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(3f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3.33", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(3.33f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3.3333", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                // Rounding off
+                let at = AtModifier::try_from(3.333f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3.3335", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                // Rounding off
+                let at = AtModifier::try_from(3.334f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3e2", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(300f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 3e-1", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(0.3).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ 0xA", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(10f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            ("foo @ -3.3e1", {
+                let name = String::from("foo");
+                let matcher = Matcher::new(
+                    MatchOp::Equal,
+                    String::from(label::METRIC_NAME),
+                    name.clone(),
+                );
+                let at = AtModifier::try_from(-33f64).unwrap();
+
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|e| e.step_invariant_expr(at))
+                    .unwrap()
+            }),
+            (r#"foo:bar{a="bc"}"#, {
+                let name = String::from("foo:bar");
+                let matchers = Matchers::new(vec![
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from(label::METRIC_NAME),
+                        name.clone(),
+                    ),
+                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
+                ]);
+                Expr::new_vector_selector(Some(name), matchers).unwrap()
+            }),
+            (r#"foo{NaN='bc'}"#, {
+                let name = String::from("foo");
+                let matchers = Matchers::new(vec![
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from(label::METRIC_NAME),
+                        name.clone(),
+                    ),
+                    Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
+                ]);
+                Expr::new_vector_selector(Some(name), matchers).unwrap()
+            }),
+            (r#"foo{bar='}'}"#, {
+                let name = String::from("foo");
+                let matchers = Matchers::new(vec![
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from(label::METRIC_NAME),
+                        name.clone(),
+                    ),
+                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
+                ]);
+                Expr::new_vector_selector(Some(name), matchers).unwrap()
+            }),
+            (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
+                let name = String::from("foo");
+                let matchers = Matchers::new(vec![
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from(label::METRIC_NAME),
+                        name.clone(),
+                    ),
+                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
+                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+                    Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
+                        .unwrap(),
+                    Matcher::new_matcher(T_NEQ_REGEX, String::from("bar"), String::from("baz"))
+                        .unwrap(),
+                ]);
+                Expr::new_vector_selector(Some(name), matchers).unwrap()
+            }),
+            (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
+                let name = String::from("foo");
+                let matchers = Matchers::new(vec![
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from(label::METRIC_NAME),
+                        name.clone(),
+                    ),
+                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
+                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+                    Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
+                        .unwrap(),
+                    Matcher::new_matcher(T_NEQ_REGEX, String::from("bar"), String::from("baz"))
+                        .unwrap(),
+                ]);
+                Expr::new_vector_selector(Some(name), matchers).unwrap()
+            }),
+        ];
+        assert_cases(Case::new_success_cases(cases));
+
+        let fail_cases = vec![
+            ("foo @ +Inf", "timestamp out of bounds for @ modifier: inf"),
+            ("foo @ -Inf", "timestamp out of bounds for @ modifier: -inf"),
+            ("foo @ NaN", "timestamp out of bounds for @ modifier: NaN"),
+            ("{", "unexpected end of input inside braces"),
+            ("}", "unexpected right bracket '}'"),
+            // ("some{", "unexpected end of input inside braces"),
+            // ("some}", "unexpected character: '}'"),
+            // (
+            //     "some_metric{a=b}",
+            //     "unexpected identifier \"b\" in label matching, expected string",
+            // ),
+            // (
+            //     r#"some_metric{a:b="b"}"#,
+            //     "unexpected character inside braces: ':'",
+            // ),
+            // (r#"foo{a*"b"}"#, "unexpected character inside braces: '*'"),
+            // // (
+            // //               r#"foo{a>="b"}"#,
+            // //              // TODO(fabxc): willingly lexing wrong tokens allows for more precise error
+            // //              // messages from the parser - consider if this is an option. "unexpected character inside braces: '>'",
+            // // ),
+            // (
+            //     r#"some_metric{a=\"\xff\"}"#,
+            //     "1:15: parse error: invalid UTF-8 rune",
+            // ),
+            // (
+            //     "foo{gibberish}",
+            //     r#"unexpected "}" in label matching, expected label matching operator"#,
+            // ),
+            // ("foo{1}", "unexpected character inside braces: '1'"),
+            // (
+            //     "{}",
+            //     "vector selector must contain at least one non-empty matcher",
+            // ),
+            // (
+            //     r#"{x=""}"#,
+            //     "vector selector must contain at least one non-empty matcher",
+            // ),
+            // (
+            //     r#"{x=~".*"}"#,
+            //     "vector selector must contain at least one non-empty matcher",
+            // ),
+            // (
+            //     r#"{x!~".+"}"#,
+            //     "vector selector must contain at least one non-empty matcher",
+            // ),
+            // (
+            //     r#"{x!="a"}"#,
+            //     "vector selector must contain at least one non-empty matcher",
+            // ),
+            // (
+            //     r#"foo{__name__="bar"}"#,
+            //     r#"metric name must not be set twice: "foo" or "bar""#,
+            // ),
+            // (
+            //     "foo{__name__= =}",
+            //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
+            // ),
+            // (
+            //     "foo{,}",
+            //     r#"unexpected "," in label matching, expected identifier or "}""#,
+            // ),
+            // (
+            //     r#"foo{__name__ == "bar"}"#,
+            //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
+            // ),
+            // (
+            //     r#"foo{__name__="bar" lol}"#,
+            //     r#"unexpected identifier "lol" in label matching, expected "," or "}""#,
+            // ),
+        ];
+        assert_cases(Case::new_fail_cases(fail_cases));
+
+        let fail_cases = vec![
+            {
+                let num = f64::MAX - 1f64;
+                let input = format!("foo @ {num}");
+                let err_msg = format!("timestamp out of bounds for @ modifier: {num}");
+                Case::Fail { input, err_msg }
+            },
+            {
+                let num = f64::MIN - 1f64;
+                let input = format!("foo @ {num}");
+                let err_msg = format!("timestamp out of bounds for @ modifier: {num}");
+                Case::Fail { input, err_msg }
+            },
+        ];
+        assert_cases(fail_cases);
+    }
+
+    #[test]
+    fn test_fail_cases() {
+        let fail_cases = vec![
             ("", "no expression found in input"),
             ("# just a comment\n\n", "no expression found in input"),
             // ("1+", "unexpected end of input"),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
-            // slightly different from Prometheus
-            ("100..4", "bad number or duration syntax: 100."),
+            ("100..4", "bad number or duration syntax: 100."), // slightly different from Prometheus
             ("0deadbeef", "bad number or duration syntax: 0de"),
             // ("1 /", "unexpected end of input"),
             // ("*1", "unexpected <op:*>"),
@@ -199,7 +670,6 @@ mod tests {
             //     "1:11: parse error: unexpected <ignoring>",
             // ),
         ];
-
-        assert_cases(Case::new_fail_cases(cases));
+        assert_cases(Case::new_fail_cases(fail_cases));
     }
 }

@@ -69,8 +69,9 @@ impl TryFrom<f64> for AtModifier {
         if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
             return err;
         }
+        let milli = (secs * 1000f64).round().abs() as u64;
 
-        let duration = Duration::from_secs(secs.round().abs() as u64);
+        let duration = Duration::from_millis(milli);
         let mut st = Some(SystemTime::UNIX_EPOCH);
         if secs.is_sign_positive() {
             st = SystemTime::UNIX_EPOCH.checked_add(duration);
@@ -458,12 +459,14 @@ mod tests {
     #[test]
     fn test_valid_at_modifier() {
         let cases = vec![
-            // tuple: (seconds, elapsed before/after UNIX_EPOCH)
+            // tuple: (seconds, elapsed milliseconds before or after UNIX_EPOCH)
             (0.0, 0),
-            (1000.3, 1000),  // after UNIX_EPOCH
-            (1000.9, 1001),  // after UNIX_EPOCH
-            (-1000.3, 1000), // before UNIX_EPOCH
-            (-1000.9, 1001), // before UNIX_EPOCH
+            (1000.3, 1000300),    // after UNIX_EPOCH
+            (1000.9, 1000900),    // after UNIX_EPOCH
+            (1000.9991, 1000999), // after UNIX_EPOCH
+            (1000.9999, 1001000), // after UNIX_EPOCH
+            (-1000.3, 1000300),   // before UNIX_EPOCH
+            (-1000.9, 1000900),   // before UNIX_EPOCH
         ];
 
         for (secs, elapsed) in cases {
@@ -472,12 +475,17 @@ mod tests {
                     if secs.is_sign_positive() || secs == 0.0 {
                         assert_eq!(
                             elapsed,
-                            st.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
+                            st.duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis()
                         )
                     } else if secs.is_sign_negative() {
                         assert_eq!(
                             elapsed,
-                            SystemTime::UNIX_EPOCH.duration_since(st).unwrap().as_secs()
+                            SystemTime::UNIX_EPOCH
+                                .duration_since(st)
+                                .unwrap()
+                                .as_millis()
                         )
                     }
                 }
