@@ -72,7 +72,7 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
         return Ok(Duration::ZERO); // Allow 0 without a unit.
     }
     if !DURATION_RE.is_match(ds) {
-        return Err(format!("not a valid duration string: {}", ds));
+        return Err(format!("not a valid duration string: {ds}"));
     }
 
     let caps = DURATION_RE.captures(ds).unwrap();

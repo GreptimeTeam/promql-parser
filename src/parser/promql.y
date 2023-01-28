@@ -173,15 +173,22 @@ label_matcher -> Result<Matcher, String>:
                 }
                 | IDENTIFIER match_op error
                 {
-                        let msg = format!("matcher err. identifier:{}, op:{}, err:{}",
-                                          lexeme_to_string($lexer, &$1), $2.val(), $3);
-                        Err(msg)
+                        let id = lexeme_to_string($lexer, &$1);
+                        let op = $2.val();
+                        let err = $3;
+                        Err(format!("matcher err. identifier:{id}, op:{op}, err:{err}"))
                 }
                 | IDENTIFIER error
                 {
-                        Err(format!("matcher err. identifier:{}, err:{}", lexeme_to_string($lexer, &$1), $2))
+                        let id = lexeme_to_string($lexer, &$1);
+                        let err = $2;
+                        Err(format!("matcher err. identifier:{id}, err:{err}"))
                 }
-                | error { Err(format!("matcher err:{}", $1)) }
+                | error
+                {
+                        let err = $1;
+                        Err(format!("matcher err:{err}"))
+                }
                 ;
 
 /*
@@ -241,9 +248,21 @@ label_set_item -> Result<Label, String>:
                         let value = lexeme_to_string($lexer, &$3);
                         Ok(Label::new(name, value))
                 }
-                | IDENTIFIER EQL error { Err(format!("label set error, {}", $3)) }
-                | IDENTIFIER error { Err(format!("label set error, {}", $2)) }
-                | error { Err(format!("label set error, {}", $1)) }
+                | IDENTIFIER EQL error
+                {
+                        let err = $3;
+                        Err(format!("label set error, {err}"))
+                }
+                | IDENTIFIER error
+                {
+                        let err = $2;
+                        Err(format!("label set error, {err}"))
+                }
+                | error
+                {
+                        let err = $1;
+                        Err(format!("label set error, {err}"))
+                }
                 ;
 
 error -> String:
@@ -335,7 +354,7 @@ number -> Result<f64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
-                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
+                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
                 }
                 ;
 
@@ -348,7 +367,7 @@ uint -> Result<u64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
-                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {} can't be parsed into u64", s))
+                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {s} can't be parsed into u64"))
                 }
                 ;
 

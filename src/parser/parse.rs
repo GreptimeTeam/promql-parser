@@ -20,7 +20,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         Ok(lexer) => {
             let (res, errs) = crate::promql_y::parse(&lexer);
             for err in errs {
-                println!("{:?}", err)
+                println!("{err:?}")
             }
             match res {
                 Some(r) => r,
