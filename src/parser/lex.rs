@@ -371,10 +371,8 @@ impl Lexer {
         self.backup();
         self.scan_number();
         if !self.accept_remaining_duration() {
-            return State::Err(format!(
-                "bad duration syntax around {}",
-                self.lexeme_string()
-            ));
+            self.pop(); // this is to include the bad syntax
+            return State::Err(format!("bad duration syntax: {}", self.lexeme_string()));
         }
         State::Lexeme(T_DURATION)
     }

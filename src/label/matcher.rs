@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use crate::label::METRIC_NAME;
 use crate::parser::token::{TokenType, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
@@ -50,6 +51,15 @@ pub struct Matcher {
 impl Matcher {
     pub fn new(op: MatchOp, name: String, value: String) -> Self {
         Self { op, name, value }
+    }
+
+    /// build a matcher instance with default metric name and Equal operation
+    pub fn new_eq_name(value: String) -> Self {
+        Self {
+            op: MatchOp::Equal,
+            name: METRIC_NAME.into(),
+            value,
+        }
     }
 
     pub fn name(&self) -> String {
@@ -119,11 +129,10 @@ impl PartialEq for Matchers {
         for (name, s_matcher) in selfs {
             match others.get(&name) {
                 Some(o_matcher) if s_matcher.eq(o_matcher) => continue,
-                Some(_) => return false,
-                None => return false,
+                _ => return false,
             };
         }
-        return true;
+        true
     }
 }
 

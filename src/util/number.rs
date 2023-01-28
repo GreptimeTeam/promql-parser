@@ -18,8 +18,8 @@ pub fn parse_golang_str_radix(s: &str) -> Result<f64, String> {
         u64::from_str_radix(s.to_lowercase().strip_prefix("0x").unwrap(), 16)
             .map(|x| x as f64)
             .map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
-    } else if s.starts_with("0") {
-        u64::from_str_radix(s.strip_prefix("0").unwrap(), 8)
+    } else if s.starts_with('0') {
+        u64::from_str_radix(s.strip_prefix('0').unwrap(), 8)
             .map(|x| x as f64)
             .map_err(|_| format!("ParseFloatError. {} can't be parsed into f64", s))
     } else {

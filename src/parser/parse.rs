@@ -45,9 +45,11 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::label::{self, MatchOp, Matcher, Matchers};
+    use crate::label::{MatchOp, Matcher, Matchers};
     use crate::parser::token::{T_EQL_REGEX, T_NEQ_REGEX};
+    use crate::parser::AtModifier as At;
     use crate::parser::*;
+    use crate::util::duration;
     use std::time::Duration;
 
     enum Case {
@@ -85,24 +87,25 @@ mod tests {
             match case {
                 Case::Success { input, expected } => {
                     let r = parse(&input);
-                    assert!(r.is_ok(), "parse {input} failed, err {:?} ", r);
-                    assert_eq!(r.unwrap(), expected, "parse {} does not match", input);
+                    assert!(r.is_ok(), "\n<parse> {input} failed, err {:?} ", r);
+                    assert_eq!(r.unwrap(), expected, "\n<parse> {} does not match", input);
                 }
 
                 Case::Fail { input, err_msg } => {
                     let r = parse(&input);
                     assert!(
                         r.is_err(),
-                        "parse '{input}' should failed, actually '{:?}' ",
+                        "\n<parse> '{input}' should failed, actually '{:?}' ",
                         r
                     );
                     let err = r.unwrap_err();
-                    assert!(
-                        &err.contains(&err_msg),
-                        "{:?} does not contains '{}'",
-                        &err,
-                        err_msg
-                    );
+                    // assert!(
+                    //     &err.contains(&err_msg),
+                    //     "{:?} does not contains '{}'",
+                    //     &err,
+                    //     err_msg
+                    // );
+                    assert_eq!(err, err_msg);
                 }
             }
         }
@@ -261,40 +264,24 @@ mod tests {
         let cases = vec![
             ("foo", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap()
             }),
             ("min", {
                 let name = String::from("min");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap()
             }),
             ("foo offset 5m", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.offset_expr(Offset::Pos(Duration::from_secs(60 * 5))))
                     .unwrap()
             }),
             ("foo offset -7m", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 let offset = Duration::from_secs(60 * 7);
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.offset_expr(Offset::Neg(offset)))
@@ -302,11 +289,7 @@ mod tests {
             }),
             ("foo OFFSET 1h30m", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 let offset = Duration::from_secs(60 * 90);
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
@@ -315,11 +298,7 @@ mod tests {
             }),
             ("foo OFFSET 1h30ms", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 let offset = Duration::from_secs(60 * 60) + Duration::from_millis(30);
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
@@ -328,12 +307,8 @@ mod tests {
             }),
             ("foo @ 1603774568", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(1603774568f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(1603774568f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -341,12 +316,8 @@ mod tests {
             }),
             ("foo @ -100", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(-100f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(-100f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -354,12 +325,8 @@ mod tests {
             }),
             ("foo @ .3", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(0.3f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(0.3f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -367,12 +334,8 @@ mod tests {
             }),
             ("foo @ 3.", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(3f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(3f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -380,12 +343,8 @@ mod tests {
             }),
             ("foo @ 3.33", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(3.33f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(3.33f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -393,13 +352,9 @@ mod tests {
             }),
             ("foo @ 3.3333", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 // Rounding off
-                let at = AtModifier::try_from(3.333f64).unwrap();
+                let at = At::try_from(3.333f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -407,13 +362,9 @@ mod tests {
             }),
             ("foo @ 3.3335", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
+                let matcher = Matcher::new_eq_name(name.clone());
                 // Rounding off
-                let at = AtModifier::try_from(3.334f64).unwrap();
+                let at = At::try_from(3.334f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -421,12 +372,8 @@ mod tests {
             }),
             ("foo @ 3e2", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(300f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(300f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -434,12 +381,8 @@ mod tests {
             }),
             ("foo @ 3e-1", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(0.3).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(0.3).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -447,12 +390,8 @@ mod tests {
             }),
             ("foo @ 0xA", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(10f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(10f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -460,12 +399,8 @@ mod tests {
             }),
             ("foo @ -3.3e1", {
                 let name = String::from("foo");
-                let matcher = Matcher::new(
-                    MatchOp::Equal,
-                    String::from(label::METRIC_NAME),
-                    name.clone(),
-                );
-                let at = AtModifier::try_from(-33f64).unwrap();
+                let matcher = Matcher::new_eq_name(name.clone());
+                let at = At::try_from(-33f64).unwrap();
 
                 Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
                     .and_then(|e| e.step_invariant_expr(at))
@@ -474,11 +409,7 @@ mod tests {
             (r#"foo:bar{a="bc"}"#, {
                 let name = String::from("foo:bar");
                 let matchers = Matchers::new(vec![
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from(label::METRIC_NAME),
-                        name.clone(),
-                    ),
+                    Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).unwrap()
@@ -486,11 +417,7 @@ mod tests {
             (r#"foo{NaN='bc'}"#, {
                 let name = String::from("foo");
                 let matchers = Matchers::new(vec![
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from(label::METRIC_NAME),
-                        name.clone(),
-                    ),
+                    Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).unwrap()
@@ -498,11 +425,7 @@ mod tests {
             (r#"foo{bar='}'}"#, {
                 let name = String::from("foo");
                 let matchers = Matchers::new(vec![
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from(label::METRIC_NAME),
-                        name.clone(),
-                    ),
+                    Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).unwrap()
@@ -510,11 +433,7 @@ mod tests {
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
                 let name = String::from("foo");
                 let matchers = Matchers::new(vec![
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from(label::METRIC_NAME),
-                        name.clone(),
-                    ),
+                    Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
                     Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
                     Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
@@ -527,11 +446,7 @@ mod tests {
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
                 let name = String::from("foo");
                 let matchers = Matchers::new(vec![
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from(label::METRIC_NAME),
-                        name.clone(),
-                    ),
+                    Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
                     Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
                     Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
@@ -636,14 +551,127 @@ mod tests {
     }
 
     #[test]
+    fn test_matrix_selector() {
+        let cases = vec![
+            ("test[5s]", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, Duration::from_secs(5)))
+                    .unwrap()
+            }),
+            ("test[5m]", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, duration::MINUTE_DURATION * 5))
+                    .unwrap()
+            }),
+            ("test[5m30s]", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, Duration::from_secs(330)))
+                    .unwrap()
+            }),
+            ("test[5h] OFFSET 5m", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, duration::HOUR_DURATION * 5))
+                    .and_then(|ms| ms.offset_expr(Offset::Pos(duration::MINUTE_DURATION * 5)))
+                    .unwrap()
+            }),
+            ("test[5d] OFFSET 10s", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, duration::DAY_DURATION * 5))
+                    .and_then(|ms| ms.offset_expr(Offset::Pos(Duration::from_secs(10))))
+                    .unwrap()
+            }),
+            ("test[5w] offset 2w", {
+                let name = String::from("test");
+                let matcher = Matcher::new_eq_name(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                    .and_then(|vs| Expr::new_matrix_selector(vs, duration::WEEK_DURATION * 5))
+                    .and_then(|ms| ms.offset_expr(Offset::Pos(duration::WEEK_DURATION * 2)))
+                    .unwrap()
+            }),
+            (r#"test{a="b"}[5y] OFFSET 3d"#, {
+                let name = String::from("test");
+                let name_matcher = Matcher::new_eq_name(name.clone());
+                let label_matcher =
+                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
+                Expr::new_vector_selector(
+                    Some(name),
+                    Matchers::new(vec![name_matcher, label_matcher]),
+                )
+                .and_then(|vs| Expr::new_matrix_selector(vs, duration::YEAR_DURATION * 5))
+                .and_then(|ms| ms.offset_expr(Offset::Pos(duration::DAY_DURATION * 3)))
+                .unwrap()
+            }),
+            (r#"test{a="b"}[5y] @ 1603774699"#, {
+                let name = String::from("test");
+                let name_matcher = Matcher::new_eq_name(name.clone());
+                let label_matcher =
+                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
+                Expr::new_vector_selector(
+                    Some(name),
+                    Matchers::new(vec![name_matcher, label_matcher]),
+                )
+                .and_then(|vs| Expr::new_matrix_selector(vs, duration::YEAR_DURATION * 5))
+                .and_then(|ms| ms.step_invariant_expr(At::try_from(1603774699_f64).unwrap()))
+                .unwrap()
+            }),
+        ];
+
+        assert_cases(Case::new_success_cases(cases));
+
+        let fail_cases = vec![
+            ("foo[5mm]", "bad duration syntax: 5mm"),
+            ("foo[5m1]", "bad duration syntax: 5m1]"),
+            ("foo[5m:1m1]", "bad duration syntax: 1m1]"),
+            ("foo[5y1hs]", "not a valid duration string: 5y1hs"),
+            ("foo[5m1h]", "not a valid duration string: 5m1h"),
+            ("foo[5m1m]", "not a valid duration string: 5m1m"),
+            ("foo[0m]", "duration must be greater than 0"),
+            (r#"foo["5m"]"#, r#"unexpected character inside brackets: ""#),
+            (r#"foo[]"#, r#"empty duration string"#),
+            (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
+            // ("some_metric[5m] OFFSET 1", ""),
+            (
+                "some_metric[5m] OFFSET 1mm",
+                "bad number or duration syntax: 1mm",
+            ),
+            // ("some_metric[5m] OFFSET", ""),
+            (
+                "some_metric OFFSET 1m[5m]",
+                "no offset modifiers allowed before range",
+            ),
+            // ("some_metric[5m] @ 1m", ""),
+            // ("some_metric[5m] @", ""),
+            (
+                "some_metric @ 1234 [5m]",
+                "no @ modifiers allowed before range",
+            ),
+            // ("(foo + bar)[5m]", ""),
+        ];
+        assert_cases(Case::new_fail_cases(fail_cases));
+    }
+
+    #[test]
     fn test_fail_cases() {
         let fail_cases = vec![
-            ("", "no expression found in input"),
-            ("# just a comment\n\n", "no expression found in input"),
+            ("", "no expression found in input: ''"),
+            (
+                "# just a comment\n\n",
+                "no expression found in input: '# just a comment\n\n'",
+            ),
             // ("1+", "unexpected end of input"),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
-            ("100..4", "bad number or duration syntax: 100."), // slightly different from Prometheus
+            ("100..4", "bad number or duration syntax: 100.."),
             ("0deadbeef", "bad number or duration syntax: 0de"),
             // ("1 /", "unexpected end of input"),
             // ("*1", "unexpected <op:*>"),

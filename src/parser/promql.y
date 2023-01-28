@@ -566,7 +566,7 @@ number -> Result<f64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
-                        parse_golang_str_radix(&s)
+                        parse_golang_str_radix(s)
                 }
                 ;
 

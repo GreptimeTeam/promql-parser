@@ -278,6 +278,7 @@ impl Expr {
         Ok(Expr::StringLiteral(StringLiteral { val }))
     }
 
+    /// NOTE: @ and offset is not set here.
     pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
         match expr {
             Expr::VectorSelector(VectorSelector {

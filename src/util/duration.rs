@@ -32,13 +32,13 @@ $",
     .unwrap();
 }
 
-const MILLI_DURATION: Duration = Duration::from_millis(1);
-const SECOND_DURATION: Duration = Duration::from_secs(1);
-const MINUTE_DURATION: Duration = Duration::from_secs(60);
-const HOUR_DURATION: Duration = Duration::from_secs(60 * 60);
-const DAY_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
-const WEEK_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
-const YEAR_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 365);
+pub const MILLI_DURATION: Duration = Duration::from_millis(1);
+pub const SECOND_DURATION: Duration = Duration::from_secs(1);
+pub const MINUTE_DURATION: Duration = Duration::from_secs(60);
+pub const HOUR_DURATION: Duration = Duration::from_secs(60 * 60);
+pub const DAY_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
+pub const WEEK_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
+pub const YEAR_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 365);
 
 const ALL_CAPS: [(&str, Duration); 7] = [
     ("y", YEAR_DURATION),
@@ -68,15 +68,18 @@ const ALL_CAPS: [(&str, Duration); 7] = [
 pub fn parse_duration(ds: &str) -> Result<Duration, String> {
     if ds.is_empty() {
         return Err("empty duration string".into());
-    } else if ds == "0" {
-        return Ok(Duration::ZERO); // Allow 0 without a unit.
     }
+
+    if ds == "0" {
+        return Err("duration must be greater than 0".into());
+    }
+
     if !DURATION_RE.is_match(ds) {
         return Err(format!("not a valid duration string: {}", ds));
     }
 
     let caps = DURATION_RE.captures(ds).unwrap();
-    ALL_CAPS
+    let dur = ALL_CAPS
         .into_iter()
         // map captured string to Option<Duration> iterator
         // FIXME: None is ignored in closure. It is better to tell users which part is wrong.
@@ -90,7 +93,13 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
                 d.checked_add(x.unwrap_or(Duration::ZERO))
                     .ok_or_else(|| "duration overflowed".into())
             })
-        })
+        });
+
+    if matches!(dur, Ok(d) if d == Duration::ZERO) {
+        Err("duration must be greater than 0".into())
+    } else {
+        dur
+    }
 }
 
 #[cfg(test)]
@@ -117,9 +126,6 @@ mod tests {
     #[test]
     fn test_valid_duration() {
         let ds = vec![
-            ("0", Duration::ZERO),
-            ("0w", Duration::ZERO),
-            ("0s", Duration::ZERO),
             ("324ms", Duration::from_millis(324)),
             ("3s", Duration::from_secs(3)),
             ("5m", MINUTE_DURATION * 5),
@@ -158,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_invalid_duration() {
-        let ds = vec!["1", "1y1m1d", "-1w", "1.5d", "d", ""];
+        let ds = vec!["1", "1y1m1d", "-1w", "1.5d", "d", "", "0", "0w", "0s"];
         for d in ds {
             assert!(parse_duration(d).is_err(), "{} is invalid duration!", d);
         }
