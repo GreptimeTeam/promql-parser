@@ -24,7 +24,12 @@ pub type LexemeType = DefaultLexeme<TokenType>;
 
 pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
-    // dbg!(&lexemes);
+    // for lexeme in &lexemes {
+    //     match *lexeme {
+    //         Ok(l) => println!("{}", token_display(l.tok_id())),
+    //         Err(ref e) => println!("{:?}", e),
+    //     }
+    // }
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         Some(Ok(_)) => {
@@ -397,18 +402,14 @@ impl Lexer {
         ))
     }
 
-    /// the first character has been consumed, but no need to backup.
+    /// the first althabetic character has been consumed, and no need to backup.
     fn accept_keyword_or_identifier(&mut self) -> State {
-        while let Some(ch) = self.pop() {
-            if !is_alpha_numeric(ch) && ch != ':' {
+        while let Some(ch) = self.peek() {
+            if is_alpha_numeric(ch) || ch == ':' {
+                self.pop();
+            } else {
                 break;
             }
-        }
-
-        // if neither keyword nor identifier character has been consumed,
-        // it has to be backed up.
-        if self.peek().is_some() {
-            self.backup();
         }
 
         let s = self.lexeme_string();
@@ -419,7 +420,7 @@ impl Lexer {
         }
     }
 
-    /// # has already not been consumed.
+    /// # has already been consumed.
     fn ignore_comment_line(&mut self) -> State {
         while let Some(ch) = self.pop() {
             if ch == '\r' || ch == '\n' {

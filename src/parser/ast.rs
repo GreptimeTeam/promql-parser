@@ -18,6 +18,7 @@ use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
 use std::time::{Duration, SystemTime};
 
+// TODO: better PartialEq, Eq ignoring Vec<String> orders
 /// Matching Modifier, for VectorMatching of binary expr.
 /// Label lists provided to matching keywords will determine how vectors are combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,7 @@ pub enum VectorMatchModifier {
     Ignoring(Vec<String>),
 }
 
+// TODO: better PartialEq, Eq ignoring Vec<String> orders
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchCardinality {
     OneToOne,

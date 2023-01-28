@@ -46,7 +46,7 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 mod tests {
     use super::*;
     use crate::label::{MatchOp, Matcher, Matchers};
-    use crate::parser::token::{T_EQL_REGEX, T_NEQ_REGEX};
+    use crate::parser::token;
     use crate::parser::AtModifier as At;
     use crate::parser::*;
     use crate::util::duration;
@@ -130,6 +130,7 @@ mod tests {
         assert_cases(Case::new_success_cases(cases));
     }
 
+    // TODO: fulfil binary expr parser cases
     #[test]
     fn test_vector_binary_expr_parser() {
         // "1 + 1"
@@ -252,6 +253,7 @@ mod tests {
         assert_cases(Case::new_fail_cases(fail_cases));
     }
 
+    // TODO: fulfil unary expr cases
     #[test]
     fn test_unary_expr_parser() {
         // "-some_metric"
@@ -436,10 +438,18 @@ mod tests {
                     Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
                     Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
-                    Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
-                        .unwrap(),
-                    Matcher::new_matcher(T_NEQ_REGEX, String::from("bar"), String::from("baz"))
-                        .unwrap(),
+                    Matcher::new_matcher(
+                        token::T_EQL_REGEX,
+                        String::from("test"),
+                        String::from("test"),
+                    )
+                    .unwrap(),
+                    Matcher::new_matcher(
+                        token::T_NEQ_REGEX,
+                        String::from("bar"),
+                        String::from("baz"),
+                    )
+                    .unwrap(),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).unwrap()
             }),
@@ -449,16 +459,25 @@ mod tests {
                     Matcher::new_eq_name(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
                     Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
-                    Matcher::new_matcher(T_EQL_REGEX, String::from("test"), String::from("test"))
-                        .unwrap(),
-                    Matcher::new_matcher(T_NEQ_REGEX, String::from("bar"), String::from("baz"))
-                        .unwrap(),
+                    Matcher::new_matcher(
+                        token::T_EQL_REGEX,
+                        String::from("test"),
+                        String::from("test"),
+                    )
+                    .unwrap(),
+                    Matcher::new_matcher(
+                        token::T_NEQ_REGEX,
+                        String::from("bar"),
+                        String::from("baz"),
+                    )
+                    .unwrap(),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).unwrap()
             }),
         ];
         assert_cases(Case::new_success_cases(cases));
 
+        // TODO: fulfil these failure cases
         let fail_cases = vec![
             ("foo @ +Inf", "timestamp out of bounds for @ modifier: inf"),
             ("foo @ -Inf", "timestamp out of bounds for @ modifier: -inf"),
@@ -628,6 +647,7 @@ mod tests {
 
         assert_cases(Case::new_success_cases(cases));
 
+        // TODO: fulfil these failure cases
         let fail_cases = vec![
             ("foo[5mm]", "bad duration syntax: 5mm"),
             ("foo[5m1]", "bad duration syntax: 5m1]"),
@@ -662,17 +682,167 @@ mod tests {
 
     #[test]
     fn test_aggregation_expr_parser() {
-        let cases = vec![("sum by (foo)(some_metric)", {
-            let name = String::from("some_metric");
-            let matcher = Matcher::new_eq_name(name.clone());
-            Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
-                .and_then(|vs| Expr::new_matrix_selector(vs, Duration::from_secs(5)))
-                .unwrap()
-        })];
+        let cases = vec![
+            ("sum by (foo) (some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("avg by (foo)(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_AVG, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("max by (foo)(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_MAX, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("sum without (foo) (some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::Without(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("sum (some_metric) without (foo)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::Without(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("stddev(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_STDDEV, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("stdvar by (foo)(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_STDVAR, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("sum by ()(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("sum by (foo,bar,)(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo"), String::from("bar")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("sum by (foo,)(some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![String::from("foo")]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                    .unwrap()
+            }),
+            ("topk(5, some_metric)", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                let param = Expr::new_number_literal(5.0).unwrap();
+                let args = FunctionArgs::new_args(param).append_args(vs);
+                Expr::new_aggregate_expr(token::T_TOPK, matching, args).unwrap()
+            }),
+            (r#"count_values("value", some_metric)"#, {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_name(name.clone());
+                let matching = AggModifier::By(vec![]);
+                let vs =
+                    Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher])).unwrap();
+                let param = Expr::new_string_literal("value".into()).unwrap();
+                let args = FunctionArgs::new_args(param).append_args(vs);
+                Expr::new_aggregate_expr(token::T_COUNT_VALUES, matching, args).unwrap()
+            }),
+            (
+                "sum without(and, by, avg, count, alert, annotations)(some_metric)",
+                {
+                    let name = String::from("some_metric");
+                    let matcher = Matcher::new_eq_name(name.clone());
+                    let matching = AggModifier::Without(
+                        vec!["and", "by", "avg", "count", "alert", "annotations"]
+                            .into_iter()
+                            .map(String::from)
+                            .collect(),
+                    );
+                    let vs = Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                        .unwrap();
+                    Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
+                        .unwrap()
+                },
+            ),
+        ];
 
         assert_cases(Case::new_success_cases(cases));
+
+        // TODO: fulfil these failure cases
+        let fail_cases = vec![
+            // ("sum without(==)(some_metric)", ""),
+            // ("sum without(,)(some_metric)", ""),
+            // ("sum without(foo,,)(some_metric)", ""),
+            // ("sum some_metric by (test)", ""),
+            // ("sum (some_metric) by test", ""),
+            // ("sum () by (test)", ""),
+            // ("MIN keep_common (some_metric)", ""),
+            // ("MIN (some_metric) keep_common", ""),
+            // ("sum without (test) (some_metric) by (test)", ""),
+            // ("topk(some_metric)", ""),
+            // ("topk(some_metric,)", ""),
+            // ("topk(some_metric, other_metric)", ""),
+            // ("count_values(5, other_metric)", ""),
+            // ("rate(some_metric[5m]) @ 1234", ""),
+        ];
+        assert_cases(Case::new_fail_cases(fail_cases));
     }
 
+    // TODO: fulfil function call cases
+    #[test]
+    fn test_function_call_parser() {}
+
+    // TODO: fulfil subquery cases
+    #[test]
+    fn test_subquery_parser() {}
+
+    // TODO: fulfil these failure cases
     #[test]
     fn test_fail_cases() {
         let fail_cases = vec![
