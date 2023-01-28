@@ -25,7 +25,7 @@ pub use ast::{
     StringLiteral, SubqueryExpr, UnaryExpr, VectorSelector,
 };
 pub use function::{get_function, Function};
-pub use lex::{lexer, LexemeType};
+pub use lex::{is_label, lexer, LexemeType};
 pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
 pub use token::{Token, TokenType};
