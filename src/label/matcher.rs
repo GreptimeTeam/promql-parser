@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::token::{Token, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use std::collections::HashMap;
+
+use crate::label::METRIC_NAME;
+use crate::parser::token::{TokenType, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -23,8 +26,22 @@ pub enum MatchOp {
     NotRe(Regex),
 }
 
+impl PartialEq for MatchOp {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MatchOp::Equal, MatchOp::Equal) => true,
+            (MatchOp::NotEqual, MatchOp::NotEqual) => true,
+            (MatchOp::Re(s), MatchOp::Re(o)) => s.as_str().eq(o.as_str()),
+            (MatchOp::NotRe(s), MatchOp::NotRe(o)) => s.as_str().eq(o.as_str()),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for MatchOp {}
+
 // Matcher models the matching of a label.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matcher {
     pub op: MatchOp,
     pub name: String,
@@ -34,6 +51,15 @@ pub struct Matcher {
 impl Matcher {
     pub fn new(op: MatchOp, name: String, value: String) -> Self {
         Self { op, name, value }
+    }
+
+    /// build a matcher instance with default metric name and Equal operation
+    pub fn new_eq_name(value: String) -> Self {
+        Self {
+            op: MatchOp::Equal,
+            name: METRIC_NAME.into(),
+            value,
+        }
     }
 
     pub fn name(&self) -> String {
@@ -47,6 +73,22 @@ impl Matcher {
             MatchOp::NotEqual => self.value.ne(s),
             MatchOp::Re(r) => r.is_match(s),
             MatchOp::NotRe(r) => !r.is_match(s),
+        }
+    }
+
+    pub fn new_matcher(id: TokenType, name: String, value: String) -> Result<Matcher, String> {
+        match id {
+            T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
+            T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
+            T_EQL_REGEX => {
+                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+                Ok(Matcher::new(MatchOp::Re(re), name, value))
+            }
+            T_NEQ_REGEX => {
+                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
+                Ok(Matcher::new(MatchOp::NotRe(re), name, value))
+            }
+            _ => Err(format!("invalid match op {id}")),
         }
     }
 }
@@ -71,28 +113,37 @@ impl Matchers {
     }
 }
 
-pub fn new_matcher(token: Token, name: String, value: String) -> Result<Matcher, String> {
-    match token.id() {
-        T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
-        T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
-        T_EQL_REGEX => {
-            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-            Ok(Matcher::new(MatchOp::Re(re), name, value))
+impl PartialEq for Matchers {
+    fn eq(&self, other: &Self) -> bool {
+        if self.matchers.len() != other.matchers.len() {
+            return false;
         }
-        T_NEQ_REGEX => {
-            let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-            Ok(Matcher::new(MatchOp::NotRe(re), name, value))
+
+        let selfs: HashMap<_, _> = self.matchers.iter().map(|m| (m.name.clone(), m)).collect();
+        let others: HashMap<_, _> = other.matchers.iter().map(|m| (m.name.clone(), m)).collect();
+
+        if selfs.len() != others.len() {
+            return false;
         }
-        _ => Err(format!("invalid match op {}", token.val())),
+
+        for (name, s_matcher) in selfs {
+            match others.get(&name) {
+                Some(o_matcher) if s_matcher.eq(o_matcher) => continue,
+                _ => return false,
+            };
+        }
+        true
     }
 }
+
+impl Eq for Matchers {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_eq_ne() {
+    fn test_matcher_eq_ne() {
         let op = MatchOp::Equal;
         let matcher = Matcher::new(op, "name".into(), "up".into());
         assert!(matcher.is_match("up"));
@@ -106,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_re() {
+    fn test_matcher_re() {
         let value = "api/v1/.*".to_string();
         let re = Regex::new(&value).unwrap();
         let op = MatchOp::Re(re);
@@ -114,5 +165,117 @@ mod tests {
         assert!(matcher.is_match("api/v1/query"));
         assert!(matcher.is_match("api/v1/range_query"));
         assert!(!matcher.is_match("api/v2"));
+    }
+
+    #[test]
+    fn test_eq_matcher_equality() {
+        assert_eq!(
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"))
+        );
+
+        assert_ne!(
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("201"))
+        );
+
+        assert_ne!(
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"))
+        );
+    }
+
+    #[test]
+    fn test_ne_matcher_equality() {
+        assert_eq!(
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"))
+        );
+
+        assert_ne!(
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("201"))
+        );
+
+        assert_ne!(
+            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"))
+        );
+    }
+
+    #[test]
+    fn test_re_matcher_equality() {
+        assert_eq!(
+            Matcher::new(
+                MatchOp::Re(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(
+                MatchOp::Re(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            )
+        );
+
+        assert_ne!(
+            Matcher::new(
+                MatchOp::Re(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(
+                MatchOp::Re(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2*?"),
+            )
+        );
+
+        assert_ne!(
+            Matcher::new(
+                MatchOp::Re(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("2??"))
+        );
+    }
+
+    #[test]
+    fn test_not_re_matcher_equality() {
+        assert_eq!(
+            Matcher::new(
+                MatchOp::NotRe(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(
+                MatchOp::NotRe(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            )
+        );
+
+        assert_ne!(
+            Matcher::new(
+                MatchOp::NotRe(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(
+                MatchOp::NotRe(Regex::new("2?*").unwrap()),
+                String::from("code"),
+                String::from("2*?"),
+            )
+        );
+
+        assert_ne!(
+            Matcher::new(
+                MatchOp::NotRe(Regex::new("2??").unwrap()),
+                String::from("code"),
+                String::from("2??"),
+            ),
+            Matcher::new(MatchOp::Equal, String::from("code"), String::from("2??"))
+        );
     }
 }

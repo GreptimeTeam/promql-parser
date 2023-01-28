@@ -152,7 +152,7 @@ pub fn get_keyword_token(s: &str) -> Option<TokenType> {
     KEYWORDS.get(s).copied()
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     id: TokenType,
     val: String,
@@ -176,6 +176,14 @@ impl Token {
     pub fn val(&self) -> String {
         self.val.clone()
     }
+
+    pub fn is_aggregator_with_param(&self) -> bool {
+        is_aggregator_with_param(self.id())
+    }
+}
+
+pub fn is_aggregator_with_param(id: TokenType) -> bool {
+    id == T_TOPK || id == T_BOTTOMK || id == T_COUNT_VALUES || id == T_QUANTILE
 }
 
 #[cfg(test)]
@@ -192,5 +200,25 @@ mod tests {
     fn test_get_keyword_tokens() {
         assert!(matches!(get_keyword_token("quantile"), Some(T_QUANTILE)));
         assert!(matches!(get_keyword_token("unknown"), None));
+    }
+
+    #[test]
+    fn test_with_param() {
+        assert!(is_aggregator_with_param(T_TOPK));
+        assert!(is_aggregator_with_param(T_BOTTOMK));
+        assert!(is_aggregator_with_param(T_COUNT_VALUES));
+        assert!(is_aggregator_with_param(T_QUANTILE));
+
+        assert!(!is_aggregator_with_param(T_COUNT));
+        assert!(!is_aggregator_with_param(T_SUM));
+
+        assert!(Token::new(T_TOPK, "top".into()).is_aggregator_with_param());
+        assert!(Token::new(T_BOTTOMK, "bottomk".into()).is_aggregator_with_param());
+        assert!(Token::new(T_COUNT_VALUES, "count_values".into()).is_aggregator_with_param());
+        assert!(Token::new(T_QUANTILE, "quantile".into()).is_aggregator_with_param());
+
+        assert!(!Token::new(T_MAX, "max".into()).is_aggregator_with_param());
+        assert!(!Token::new(T_MIN, "min".into()).is_aggregator_with_param());
+        assert!(!Token::new(T_AVG, "avg".into()).is_aggregator_with_param());
     }
 }

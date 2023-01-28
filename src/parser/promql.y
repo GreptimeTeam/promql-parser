@@ -133,23 +133,22 @@ start -> Result<Expr, String>:
 /*
  * Vector selectors.
  */
-
 vector_selector -> Result<Expr, String>:
                 metric_identifier label_matchers
                 {
                         let name = $1.val();
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = $2?.append(matcher);
-                        Ok(Expr::new_vector_selector(Some(name), matchers))
+                        Expr::new_vector_selector(Some(name), matchers)
                 }
                 | metric_identifier
                 {
                         let name = $1.val();
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = Matchers::empty().append(matcher);
-                        Ok(Expr::new_vector_selector(Some(name), matchers))
+                        Expr::new_vector_selector(Some(name), matchers)
                 }
-                | label_matchers { Ok(Expr::new_vector_selector(None, $1?)) }
+                | label_matchers { Expr::new_vector_selector(None, $1?) }
                 ;
 
 label_matchers -> Result<Matchers, String>:
@@ -161,7 +160,7 @@ label_matchers -> Result<Matchers, String>:
 label_match_list -> Result<Matchers, String>:
                 label_match_list COMMA label_matcher { Ok($1?.append($3?)) }
                 | label_matcher { Ok(Matchers::empty().append($1?)) }
-                | label_match_list error { $1 } // FIXME: error ignored
+                | label_match_list error { Err($2) }
                 ;
 
 label_matcher -> Result<Matcher, String>:
@@ -169,7 +168,7 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1);
                         let value = lexeme_to_string($lexer, &$3);
-                        new_matcher($2, name, value)
+                        Matcher::new_matcher($2.id(), name, value)
                 }
                 | IDENTIFIER match_op error
                 {
@@ -194,7 +193,6 @@ label_matcher -> Result<Matcher, String>:
 /*
  * Metric descriptions.
  */
-
 metric -> Result<Labels, String>:
                 metric_identifier label_set
                 {
@@ -270,9 +268,13 @@ error -> String:
                 ;
 
 /*
- * Keyword lists.
+ * Series descriptions (only used by unit tests).
+ * Note: this is not supported yet.
  */
 
+/*
+ * Keyword lists.
+ */
 aggregate_op -> Token:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
@@ -288,7 +290,8 @@ aggregate_op -> Token:
                 | TOPK { lexeme_to_token($lexer, $1) }
                 ;
 
-// inside of grouping options label names can be recognized as keywords by the lexer. This is a list of keywords that could also be a label name.
+// inside of grouping options label names can be recognized as keywords by the lexer.
+// This is a list of keywords that could also be a label name.
 maybe_label -> Token:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOOL { lexeme_to_token($lexer, $1) }
@@ -321,7 +324,7 @@ maybe_label -> Token:
 
 unary_op -> Token:
                 ADD { lexeme_to_token($lexer, $1) }
-|               SUB { lexeme_to_token($lexer, $1) }
+                | SUB { lexeme_to_token($lexer, $1) }
                 ;
 
 match_op -> Token:
@@ -334,13 +337,8 @@ match_op -> Token:
 /*
  * Literals.
  */
-
 number_literal -> Result<Expr, String>:
-                number
-                {
-                        let nl = NumberLiteral { val: $1?};
-                        Ok(Expr::NumberLiteral(nl))
-                }
+                signed_or_unsigned_number { Expr::new_number_literal($1?) }
                 ;
 
 
@@ -349,25 +347,18 @@ signed_or_unsigned_number -> Result<f64, String>:
                 | signed_number  { $1 }
                 ;
 
+signed_number -> Result<f64, String>:
+                ADD number { $2 }
+                | SUB number { $2.map(|i| -i) }
+                ;
 
 number -> Result<f64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
                         s.parse::<f64>().map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
-                }
-                ;
-
-signed_number -> Result<f64, String>:
-                ADD number { $2 }
-                | SUB number { $2.map(|i| -i) }
-                ;
-
-uint -> Result<u64, String>:
-                NUMBER
-                {
-                        let s = $lexer.span_str($span);
-                        s.parse::<u64>().map_err(|_| format!("ParseIntError. {s} can't be parsed into u64"))
+                        /* FIXME: rebase after parse_golang_str_radix is merged */
+                        /* parse_golang_str_radix(s) */
                 }
                 ;
 
@@ -376,31 +367,29 @@ duration -> Result<Duration, String>:
                 ;
 
 string_literal -> Result<Expr, String>:
-                STRING
-                {
-                        let sl = StringLiteral { val: span_to_string($lexer, $span) };
-                        Ok(Expr::StringLiteral(sl))
-                }
+                STRING { Expr::new_string_literal(span_to_string($lexer, $span)) }
                 ;
 
-// TODO
 /*
  * Wrappers for optional arguments.
  */
-
-/* maybe_duration  : /\* empty *\/ */
-/*                         {$$ = 0} */
-/*                 | duration */
+/* FIXME: rebase after grouping_labels rule is merged */
+/* maybe_duration -> Result<Duration, String>: */
+/*                 { Ok(Duration::ZERO) } */
+/*                 | duration { $1 } */
 /*                 ; */
 
-/* maybe_grouping_labels: /\* empty *\/ */
-/*                 { $$ = nil } */
-/*                 | grouping_labels */
+/* maybe_grouping_labels -> Result<Vec<String>, String>: */
+/*                 { Ok(vec![]) } */
+/*                 | grouping_labels { $1 } */
 /*                 ; */
 
 %%
 use std::time::Duration;
 
-use crate::parser::{Expr, Token, StringLiteral, NumberLiteral, lexeme_to_string, lexeme_to_token, span_to_string};
-use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME, new_matcher};
-use crate::util::parse_duration;
+/* FIXME: rebase after rules are merged */
+use crate::parser::{
+    Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string,
+};
+use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
+use crate::util::{parse_duration};
