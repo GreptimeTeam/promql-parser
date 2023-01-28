@@ -21,13 +21,13 @@ pub mod token;
 pub mod value;
 
 pub use ast::{
-    AggregateExpr, AggregateModifier, AggregateOps, AtModifier, BinaryExpr, Call, EvalStmt, Expr,
-    GroupModifier, MatchingOps, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral,
-    SubqueryExpr, UnaryExpr, VectorMatchCardinality, VectorMatching, VectorSelector,
+    AggModifier, AggregateExpr, AtModifier, BinModifier, BinaryExpr, Call, EvalStmt, Expr,
+    MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr,
+    VectorMatchCardinality, VectorMatchModifier, VectorSelector,
 };
 pub use function::{get_function, Function, FunctionArgs};
 pub use lex::{is_label, lexer, LexemeType};
 pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
-pub use token::{Token, TokenType};
+pub use token::{is_aggregator_with_param, Token, TokenType};
 pub use value::{Value, ValueType};

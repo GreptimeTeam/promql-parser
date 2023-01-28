@@ -178,11 +178,12 @@ impl Token {
     }
 
     pub fn is_aggregator_with_param(&self) -> bool {
-        self.id == T_TOPK
-            || self.id == T_BOTTOMK
-            || self.id == T_COUNT_VALUES
-            || self.id == T_QUANTILE
+        is_aggregator_with_param(self.id())
     }
+}
+
+pub fn is_aggregator_with_param(id: TokenType) -> bool {
+    id == T_TOPK || id == T_BOTTOMK || id == T_COUNT_VALUES || id == T_QUANTILE
 }
 
 #[cfg(test)]

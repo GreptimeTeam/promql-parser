@@ -661,6 +661,19 @@ mod tests {
     }
 
     #[test]
+    fn test_aggregation_expr_parser() {
+        let cases = vec![("sum by (foo)(some_metric)", {
+            let name = String::from("some_metric");
+            let matcher = Matcher::new_eq_name(name.clone());
+            Expr::new_vector_selector(Some(name), Matchers::new(vec![matcher]))
+                .and_then(|vs| Expr::new_matrix_selector(vs, Duration::from_secs(5)))
+                .unwrap()
+        })];
+
+        assert_cases(Case::new_success_cases(cases));
+    }
+
+    #[test]
     fn test_fail_cases() {
         let fail_cases = vec![
             ("", "no expression found in input: ''"),

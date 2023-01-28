@@ -149,25 +149,25 @@ expr -> Result<Expr, String>:
  * Aggregations.
  */
 aggregate_expr -> Result<Expr, String>:
-                aggregate_op aggregate_modifier function_call_body { Expr::new_aggregate_expr($1, $2?, $3?) }
-                | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1, $3?, $2?) }
+                aggregate_op aggregate_modifier function_call_body { Expr::new_aggregate_expr($1.id(), $2?, $3?) }
+                | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1.id(), $3?, $2?) }
                 | aggregate_op function_call_body
                 {
-                        let modifier = (vec![], AggregateOps::By);
-                        Expr::new_aggregate_expr($1, modifier, $2?)
+                        let modifier = AggModifier::By(vec![]);
+                        Expr::new_aggregate_expr($1.id(), modifier, $2?)
                 }
                 | aggregate_op error { Err($2) }
                 ;
 
-aggregate_modifier -> Result<AggregateModifier, String>:
-                BY grouping_labels { Ok(($2?, AggregateOps::By)) }
-                | WITHOUT grouping_labels { Ok(($2?, AggregateOps::Without)) }
+aggregate_modifier -> Result<AggModifier, String>:
+                BY grouping_labels { Ok(AggModifier::By($2?)) }
+                | WITHOUT grouping_labels { Ok(AggModifier::Without($2?)) }
                 ;
 
 /*
  * Binary expressions.
  */
-/* // Operator precedence only works if each of those is listed separately. */
+// Operator precedence only works if each of those is listed separately.
 binary_expr -> Result<Expr, String>:
                 expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
                 | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
@@ -187,56 +187,57 @@ binary_expr -> Result<Expr, String>:
                 | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
                 ;
 
-/* // Using left recursion for the modifier rules, helps to keep the parser stack small and */
-/* // reduces allocations */
-bin_modifier -> Result<GroupModifier, String>:
+// Using left recursion for the modifier rules, helps to keep the parser stack small and
+// reduces allocations
+bin_modifier -> Result<BinModifier, String>:
                 group_modifiers { $1 }
                 ;
 
-bool_modifier -> Result<GroupModifier, String>:
+bool_modifier -> Result<BinModifier, String>:
                 {
-                        let matching =  VectorMatching::new(VectorMatchCardinality::OneToOne);
-                        Ok((matching, false))
+                        let card = VectorMatchCardinality::OneToOne;
+                        let matching =  VectorMatchModifier::On(vec![]);
+                        let return_bool = false;
+                        Ok(BinModifier {card, matching, return_bool})
                 }
                 | BOOL
                 {
-                        let matching =  VectorMatching::new(VectorMatchCardinality::OneToOne);
-                        Ok((matching, false))
+                        let card = VectorMatchCardinality::OneToOne;
+                        let matching =  VectorMatchModifier::On(vec![]);
+                        let return_bool = true;
+                        Ok(BinModifier {card, matching, return_bool})
                 }
                 ;
 
-on_or_ignoring -> Result<GroupModifier, String>:
+on_or_ignoring -> Result<BinModifier, String>:
                 bool_modifier IGNORING grouping_labels
                 {
-                        let (mut matching, b) = $1?;
-                        matching.labels = $3?;
-                        Ok((matching, b))
+                        let mut modifier = $1?;
+                        modifier.matching = VectorMatchModifier::Ignoring($3?);
+                        Ok(modifier)
                 }
                 | bool_modifier ON grouping_labels
                 {
-                        let (mut matching, b) = $1?;
-                        matching.labels = $3?;
-                        matching.how = MatchingOps::On;
-                        Ok((matching, b))
+                        let mut modifier = $1?;
+                        modifier.matching = VectorMatchModifier::On($3?);
+                        Ok(modifier)
                 }
                 ;
 
-group_modifiers -> Result<GroupModifier, String>:
+group_modifiers -> Result<BinModifier, String>:
                 bool_modifier { $1 }
                 | on_or_ignoring { $1 }
                 | on_or_ignoring GROUP_LEFT maybe_grouping_labels
                 {
-                        let (mut matching, b) = $1?;
-                        matching.card = VectorMatchCardinality::ManyToOne;
-                        matching.include = $3?;
-                        Ok((matching, b))
+                        let mut modifier = $1?;
+                        modifier.card = VectorMatchCardinality::ManyToOne($3?);
+                        Ok(modifier)
                 }
                 | on_or_ignoring GROUP_RIGHT maybe_grouping_labels
                 {
-                        let (mut matching, b) = $1?;
-                        matching.card = VectorMatchCardinality::OneToMany;
-                        matching.include = $3?;
-                        Ok((matching, b))
+                        let mut modifier = $1?;
+                        modifier.card = VectorMatchCardinality::OneToMany($3?);
+                        Ok(modifier)
                 }
                 ;
 
@@ -268,7 +269,6 @@ grouping_label -> Result<Token, String>:
                 }
                 | error { Err($1) }
                 ;
-
 
 /*
  * Function calls.
@@ -595,8 +595,8 @@ maybe_grouping_labels -> Result<Vec<String>, String>:
 use std::time::Duration;
 
 use crate::parser::{
-    AggregateModifier, AggregateOps, AtModifier, Expr, FunctionArgs, GroupModifier,
-    MatchingOps, Offset, Token, VectorMatchCardinality, VectorMatching,
+    AggModifier, AtModifier, BinModifier, Expr, FunctionArgs, Offset, Token,
+    VectorMatchCardinality, VectorMatchModifier,
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME};

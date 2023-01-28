@@ -13,26 +13,47 @@
 // limitations under the License.
 
 #![allow(dead_code)]
-use std::fmt::{self, Display};
+use crate::label::Matchers;
+use crate::parser::token::{self, T_END, T_START};
+use crate::parser::{Function, FunctionArgs, Token, TokenType};
 use std::time::{Duration, SystemTime};
 
-use crate::label::Matchers;
-use crate::parser::token::{T_END, T_START};
-use crate::parser::{Function, FunctionArgs, Token, TokenType};
-
-pub type GroupModifier = (VectorMatching, bool);
-pub type AggregateModifier = (Vec<String>, AggregateOps);
-
+/// Matching Modifier, for VectorMatching of binary expr.
+/// Label lists provided to matching keywords will determine how vectors are combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MatchingOps {
-    On,
-    Ignoring,
+pub enum VectorMatchModifier {
+    On(Vec<String>),
+    Ignoring(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateOps {
-    By,
-    Without,
+pub enum VectorMatchCardinality {
+    OneToOne,
+
+    // The label list provided with the group_left or group_right modifier contains
+    // additional labels from the "one"-side to be included in the result metrics.
+    ManyToOne(Vec<String>),
+    OneToMany(Vec<String>),
+    // ManyToMany, // useless so far
+}
+
+/// Binary Expr Modifier
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinModifier {
+    // The matching behavior for the operation if both operands are Vectors.
+    // If they are not this field is None.
+    pub card: VectorMatchCardinality,
+    pub matching: VectorMatchModifier,
+
+    // If a comparison operator, return 0/1 rather than filtering.
+    pub return_bool: bool,
+}
+
+/// Aggregation Modifier
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AggModifier {
+    By(Vec<String>),
+    Without(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,8 +134,7 @@ pub struct AggregateExpr {
     pub op: TokenType,            // The used aggregation operation.
     pub expr: Box<Expr>,          // The Vector expression over which is aggregated.
     pub param: Option<Box<Expr>>, // Parameter used by some aggregators.
-    pub grouping: Vec<String>,    // The labels by which to group the Vector.
-    pub how: AggregateOps,        // Whether to drop the given labels rather than keep them.
+    pub grouping: AggModifier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,18 +143,18 @@ pub struct UnaryExpr {
     pub expr: Box<Expr>,
 }
 
+/// <vector expr> <bin-op> ignoring(<label list>) group_left(<label list>) <vector expr>
+/// <vector expr> <bin-op> ignoring(<label list>) group_right(<label list>) <vector expr>
+/// <vector expr> <bin-op> on(<label list>) group_left(<label list>) <vector expr>
+/// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
     pub op: TokenType,  // The operation of the expression.
     pub lhs: Box<Expr>, // The operands on the left sides of the operator.
     pub rhs: Box<Expr>, // The operands on the right sides of the operator.
 
-    // The matching behavior for the operation if both operands are Vectors.
-    // If they are not this field is None.
-    pub matching: VectorMatching,
-
-    // If a comparison operator, return 0/1 rather than filtering.
-    pub return_bool: bool,
+    pub matching: BinModifier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -367,7 +387,7 @@ impl Expr {
     pub fn new_binary_expr(
         lhs: Expr,
         op: TokenType,
-        (matching, return_bool): GroupModifier,
+        matching: BinModifier,
         rhs: Expr,
     ) -> Result<Expr, String> {
         let ex = BinaryExpr {
@@ -375,14 +395,13 @@ impl Expr {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
             matching,
-            return_bool,
         };
         Ok(Expr::Binary(ex))
     }
 
     pub fn new_aggregate_expr(
-        token: Token,
-        (grouping, how): AggregateModifier,
+        op: TokenType,
+        grouping: AggModifier,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
         if args.is_empty() {
@@ -391,7 +410,7 @@ impl Expr {
 
         let mut desired_args_count = 1;
         let mut param = None;
-        if token.is_aggregator_with_param() {
+        if token::is_aggregator_with_param(op) {
             desired_args_count = 2;
             param = Some(args.first());
         }
@@ -403,53 +422,12 @@ impl Expr {
             ));
         }
         let ex = AggregateExpr {
-            op: token.id(),
+            op,
             expr: args.last(),
             param,
             grouping,
-            how,
         };
         Ok(Expr::Aggregate(ex))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VectorMatchCardinality {
-    OneToOne,
-    ManyToOne,
-    OneToMany,
-    ManyToMany,
-}
-
-impl Display for VectorMatchCardinality {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            VectorMatchCardinality::OneToOne => write!(f, "one-to-one"),
-            VectorMatchCardinality::ManyToOne => write!(f, "many-to-one"),
-            VectorMatchCardinality::OneToMany => write!(f, "one-to-many"),
-            VectorMatchCardinality::ManyToMany => write!(f, "many-to-many"),
-        }
-    }
-}
-
-// VectorMatching describes how elements from two Vectors in a binary
-// operation are supposed to be matched.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VectorMatching {
-    pub card: VectorMatchCardinality,
-    pub labels: Vec<String>,
-    pub how: MatchingOps, // on, ignoring
-    pub include: Vec<String>,
-}
-
-impl VectorMatching {
-    pub fn new(card: VectorMatchCardinality) -> Self {
-        Self {
-            card,
-            labels: vec![],
-            how: MatchingOps::On,
-            include: vec![],
-        }
     }
 }
 
