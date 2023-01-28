@@ -11,6 +11,8 @@ on:
 
 jobs:
   check:
+    name: check-pr-title
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

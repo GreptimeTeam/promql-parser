@@ -28,6 +28,7 @@ env:
 jobs:
   typos:
     name: Spell Check with Typos
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -35,6 +36,7 @@ jobs:
 
   check:
     name: Check
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -48,6 +50,7 @@ jobs:
 
   fmt:
     name: Rustfmt
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -62,6 +65,7 @@ jobs:
 
   clippy:
     name: Clippy
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

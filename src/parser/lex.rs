@@ -31,7 +31,7 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
             let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
         }
-        None => Err(format!("generated empty lexemes for {}", s)),
+        None => Err(format!("generated empty lexemes for {s}")),
     }
 }
 
@@ -299,7 +299,7 @@ impl Lexer {
             },
             '!' => match self.pop() {
                 Some('=') => State::Lexeme(T_NEQ),
-                Some(ch) => State::Err(format!("unexpected character after '!': {}", ch)),
+                Some(ch) => State::Err(format!("unexpected character after '!': {ch}")),
                 None => State::Err("'!' can not be at the end".into()),
             },
             '<' => match self.peek() {
@@ -320,7 +320,7 @@ impl Lexer {
             ch if ch.is_ascii_digit() => State::NumberOrDuration,
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
-                Some(ch) => State::Err(format!("unexpected character after '.' {}", ch)),
+                Some(ch) => State::Err(format!("unexpected character after '.' {ch}")),
                 None => State::Err("'.' can not be at the end".into()),
             },
             ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
@@ -353,7 +353,7 @@ impl Lexer {
             }
             // the matched ] has been consumed inside brackets
             ']' => State::Err("unexpected right bracket ']'".into()),
-            ch => State::Err(format!("unexpected character: {}", ch)),
+            ch => State::Err(format!("unexpected character: {ch}")),
         }
     }
 
@@ -536,7 +536,7 @@ impl Lexer {
             }
         }
 
-        State::Err(format!("unterminated quoted string {}", symbol))
+        State::Err(format!("unterminated quoted string {symbol}"))
     }
 
     /// scans the inside of a vector selector. Keywords are ignored and
@@ -559,8 +559,7 @@ impl Lexer {
                 Some('~') => State::Lexeme(T_NEQ_REGEX),
                 Some('=') => State::Lexeme(T_NEQ),
                 Some(ch) => State::Err(format!(
-                    "unexpected character after '!' inside braces: '{}'",
-                    ch
+                    "unexpected character after '!' inside braces: '{ch}'"
                 )),
                 None => State::Err("'!' can not be at the end".into()),
             },
@@ -569,7 +568,7 @@ impl Lexer {
                 self.jump_outof_braces();
                 State::Lexeme(T_RIGHT_BRACE)
             }
-            Some(ch) => State::Err(format!("unexpected character inside braces: '{}'", ch)),
+            Some(ch) => State::Err(format!("unexpected character inside braces: '{ch}'")),
             None => State::Err("unexpected end of input inside braces".into()),
         }
     }
@@ -620,7 +619,7 @@ impl Lexer {
                 State::Lexeme(T_RIGHT_BRACKET)
             }
             Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
-            Some(ch) => State::Err(format!("unexpected character inside brackets: {}", ch)),
+            Some(ch) => State::Err(format!("unexpected character inside brackets: {ch}")),
             None => State::Err("unexpected end of input inside brackets".into()),
         }
     }
