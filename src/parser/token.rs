@@ -193,12 +193,21 @@ mod tests {
     #[test]
     fn test_token_display() {
         assert_eq!("@", token_display(T_AT));
+        assert_eq!("sum", token_display(T_SUM));
+        assert_eq!("start", token_display(T_START));
         assert_eq!("unknown token", token_display(255));
     }
 
     #[test]
     fn test_get_keyword_tokens() {
         assert!(matches!(get_keyword_token("quantile"), Some(T_QUANTILE)));
+        assert!(matches!(get_keyword_token("offset"), Some(T_OFFSET)));
+        assert!(matches!(get_keyword_token("on"), Some(T_ON)));
+        assert!(matches!(get_keyword_token("ignoring"), Some(T_IGNORING)));
+        assert!(matches!(get_keyword_token("by"), Some(T_BY)));
+        assert!(matches!(get_keyword_token("without"), Some(T_WITHOUT)));
+
+        assert!(matches!(get_keyword_token("at"), None));
         assert!(matches!(get_keyword_token("unknown"), None));
     }
 
