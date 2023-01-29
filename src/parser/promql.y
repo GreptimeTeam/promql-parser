@@ -153,7 +153,7 @@ aggregate_expr -> Result<Expr, String>:
                 | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1.id, $3?, $2?) }
                 | aggregate_op function_call_body
                 {
-                        let modifier = AggModifier::By(vec![]);
+                        let modifier = AggModifier::By(HashSet::new());
                         Expr::new_aggregate_expr($1.id, modifier, $2?)
                 }
                 | aggregate_op error { Err($2) }
@@ -196,14 +196,14 @@ bin_modifier -> Result<BinModifier, String>:
 bool_modifier -> Result<BinModifier, String>:
                 {
                         let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(vec![]);
+                        let matching =  VectorMatchModifier::On(HashSet::new());
                         let return_bool = false;
                         Ok(BinModifier {card, matching, return_bool})
                 }
                 | BOOL
                 {
                         let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(vec![]);
+                        let matching =  VectorMatchModifier::On(HashSet::new());
                         let return_bool = true;
                         Ok(BinModifier {card, matching, return_bool})
                 }
@@ -241,21 +241,26 @@ group_modifiers -> Result<BinModifier, String>:
                 }
                 ;
 
-grouping_labels -> Result<Vec<String>, String>:
+grouping_labels -> Result<Labels, String>:
                 LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
                 | LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
-                | LEFT_PAREN RIGHT_PAREN { Ok(vec![]) }
+                | LEFT_PAREN RIGHT_PAREN { Ok(HashSet::new()) }
                 | error { Err(format!("err in grouping opts {}", $1)) }
                 ;
 
-grouping_label_list -> Result<Vec<String>, String>:
+grouping_label_list -> Result<Labels, String>:
                 grouping_label_list COMMA grouping_label
                 {
                         let mut v = $1?;
-                        v.push($3?.val);
+                        v.insert($3?.val);
                         Ok(v)
                 }
-                | grouping_label { Ok(vec![$1?.val]) }
+                | grouping_label
+                {
+                        let mut labels = HashSet::new();
+                        labels.insert($1?.val);
+                        Ok(labels)
+                }
                 | grouping_label_list error { Err(format!("err in grouping opts {}", $2)) }
                 ;
 
@@ -561,14 +566,19 @@ maybe_duration -> Result<Duration, String>:
                 | duration { $1 }
                 ;
 
-maybe_grouping_labels -> Result<Vec<String>, String>:
-                { Ok(vec![]) }
+maybe_grouping_labels -> Result<Labels, String>:
+                { Ok(HashSet::new()) }
                 | grouping_labels { $1 }
                 ;
 
 %%
 
+use std::collections::HashSet;
 use std::time::Duration;
-use crate::parser::{Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string};
-use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
+use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
+use crate::parser::{
+    AggModifier, AtModifier, BinModifier, Expr, FunctionArgs, Offset, Token,
+    VectorMatchCardinality, VectorMatchModifier,
+    get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
+};
 use crate::util::{parse_duration, parse_golang_str_radix};

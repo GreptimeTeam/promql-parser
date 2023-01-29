@@ -25,7 +25,3 @@ pub const INSTANCE_NAME: &str = "instance";
 
 pub type Label = String;
 pub type Labels = HashSet<Label>;
-
-pub fn empty_labels() -> Labels {
-    HashSet::new()
-}
