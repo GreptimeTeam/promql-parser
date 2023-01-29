@@ -154,8 +154,8 @@ pub fn get_keyword_token(s: &str) -> Option<TokenType> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
-    id: TokenType,
-    val: String,
+    pub id: TokenType,
+    pub val: String,
 }
 
 impl Display for Token {
@@ -169,16 +169,8 @@ impl Token {
         Self { id, val }
     }
 
-    pub fn id(&self) -> TokenType {
-        self.id
-    }
-
-    pub fn val(&self) -> String {
-        self.val.clone()
-    }
-
     pub fn is_aggregator_with_param(&self) -> bool {
-        is_aggregator_with_param(self.id())
+        is_aggregator_with_param(self.id)
     }
 }
 

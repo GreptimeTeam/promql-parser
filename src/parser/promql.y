@@ -136,14 +136,14 @@ start -> Result<Expr, String>:
 vector_selector -> Result<Expr, String>:
                 metric_identifier label_matchers
                 {
-                        let name = $1.val();
+                        let name = $1.val;
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = $2?.append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
                 }
                 | metric_identifier
                 {
-                        let name = $1.val();
+                        let name = $1.val;
                         let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
                         let matchers = Matchers::empty().append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
@@ -168,12 +168,12 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1);
                         let value = lexeme_to_string($lexer, &$3);
-                        Matcher::new_matcher($2.id(), name, value)
+                        Matcher::new_matcher($2.id, name, value)
                 }
                 | IDENTIFIER match_op error
                 {
                         let id = lexeme_to_string($lexer, &$1);
-                        let op = $2.val();
+                        let op = $2.val;
                         let err = $3;
                         Err(format!("matcher err. identifier:{id}, op:{op}, err:{err}"))
                 }
@@ -196,7 +196,7 @@ label_matcher -> Result<Matcher, String>:
 metric -> Result<Labels, String>:
                 metric_identifier label_set
                 {
-                        let label = Label::new(METRIC_NAME.to_string(), $1.val());
+                        let label = Label::new(METRIC_NAME.to_string(), $1.val);
                         Ok($2?.append(label))
                 }
                 | label_set { $1 }

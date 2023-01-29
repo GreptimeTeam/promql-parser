@@ -90,7 +90,7 @@ impl TryFrom<Token> for AtModifier {
     type Error = String;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        AtModifier::try_from(token.id())
+        AtModifier::try_from(token.id)
     }
 }
 
@@ -278,7 +278,7 @@ impl Expr {
                 Expr::NumberLiteral(NumberLiteral { val: -val })
             }
             _ => Expr::Unary(UnaryExpr {
-                op: op.id(),
+                op: op.id,
                 expr: Box::new(expr),
             }),
         };
