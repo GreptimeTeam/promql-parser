@@ -13,5 +13,7 @@
 // limitations under the License.
 
 pub mod duration;
+pub mod number;
 
 pub use duration::parse_duration;
+pub use number::parse_golang_str_radix;
