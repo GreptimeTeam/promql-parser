@@ -19,22 +19,23 @@ use crate::parser::{Function, FunctionArgs, Token, TokenType};
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
+type Label = String;
+
 /// Matching Modifier, for VectorMatching of binary expr.
 /// Label lists provided to matching keywords will determine how vectors are combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchModifier {
-    On(HashSet<String>),
-    Ignoring(HashSet<String>),
+    On(HashSet<Label>),
+    Ignoring(HashSet<Label>),
 }
 
+/// The label list provided with the group_left or group_right modifier contains
+/// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchCardinality {
     OneToOne,
-
-    /// The label list provided with the group_left or group_right modifier contains
-    /// additional labels from the "one"-side to be included in the result metrics.
-    ManyToOne(HashSet<String>),
-    OneToMany(HashSet<String>),
+    ManyToOne(HashSet<Label>),
+    OneToMany(HashSet<Label>),
     // ManyToMany, // useless so far
 }
 
@@ -44,17 +45,22 @@ pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
     pub card: VectorMatchCardinality,
+    /// on/ignoring on labels
     pub matching: VectorMatchModifier,
-
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
 }
 
 /// Aggregation Modifier
+///
+/// `without` removes the listed labels from the result vector,
+/// while all other labels are preserved in the output.
+/// `by` does the opposite and drops labels that are not listed in the by clause,
+/// even if their label values are identical between all elements of the vector.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggModifier {
-    By(HashSet<String>),
-    Without(HashSet<String>),
+    By(HashSet<Label>),
+    Without(HashSet<Label>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +73,7 @@ pub enum Offset {
 pub enum AtModifier {
     Start,
     End,
+    /// at can be earlier than UNIX_EPOCH
     At(SystemTime),
 }
 
