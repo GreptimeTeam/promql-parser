@@ -71,15 +71,26 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
+impl TryFrom<TokenType> for AtModifier {
+    type Error = String;
+
+    fn try_from(id: TokenType) -> Result<Self, Self::Error> {
+        match id {
+            T_START => Ok(AtModifier::Start),
+            T_END => Ok(AtModifier::End),
+            _ => Err(format!(
+                "invalid @ modifier preprocessor '{}', START or END is valid.",
+                token::token_display(id)
+            )),
+        }
+    }
+}
+
 impl TryFrom<Token> for AtModifier {
     type Error = String;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        match token.id() {
-            T_START => Ok(AtModifier::Start),
-            T_END => Ok(AtModifier::End),
-            _ => Err(format!("invalid at modifier preprocessor {}", token.val())),
-        }
+        AtModifier::try_from(token.id())
     }
 }
 
