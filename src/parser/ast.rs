@@ -16,46 +16,45 @@
 use crate::label::Matchers;
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
-// TODO: better PartialEq, Eq ignoring Vec<String> orders
 /// Matching Modifier, for VectorMatching of binary expr.
 /// Label lists provided to matching keywords will determine how vectors are combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchModifier {
-    On(Vec<String>),
-    Ignoring(Vec<String>),
+    On(HashSet<String>),
+    Ignoring(HashSet<String>),
 }
 
-// TODO: better PartialEq, Eq ignoring Vec<String> orders
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchCardinality {
     OneToOne,
 
-    // The label list provided with the group_left or group_right modifier contains
-    // additional labels from the "one"-side to be included in the result metrics.
-    ManyToOne(Vec<String>),
-    OneToMany(Vec<String>),
+    /// The label list provided with the group_left or group_right modifier contains
+    /// additional labels from the "one"-side to be included in the result metrics.
+    ManyToOne(HashSet<String>),
+    OneToMany(HashSet<String>),
     // ManyToMany, // useless so far
 }
 
 /// Binary Expr Modifier
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinModifier {
-    // The matching behavior for the operation if both operands are Vectors.
-    // If they are not this field is None.
+    /// The matching behavior for the operation if both operands are Vectors.
+    /// If they are not this field is None.
     pub card: VectorMatchCardinality,
     pub matching: VectorMatchModifier,
 
-    // If a comparison operator, return 0/1 rather than filtering.
+    /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
 }
 
 /// Aggregation Modifier
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggModifier {
-    By(Vec<String>),
-    Without(Vec<String>),
+    By(HashSet<String>),
+    Without(HashSet<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,15 +124,16 @@ impl TryFrom<f64> for AtModifier {
 /// be evaluated on.
 #[derive(Debug, Clone)]
 pub struct EvalStmt {
-    pub expr: Expr, // Expression to be evaluated.
+    /// Expression to be evaluated.
+    pub expr: Expr,
 
-    // The time boundaries for the evaluation. If start equals end an instant
-    // is evaluated.
+    /// The time boundaries for the evaluation. If start equals end an instant
+    /// is evaluated.
     pub start: SystemTime,
     pub end: SystemTime,
-    // Time between two evaluated instants for the range [start:end].
+    /// Time between two evaluated instants for the range [start:end].
     pub interval: Duration,
-    // Lookback delta to use for this evaluation.
+    /// Lookback delta to use for this evaluation.
     pub lookback_delta: Duration,
 }
 
@@ -144,9 +144,12 @@ pub struct EvalStmt {
 /// parameter is only required for count_values, quantile, topk and bottomk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
-    pub op: TokenType,            // The used aggregation operation.
-    pub expr: Box<Expr>,          // The Vector expression over which is aggregated.
-    pub param: Option<Box<Expr>>, // Parameter used by some aggregators.
+    /// The used aggregation operation.
+    pub op: TokenType,
+    /// The Vector expression over which is aggregated.
+    pub expr: Box<Expr>,
+    /// Parameter used by some aggregators.
+    pub param: Option<Box<Expr>>,
     pub grouping: AggModifier,
 }
 
@@ -163,9 +166,12 @@ pub struct UnaryExpr {
 ///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
-    pub op: TokenType,  // The operation of the expression.
-    pub lhs: Box<Expr>, // The operands on the left sides of the operator.
-    pub rhs: Box<Expr>, // The operands on the right sides of the operator.
+    /// The operation of the expression.
+    pub op: TokenType,
+    /// The operands on the left sides of the operator.
+    pub lhs: Box<Expr>,
+    /// The operands on the right sides of the operator.
+    pub rhs: Box<Expr>,
 
     pub matching: BinModifier,
 }
@@ -247,14 +253,19 @@ pub enum Expr {
     /// of operator precedence.
     Paren(ParenExpr),
 
+    /// SubqueryExpr represents a subquery.
     Subquery(SubqueryExpr),
 
+    /// NumberLiteral represents a number.
     NumberLiteral(NumberLiteral),
 
+    /// StringLiteral represents a string.
     StringLiteral(StringLiteral),
 
+    /// VectorSelector represents a Vector selection.
     VectorSelector(VectorSelector),
 
+    /// MatrixSelector represents a Matrix selection.
     MatrixSelector(MatrixSelector),
 
     /// Call represents a function call.
