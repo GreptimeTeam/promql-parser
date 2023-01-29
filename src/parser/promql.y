@@ -356,9 +356,7 @@ number -> Result<f64, String>:
                 NUMBER
                 {
                         let s = $lexer.span_str($span);
-                        s.parse::<f64>().map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
-                        /* FIXME: rebase after parse_golang_str_radix is merged */
-                        /* parse_golang_str_radix(s) */
+                        parse_golang_str_radix(s)
                 }
                 ;
 
@@ -392,4 +390,4 @@ use crate::parser::{
     Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
-use crate::util::{parse_duration};
+use crate::util::{parse_duration, parse_golang_str_radix};
