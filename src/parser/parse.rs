@@ -784,7 +784,6 @@ mod tests {
                 Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(vs))
             }),
         ];
-
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
