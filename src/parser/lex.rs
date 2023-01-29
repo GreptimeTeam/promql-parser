@@ -31,7 +31,7 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
             let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
             Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
         }
-        None => Err(format!("generated empty lexemes for {s}")),
+        None => Err(format!("no expression found in input: '{s}'")),
     }
 }
 
@@ -105,8 +105,15 @@ impl Context {
         self.chars.get(self.idx).copied()
     }
 
+    /// string lexeme SHOULD trim the surrounding string symbols, ' or " or `
     fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
-        DefaultLexeme::new(token_id, self.start, self.pos - self.start)
+        let mut start = self.start;
+        let mut len = self.pos - self.start;
+        if token_id == T_STRING {
+            start += 1;
+            len -= 2;
+        }
+        DefaultLexeme::new(token_id, start, len)
     }
 
     /// ignore the text between start and pos
@@ -321,7 +328,7 @@ impl Lexer {
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
                 Some(ch) => State::Err(format!("unexpected character after '.' {ch}")),
-                None => State::Err("'.' can not be at the end".into()),
+                None => State::Err("unexpected character: '.'".into()),
             },
             ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
             ch if STRING_SYMBOLS.contains(ch) => State::String(ch),
@@ -362,10 +369,8 @@ impl Lexer {
         self.backup();
         self.scan_number();
         if !self.accept_remaining_duration() {
-            return State::Err(format!(
-                "bad duration syntax around {}",
-                self.lexeme_string()
-            ));
+            self.pop(); // this is to include the bad syntax
+            return State::Err(format!("bad duration syntax: {}", self.lexeme_string()));
         }
         State::Lexeme(T_DURATION)
     }
@@ -382,24 +387,22 @@ impl Lexer {
             return State::Lexeme(T_DURATION);
         }
 
+        // the next char is invalid, so it should be captured in the err info.
+        self.pop();
         State::Err(format!(
             "bad number or duration syntax: {}",
             self.lexeme_string()
         ))
     }
 
-    /// the first character has been consumed, but no need to backup.
+    /// the first alphabetic character has been consumed, and no need to backup.
     fn accept_keyword_or_identifier(&mut self) -> State {
-        while let Some(ch) = self.pop() {
-            if !is_alpha_numeric(ch) && ch != ':' {
+        while let Some(ch) = self.peek() {
+            if is_alpha_numeric(ch) || ch == ':' {
+                self.pop();
+            } else {
                 break;
             }
-        }
-
-        // if neither keyword nor identifier character has been consumed,
-        // it has to be backed up.
-        if self.peek().is_some() {
-            self.backup();
         }
 
         let s = self.lexeme_string();
@@ -410,7 +413,7 @@ impl Lexer {
         }
     }
 
-    /// # has already not been consumed.
+    /// # has already been consumed.
     fn ignore_comment_line(&mut self) -> State {
         while let Some(ch) = self.pop() {
             if ch == '\r' || ch == '\n' {
@@ -481,9 +484,10 @@ impl Lexer {
             self.accept_run(|ch| ch.is_ascii_digit());
         }
 
-        // Next thing must not be alphanumeric unless it's the times token
-        // for series repetitions.
-        !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
+        // Next thing must not be alpha or '.'
+        // if alpha: it maybe a duration
+        // if '.': invalid number
+        !matches!(self.peek(), Some(ch) if is_alpha(ch) || ch == '.')
     }
 
     /// number part has already been scanned.
@@ -655,6 +659,25 @@ fn is_alpha(ch: char) -> bool {
     ch == '_' || ch.is_ascii_alphabetic()
 }
 
+pub fn is_label(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let mut chars = s.chars();
+    match chars.next() {
+        None => false,
+        Some(ch) if !is_alpha(ch) => false,
+        Some(_) => {
+            for ch in chars {
+                if !is_alpha_numeric(ch) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -689,11 +712,7 @@ mod tests {
             .collect();
 
         for (input, expected, actual) in cases.iter() {
-            assert_eq!(
-                expected, actual,
-                "input: {}, expected: {:?}, actual: {:?}",
-                input, expected, actual
-            );
+            assert_eq!(expected, actual, "\n<input>: {}", input);
         }
     }
 
@@ -792,10 +811,10 @@ mod tests {
     #[test]
     fn test_strings() {
         let cases = vec![
-            ("\"test\\tsequence\"", vec![(T_STRING, 0, 16)], None),
-            ("\"test\\\\.expression\"", vec![(T_STRING, 0, 19)], None),
+            ("\"test\\tsequence\"", vec![(T_STRING, 1, 14)], None),
+            ("\"test\\\\.expression\"", vec![(T_STRING, 1, 17)], None),
             // FIXME: "\"test\\.expression\""
-            ("`test\\.expression`", vec![(T_STRING, 0, 18)], None),
+            ("`test\\.expression`", vec![(T_STRING, 1, 16)], None),
             // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
         ];
         assert_matches(cases);
@@ -824,7 +843,7 @@ mod tests {
                 None,
             ),
             (":bc", vec![(T_METRIC_IDENTIFIER, 0, 3)], None),
-            ("0a:bc", vec![], Some("bad number or duration syntax: 0")),
+            ("0a:bc", vec![], Some("bad number or duration syntax: 0a")),
         ];
         assert_matches(cases);
     }
@@ -911,14 +930,14 @@ mod tests {
         let cases = vec![
             ("北京", vec![], Some("unexpected character: 北")),
             ("北京='a'", vec![], Some("unexpected character: 北")),
-            ("0a='a'", vec![], Some("bad number or duration syntax: 0")),
+            ("0a='a'", vec![], Some("bad number or duration syntax: 0a")),
             (
                 "{foo='bar'}",
                 vec![
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -929,7 +948,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -940,7 +959,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_EQL, 4, 1),
-                    (T_STRING, 5, 10),
+                    (T_STRING, 6, 8),
                     (T_RIGHT_BRACE, 15, 1),
                 ],
                 None,
@@ -951,7 +970,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 3),
                     (T_NEQ, 5, 2),
-                    (T_STRING, 8, 5),
+                    (T_STRING, 9, 3),
                     (T_RIGHT_BRACE, 14, 1),
                 ],
                 None,
@@ -962,7 +981,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 5),
                     (T_EQL_REGEX, 6, 2),
-                    (T_STRING, 8, 5),
+                    (T_STRING, 9, 3),
                     (T_RIGHT_BRACE, 14, 1),
                 ],
                 None,
@@ -973,7 +992,7 @@ mod tests {
                     (T_LEFT_BRACE, 0, 1),
                     (T_IDENTIFIER, 1, 2),
                     (T_NEQ_REGEX, 3, 2),
-                    (T_STRING, 5, 5),
+                    (T_STRING, 6, 3),
                     (T_RIGHT_BRACE, 10, 1),
                 ],
                 None,
@@ -1004,7 +1023,7 @@ mod tests {
             ("=~", vec![], Some("unexpected character after '=': ~")),
             ("!~", vec![], Some("unexpected character after '!': ~")),
             ("!(", vec![], Some("unexpected character after '!': (")),
-            ("1a", vec![], Some("bad number or duration syntax: 1")),
+            ("1a", vec![], Some("bad number or duration syntax: 1a")),
         ];
         assert_matches(cases);
     }
@@ -1090,7 +1109,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1107,7 +1126,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1124,7 +1143,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1141,7 +1160,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1161,7 +1180,7 @@ mod tests {
                     (T_LEFT_BRACE, 22, 1),
                     (T_IDENTIFIER, 23, 3),
                     (T_EQL, 26, 1),
-                    (T_STRING, 27, 5),
+                    (T_STRING, 28, 3),
                     (T_RIGHT_BRACE, 32, 1),
                     (T_LEFT_BRACKET, 33, 1),
                     (T_DURATION, 34, 2),
@@ -1187,7 +1206,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 6),
+                    (T_STRING, 15, 4),
                     (T_RIGHT_BRACE, 20, 1),
                     (T_LEFT_BRACKET, 21, 1),
                     (T_DURATION, 22, 2),
@@ -1210,7 +1229,7 @@ mod tests {
                     (T_LEFT_BRACE, 22, 1),
                     (T_IDENTIFIER, 23, 3),
                     (T_EQL, 26, 1),
-                    (T_STRING, 27, 5),
+                    (T_STRING, 28, 3),
                     (T_RIGHT_BRACE, 32, 1),
                     (T_LEFT_BRACKET, 33, 1),
                     (T_DURATION, 34, 2),
@@ -1257,7 +1276,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1273,7 +1292,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1289,7 +1308,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                     (T_DURATION, 21, 2),
@@ -1304,7 +1323,7 @@ mod tests {
                     (T_LEFT_BRACE, 9, 1),
                     (T_IDENTIFIER, 10, 2),
                     (T_NEQ_REGEX, 12, 2),
-                    (T_STRING, 14, 5),
+                    (T_STRING, 15, 3),
                     (T_RIGHT_BRACE, 19, 1),
                     (T_LEFT_BRACKET, 20, 1),
                 ],
@@ -1338,5 +1357,19 @@ mod tests {
         assert!(is_alpha_numeric('9'));
         assert!(!is_alpha_numeric('-'));
         assert!(!is_alpha_numeric('@'));
+    }
+
+    #[test]
+    fn test_is_label() {
+        assert!(is_label("_"));
+        assert!(is_label("_up"));
+        assert!(is_label("up"));
+        assert!(is_label("up_"));
+        assert!(is_label("up_system_1"));
+
+        assert!(!is_label(""));
+        assert!(!is_label("0"));
+        assert!(!is_label("0up"));
+        assert!(!is_label("0_up"));
     }
 }
