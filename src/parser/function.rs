@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use lazy_static::lazy_static;
 
 use crate::parser::ValueType;
 
-#[derive(Debug, Clone)]
+/// Functions is a list of all functions supported by PromQL, including their types.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
@@ -42,523 +43,187 @@ impl Function {
     }
 }
 
+macro_rules! map {
+    ($(($name:literal, $arg:expr, $ret:expr)),*) => (
+        {
+            let mut m: HashMap<&'static str, Function> = HashMap::new();
+            $(
+                let variadic = FUNCTIONS_WITH_VARIADIC_ARGS.contains($name);
+                let func = Function::new($name, $arg, variadic, $ret);
+                m.insert($name, func);
+            )*
+            m
+        }
+    );
+}
+
 lazy_static! {
-    static ref FUNCTIONS: HashMap<&'static str, Function> = {
-        let mut m = HashMap::new();
-
-        m.insert(
-            "abs",
-            Function::new("abs", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "absent",
-            Function::new("absent", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
+    static ref FUNCTIONS_WITH_VARIADIC_ARGS: HashSet<&'static str> = HashSet::from([
+        "days_in_month",
+        "day_of_year",
+        "day_of_month",
+        "day_of_week",
+        "year",
+        "month",
+        "hour",
+        "minute",
+        "label_join",
+        "round",
+    ]);
+    static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
+        ("abs", vec![ValueType::Vector], ValueType::Vector),
+        ("absent", vec![ValueType::Vector], ValueType::Vector),
+        (
             "absent_over_time",
-            Function::new(
-                "absent_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "acos",
-            Function::new("acos", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "acosh",
-            Function::new("acosh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "asin",
-            Function::new("asin", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "asinh",
-            Function::new("asinh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "atan",
-            Function::new("atan", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "atanh",
-            Function::new("atanh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "avg_over_time",
-            Function::new(
-                "avg_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "ceil",
-            Function::new("ceil", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "changes",
-            Function::new("changes", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        ("acos", vec![ValueType::Vector], ValueType::Vector),
+        ("acosh", vec![ValueType::Vector], ValueType::Vector),
+        ("asin", vec![ValueType::Vector], ValueType::Vector),
+        ("asinh", vec![ValueType::Vector], ValueType::Vector),
+        ("atan", vec![ValueType::Vector], ValueType::Vector),
+        ("atanh", vec![ValueType::Vector], ValueType::Vector),
+        ("avg_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        ("ceil", vec![ValueType::Vector], ValueType::Vector),
+        ("changes", vec![ValueType::Matrix], ValueType::Vector),
+        (
             "clamp",
-            Function::new(
-                "clamp",
-                vec![ValueType::Vector, ValueType::Scalar, ValueType::Scalar],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Vector, ValueType::Scalar, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
             "clamp_max",
-            Function::new(
-                "clamp_max",
-                vec![ValueType::Vector, ValueType::Scalar],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
             "clamp_min",
-            Function::new(
-                "clamp_min",
-                vec![ValueType::Vector, ValueType::Scalar],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "cos",
-            Function::new("cos", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "cosh",
-            Function::new("cosh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        ("cos", vec![ValueType::Vector], ValueType::Vector),
+        ("cosh", vec![ValueType::Vector], ValueType::Vector),
+        (
             "count_over_time",
-            Function::new(
-                "count_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "days_in_month",
-            Function::new(
-                "days_in_month",
-                vec![ValueType::Vector],
-                true,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "day_of_month",
-            Function::new(
-                "day_of_month",
-                vec![ValueType::Vector],
-                true,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "day_of_week",
-            Function::new(
-                "day_of_week",
-                vec![ValueType::Vector],
-                true,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "day_of_year",
-            Function::new(
-                "day_of_year",
-                vec![ValueType::Vector],
-                true,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "deg",
-            Function::new("deg", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "delta",
-            Function::new("delta", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "deriv",
-            Function::new("deriv", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "exp",
-            Function::new("exp", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "floor",
-            Function::new("floor", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        ("days_in_month", vec![ValueType::Vector], ValueType::Vector),
+        ("day_of_month", vec![ValueType::Vector], ValueType::Vector),
+        ("day_of_week", vec![ValueType::Vector], ValueType::Vector),
+        ("day_of_year", vec![ValueType::Vector], ValueType::Vector),
+        ("deg", vec![ValueType::Vector], ValueType::Vector),
+        ("delta", vec![ValueType::Matrix], ValueType::Vector),
+        ("deriv", vec![ValueType::Matrix], ValueType::Vector),
+        ("exp", vec![ValueType::Vector], ValueType::Vector),
+        ("floor", vec![ValueType::Vector], ValueType::Vector),
+        (
             "histogram_count",
-            Function::new(
-                "histogram_count",
-                vec![ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "histogram_sum",
-            Function::new(
-                "histogram_sum",
-                vec![ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Vector],
+            ValueType::Vector
+        ),
+        ("histogram_sum", vec![ValueType::Vector], ValueType::Vector),
+        (
             "histogram_fraction",
-            Function::new(
-                "histogram_fraction",
-                vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector],
+            ValueType::Vector
+        ),
+        (
             "histogram_quantile",
-            Function::new(
-                "histogram_quantile",
-                vec![ValueType::Scalar, ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Scalar, ValueType::Vector],
+            ValueType::Vector
+        ),
+        (
             "holt_winters",
-            Function::new(
-                "holt_winters",
-                vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "hour",
-            Function::new("hour", vec![ValueType::Vector], true, ValueType::Vector),
-        );
-
-        m.insert(
-            "idelta",
-            Function::new("idelta", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "increase",
-            Function::new(
-                "increase",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "irate",
-            Function::new("irate", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        ("hour", vec![ValueType::Vector], ValueType::Vector),
+        ("idelta", vec![ValueType::Matrix], ValueType::Vector),
+        ("increase", vec![ValueType::Matrix], ValueType::Vector),
+        ("irate", vec![ValueType::Matrix], ValueType::Vector),
+        (
             "label_replace",
-            Function::new(
-                "label_replace",
-                vec![
-                    ValueType::Vector,
-                    ValueType::String,
-                    ValueType::String,
-                    ValueType::String,
-                    ValueType::String,
-                ],
-                false,
+            vec![
                 ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+            ],
+            ValueType::Vector
+        ),
+        (
             "label_join",
-            Function::new(
-                "label_join",
-                vec![
-                    ValueType::Vector,
-                    ValueType::String,
-                    ValueType::String,
-                    ValueType::String,
-                ],
-                true,
+            vec![
                 ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "last_over_time",
-            Function::new(
-                "last_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "ln",
-            Function::new("ln", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "log10",
-            Function::new("log10", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "log2",
-            Function::new("log2", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "max_over_time",
-            Function::new(
-                "max_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "min_over_time",
-            Function::new(
-                "min_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "minute",
-            Function::new("minute", vec![ValueType::Vector], true, ValueType::Vector),
-        );
-
-        m.insert(
-            "month",
-            Function::new("month", vec![ValueType::Vector], true, ValueType::Vector),
-        );
-
-        m.insert("pi", Function::new("pi", vec![], false, ValueType::Scalar));
-
-        m.insert(
+                ValueType::String,
+                ValueType::String,
+                ValueType::String,
+            ],
+            ValueType::Vector
+        ),
+        ("last_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        ("ln", vec![ValueType::Vector], ValueType::Vector),
+        ("log10", vec![ValueType::Vector], ValueType::Vector),
+        ("log2", vec![ValueType::Vector], ValueType::Vector),
+        ("max_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        ("min_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        ("minute", vec![ValueType::Vector], ValueType::Vector),
+        ("month", vec![ValueType::Vector], ValueType::Vector),
+        ("pi", vec![], ValueType::Scalar),
+        (
             "predict_linear",
-            Function::new(
-                "predict_linear",
-                vec![ValueType::Matrix, ValueType::Scalar],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        (
             "present_over_time",
-            Function::new(
-                "present_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        (
             "quantile_over_time",
-            Function::new(
-                "quantile_over_time",
-                vec![ValueType::Scalar, ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "rad",
-            Function::new("rad", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "rate",
-            Function::new("rate", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "resets",
-            Function::new("resets", vec![ValueType::Matrix], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Scalar, ValueType::Matrix],
+            ValueType::Vector
+        ),
+        ("rad", vec![ValueType::Vector], ValueType::Vector),
+        ("rate", vec![ValueType::Matrix], ValueType::Vector),
+        ("resets", vec![ValueType::Matrix], ValueType::Vector),
+        (
             "round",
-            Function::new(
-                "round",
-                vec![ValueType::Vector, ValueType::Scalar],
-                true,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "scalar",
-            Function::new("scalar", vec![ValueType::Vector], false, ValueType::Scalar),
-        );
-
-        m.insert(
-            "sgn",
-            Function::new("sgn", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "sin",
-            Function::new("sin", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "sinh",
-            Function::new("sinh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "sort",
-            Function::new("sort", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "sort_desc",
-            Function::new(
-                "sort_desc",
-                vec![ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "sqrt",
-            Function::new("sqrt", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
+            vec![ValueType::Vector, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        ("scalar", vec![ValueType::Vector], ValueType::Scalar),
+        ("sgn", vec![ValueType::Vector], ValueType::Vector),
+        ("sin", vec![ValueType::Vector], ValueType::Vector),
+        ("sinh", vec![ValueType::Vector], ValueType::Vector),
+        ("sort", vec![ValueType::Vector], ValueType::Vector),
+        ("sort_desc", vec![ValueType::Vector], ValueType::Vector),
+        ("sqrt", vec![ValueType::Vector], ValueType::Vector),
+        (
             "stddev_over_time",
-            Function::new(
-                "stddev_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        (
             "stdvar_over_time",
-            Function::new(
-                "stdvar_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "sum_over_time",
-            Function::new(
-                "sum_over_time",
-                vec![ValueType::Matrix],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "tan",
-            Function::new("tan", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "tanh",
-            Function::new("tanh", vec![ValueType::Vector], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "time",
-            Function::new("time", vec![], false, ValueType::Scalar),
-        );
-
-        m.insert(
-            "timestamp",
-            Function::new(
-                "timestamp",
-                vec![ValueType::Vector],
-                false,
-                ValueType::Vector,
-            ),
-        );
-
-        m.insert(
-            "vector",
-            Function::new("vector", vec![ValueType::Scalar], false, ValueType::Vector),
-        );
-
-        m.insert(
-            "year",
-            Function::new("year", vec![ValueType::Vector], true, ValueType::Vector),
-        );
-
-        m
-    };
+            vec![ValueType::Matrix],
+            ValueType::Vector
+        ),
+        ("sum_over_time", vec![ValueType::Matrix], ValueType::Vector),
+        ("tan", vec![ValueType::Vector], ValueType::Vector),
+        ("tanh", vec![ValueType::Vector], ValueType::Vector),
+        ("time", vec![], ValueType::Scalar),
+        ("timestamp", vec![ValueType::Vector], ValueType::Vector),
+        ("vector", vec![ValueType::Scalar], ValueType::Vector),
+        ("year", vec![ValueType::Vector], ValueType::Vector)
+    );
 }
 
 // get_function returns a predefined Function object for the given name.
-pub fn get_function(name: &str) -> Option<&Function> {
-    FUNCTIONS.get(name)
+pub fn get_function(name: &str) -> Option<Function> {
+    FUNCTIONS.get(name).cloned()
 }
