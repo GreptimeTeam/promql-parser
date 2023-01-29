@@ -13,20 +13,17 @@
 // limitations under the License.
 
 #![allow(dead_code)]
-use crate::label::Matchers;
+use crate::label::{Labels, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
-use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
-
-type Label = String;
 
 /// Matching Modifier, for VectorMatching of binary expr.
 /// Label lists provided to matching keywords will determine how vectors are combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchModifier {
-    On(HashSet<Label>),
-    Ignoring(HashSet<Label>),
+    On(Labels),
+    Ignoring(Labels),
 }
 
 /// The label list provided with the group_left or group_right modifier contains
@@ -34,8 +31,8 @@ pub enum VectorMatchModifier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorMatchCardinality {
     OneToOne,
-    ManyToOne(HashSet<Label>),
-    OneToMany(HashSet<Label>),
+    ManyToOne(Labels),
+    OneToMany(Labels),
     // ManyToMany, // useless so far
 }
 
@@ -59,8 +56,8 @@ pub struct BinModifier {
 /// even if their label values are identical between all elements of the vector.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggModifier {
-    By(HashSet<Label>),
-    Without(HashSet<Label>),
+    By(Labels),
+    Without(Labels),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

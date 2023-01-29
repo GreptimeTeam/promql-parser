@@ -125,9 +125,239 @@ START_METRIC_SELECTOR
 %%
 
 start -> Result<Expr, String>:
-                vector_selector { $1 }
-                | string_literal { $1 }
+                expr { $1 }
+                /* If none of the more detailed error messages are triggered, we fall back to this. */
+                | error { Err($1) }
+                ;
+
+expr -> Result<Expr, String>:
+                aggregate_expr { $1 }
+                /* binary_expr { $1 } */
+                | function_call { $1 }
+                | matrix_selector { $1 }
                 | number_literal { $1 }
+                | offset_expr { $1 }
+                | paren_expr { $1 }
+                | string_literal { $1 }
+                | subquery_expr { $1 }
+                /* | unary_expr  { $1 } */
+                | vector_selector  { $1 }
+                | step_invariant_expr { $1 }
+                ;
+
+/*
+ * Aggregations.
+ */
+aggregate_expr -> Result<Expr, String>:
+                aggregate_op aggregate_modifier function_call_body { Expr::new_aggregate_expr($1.id, $2?, $3?) }
+                | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1.id, $3?, $2?) }
+                | aggregate_op function_call_body
+                {
+                        let modifier = AggModifier::By(vec![]);
+                        Expr::new_aggregate_expr($1.id, modifier, $2?)
+                }
+                | aggregate_op error { Err($2) }
+                ;
+
+aggregate_modifier -> Result<AggModifier, String>:
+                BY grouping_labels { Ok(AggModifier::By($2?)) }
+                | WITHOUT grouping_labels { Ok(AggModifier::Without($2?)) }
+                ;
+
+/*
+ * Binary expressions.
+ */
+// Operator precedence only works if each of those is listed separately.
+binary_expr -> Result<Expr, String>:
+                expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                ;
+
+// Using left recursion for the modifier rules, helps to keep the parser stack small and
+// reduces allocations
+bin_modifier -> Result<BinModifier, String>:
+                group_modifiers { $1 }
+                ;
+
+bool_modifier -> Result<BinModifier, String>:
+                {
+                        let card = VectorMatchCardinality::OneToOne;
+                        let matching =  VectorMatchModifier::On(vec![]);
+                        let return_bool = false;
+                        Ok(BinModifier {card, matching, return_bool})
+                }
+                | BOOL
+                {
+                        let card = VectorMatchCardinality::OneToOne;
+                        let matching =  VectorMatchModifier::On(vec![]);
+                        let return_bool = true;
+                        Ok(BinModifier {card, matching, return_bool})
+                }
+                ;
+
+on_or_ignoring -> Result<BinModifier, String>:
+                bool_modifier IGNORING grouping_labels
+                {
+                        let mut modifier = $1?;
+                        modifier.matching = VectorMatchModifier::Ignoring($3?);
+                        Ok(modifier)
+                }
+                | bool_modifier ON grouping_labels
+                {
+                        let mut modifier = $1?;
+                        modifier.matching = VectorMatchModifier::On($3?);
+                        Ok(modifier)
+                }
+                ;
+
+group_modifiers -> Result<BinModifier, String>:
+                bool_modifier { $1 }
+                | on_or_ignoring { $1 }
+                | on_or_ignoring GROUP_LEFT maybe_grouping_labels
+                {
+                        let mut modifier = $1?;
+                        modifier.card = VectorMatchCardinality::ManyToOne($3?);
+                        Ok(modifier)
+                }
+                | on_or_ignoring GROUP_RIGHT maybe_grouping_labels
+                {
+                        let mut modifier = $1?;
+                        modifier.card = VectorMatchCardinality::OneToMany($3?);
+                        Ok(modifier)
+                }
+                ;
+
+grouping_labels -> Result<Vec<String>, String>:
+                LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
+                | LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
+                | LEFT_PAREN RIGHT_PAREN { Ok(vec![]) }
+                | error { Err(format!("err in grouping opts {}", $1)) }
+                ;
+
+grouping_label_list -> Result<Vec<String>, String>:
+                grouping_label_list COMMA grouping_label
+                {
+                        let mut v = $1?;
+                        v.push($3?.val);
+                        Ok(v)
+                }
+                | grouping_label { Ok(vec![$1?.val]) }
+                | grouping_label_list error { Err(format!("err in grouping opts {}", $2)) }
+                ;
+
+grouping_label -> Result<Token, String>:
+                maybe_label
+                {
+                        if !is_label(&$1.val) {
+                            Err(format!("{} is not valid label in grouping opts", $1.val))
+                        } else {
+                            Ok($1)
+                        }
+                }
+                | error { Err($1) }
+                ;
+
+/*
+ * Function calls.
+ */
+function_call -> Result<Expr, String>:
+                IDENTIFIER function_call_body
+                {
+                        let name = lexeme_to_string($lexer, &$1);
+                        match get_function(&name) {
+                            None => Err(format!("unknown function with name {}", name)),
+                            Some(func) => Expr::new_call(func, $2?)
+                        }
+                }
+                ;
+
+function_call_body -> Result<FunctionArgs, String>:
+                LEFT_PAREN function_call_args RIGHT_PAREN { $2 }
+                | LEFT_PAREN RIGHT_PAREN { Ok(FunctionArgs::empty_args()) }
+                ;
+
+function_call_args -> Result<FunctionArgs, String>:
+                function_call_args COMMA expr { Ok($1?.append_args($3?)) }
+                | expr { Ok(FunctionArgs::new_args($1?)) }
+                | function_call_args COMMA { Err("trailing commas not allowed in function call args".into()) }
+                ;
+
+/*
+ * Expressions inside parentheses.
+ */
+paren_expr -> Result<Expr, String>:
+                LEFT_PAREN expr RIGHT_PAREN { Expr::new_paren_expr($2?) }
+                ;
+
+/*
+ * Offset modifiers.
+ */
+offset_expr -> Result<Expr, String>:
+                expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
+                | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
+                | expr OFFSET error { Err($3) }
+                ;
+
+/*
+ * @ modifiers.
+ */
+step_invariant_expr -> Result<Expr, String>:
+                expr AT signed_or_unsigned_number
+                {
+                        let at = AtModifier::try_from($3?)?;
+                        $1?.step_invariant_expr(at)
+                }
+                | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
+                {
+                        let at = AtModifier::try_from($3)?;
+                        $1?.step_invariant_expr(at)
+                }
+                | expr AT error { Err($3) }
+                ;
+
+at_modifier_preprocessors -> Token:
+                START { lexeme_to_token($lexer, $1) }
+                | END { lexeme_to_token($lexer, $1) }
+                ;
+
+/*
+ * Subquery and range selectors.
+ */
+matrix_selector -> Result<Expr, String>:
+                expr LEFT_BRACKET duration RIGHT_BRACKET
+                { Expr::new_matrix_selector($1?, $3?) }
+                ;
+
+subquery_expr -> Result<Expr, String>:
+                expr LEFT_BRACKET duration COLON maybe_duration RIGHT_BRACKET
+                { Expr::new_subquery_expr($1?, $3?, $5?) }
+                | expr LEFT_BRACKET duration COLON duration error { Err($6) }
+                | expr LEFT_BRACKET duration COLON error { Err($5) }
+                | expr LEFT_BRACKET duration error { Err($4) }
+                | expr LEFT_BRACKET error { Err($3) }
+                ;
+
+/*
+ * Unary expressions.
+ */
+unary_expr -> Result<Expr, String>:
+                /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
+                /* FIXME: unary_op has same precedence with MUL, otherwise Rule Conflict */
+                unary_op expr { Expr::new_unary_expr($2?, &$1) }
                 ;
 
 /*
@@ -326,20 +556,19 @@ string_literal -> Result<Expr, String>:
 /*
  * Wrappers for optional arguments.
  */
-/* FIXME: rebase after grouping_labels rule is merged */
-/* maybe_duration -> Result<Duration, String>: */
-/*                 { Ok(Duration::ZERO) } */
-/*                 | duration { $1 } */
-/*                 ; */
+maybe_duration -> Result<Duration, String>:
+                { Ok(Duration::ZERO) }
+                | duration { $1 }
+                ;
 
-/* maybe_grouping_labels -> Result<Vec<String>, String>: */
-/*                 { Ok(vec![]) } */
-/*                 | grouping_labels { $1 } */
-/*                 ; */
+maybe_grouping_labels -> Result<Vec<String>, String>:
+                { Ok(vec![]) }
+                | grouping_labels { $1 }
+                ;
 
 %%
-use std::time::Duration;
 
+use std::time::Duration;
 use crate::parser::{Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
 use crate::util::{parse_duration, parse_golang_str_radix};

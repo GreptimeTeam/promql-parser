@@ -15,9 +15,17 @@
 mod matcher;
 
 pub use matcher::{MatchOp, Matcher, Matchers};
+use std::collections::HashSet;
 
 // Well-known label names used by Prometheus components.
 pub const METRIC_NAME: &str = "__name__";
 pub const ALERT_NAME: &str = "alertname";
 pub const BUCKET_LABEL: &str = "le";
 pub const INSTANCE_NAME: &str = "instance";
+
+pub type Label = String;
+pub type Labels = HashSet<Label>;
+
+pub fn empty_labels() -> Labels {
+    HashSet::new()
+}
