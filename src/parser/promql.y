@@ -245,7 +245,11 @@ grouping_labels -> Result<Labels, String>:
                 LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
                 | LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
                 | LEFT_PAREN RIGHT_PAREN { Ok(HashSet::new()) }
-                | error { Err(format!("err in grouping opts {}", $1)) }
+                | error
+                {
+                        let err = $1;
+                        Err(format!("err in grouping opts {err}"))
+                }
                 ;
 
 grouping_label_list -> Result<Labels, String>:
@@ -256,16 +260,21 @@ grouping_label_list -> Result<Labels, String>:
                         Ok(v)
                 }
                 | grouping_label { Ok(HashSet::from([$1?.val])) }
-                | grouping_label_list error { Err(format!("err in grouping opts {}", $2)) }
+                | grouping_label_list error
+                {
+                        let err = $2;
+                        Err(format!("err in grouping opts {err}"))
+                }
                 ;
 
 grouping_label -> Result<Token, String>:
                 maybe_label
                 {
-                        if is_label(&$1.val) {
+                        let label = &$1.val;
+                        if is_label(label) {
                             Ok($1)
                         } else {
-                            Err(format!("{} is not valid label in grouping opts", $1.val))
+                            Err(format!("{label} is not valid label in grouping opts"))
                         }
                 }
                 | error { Err($1) }
@@ -279,7 +288,7 @@ function_call -> Result<Expr, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
                         match get_function(&name) {
-                            None => Err(format!("unknown function with name {}", name)),
+                            None => Err(format!("unknown function with name {name}")),
                             Some(func) => Expr::new_call(func, $2?)
                         }
                 }
