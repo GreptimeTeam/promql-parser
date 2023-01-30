@@ -13,69 +13,189 @@
 // limitations under the License.
 
 #![allow(dead_code)]
-use std::fmt::{self, Display};
+use crate::label::Matchers;
+use crate::parser::token::{self, T_END, T_START};
+use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
-use crate::label::Matchers;
-use crate::parser::{Function, TokenType};
+type Label = String;
+
+/// Matching Modifier, for VectorMatching of binary expr.
+/// Label lists provided to matching keywords will determine how vectors are combined.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VectorMatchModifier {
+    On(HashSet<Label>),
+    Ignoring(HashSet<Label>),
+}
+
+/// The label list provided with the group_left or group_right modifier contains
+/// additional labels from the "one"-side to be included in the result metrics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VectorMatchCardinality {
+    OneToOne,
+    ManyToOne(HashSet<Label>),
+    OneToMany(HashSet<Label>),
+    // ManyToMany, // useless so far
+}
+
+/// Binary Expr Modifier
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinModifier {
+    /// The matching behavior for the operation if both operands are Vectors.
+    /// If they are not this field is None.
+    pub card: VectorMatchCardinality,
+    /// on/ignoring on labels
+    pub matching: VectorMatchModifier,
+    /// If a comparison operator, return 0/1 rather than filtering.
+    pub return_bool: bool,
+}
+
+/// Aggregation Modifier
+///
+/// `without` removes the listed labels from the result vector,
+/// while all other labels are preserved in the output.
+/// `by` does the opposite and drops labels that are not listed in the by clause,
+/// even if their label values are identical between all elements of the vector.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AggModifier {
+    By(HashSet<Label>),
+    Without(HashSet<Label>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Offset {
+    Pos(Duration),
+    Neg(Duration),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AtModifier {
+    Start,
+    End,
+    /// at can be earlier than UNIX_EPOCH
+    At(SystemTime),
+}
+
+impl TryFrom<TokenType> for AtModifier {
+    type Error = String;
+
+    fn try_from(id: TokenType) -> Result<Self, Self::Error> {
+        match id {
+            T_START => Ok(AtModifier::Start),
+            T_END => Ok(AtModifier::End),
+            _ => Err(format!(
+                "invalid @ modifier preprocessor '{}', START or END is valid.",
+                token::token_display(id)
+            )),
+        }
+    }
+}
+
+impl TryFrom<Token> for AtModifier {
+    type Error = String;
+
+    fn try_from(token: Token) -> Result<Self, Self::Error> {
+        AtModifier::try_from(token.id)
+    }
+}
+
+impl TryFrom<f64> for AtModifier {
+    type Error = String;
+
+    fn try_from(secs: f64) -> Result<Self, Self::Error> {
+        let err = Err(format!("timestamp out of bounds for @ modifier: {secs}"));
+
+        if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
+            return err;
+        }
+        let milli = (secs * 1000f64).round().abs() as u64;
+
+        let duration = Duration::from_millis(milli);
+        let mut st = Some(SystemTime::UNIX_EPOCH);
+        if secs.is_sign_positive() {
+            st = SystemTime::UNIX_EPOCH.checked_add(duration);
+        }
+        if secs.is_sign_negative() {
+            st = SystemTime::UNIX_EPOCH.checked_sub(duration);
+        }
+
+        match st {
+            Some(st) => Ok(Self::At(st)),
+            None => err,
+        }
+    }
+}
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
 #[derive(Debug, Clone)]
 pub struct EvalStmt {
-    pub expr: Expr, // Expression to be evaluated.
+    /// Expression to be evaluated.
+    pub expr: Expr,
 
-    // The time boundaries for the evaluation. If start equals end an instant
-    // is evaluated.
+    /// The time boundaries for the evaluation. If start equals end an instant
+    /// is evaluated.
     pub start: SystemTime,
     pub end: SystemTime,
-    // Time between two evaluated instants for the range [start:end].
+    /// Time between two evaluated instants for the range [start:end].
     pub interval: Duration,
-    // Lookback delta to use for this evaluation.
+    /// Lookback delta to use for this evaluation.
     pub lookback_delta: Duration,
 }
 
-#[derive(Debug, Clone)]
+/// <aggr-op> [without|by (<label list>)] ([parameter,] <vector expression>)
+/// or
+/// <aggr-op>([parameter,] <vector expression>) [without|by (<label list>)]
+///
+/// parameter is only required for count_values, quantile, topk and bottomk.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
-    pub op: TokenType,         // The used aggregation operation.
-    pub expr: Box<Expr>,       // The Vector expression over which is aggregated.
-    pub param: Box<Expr>,      // Parameter used by some aggregators.
-    pub grouping: Vec<String>, // The labels by which to group the Vector.
-    pub without: bool,         // Whether to drop the given labels rather than keep them.
+    /// The used aggregation operation.
+    pub op: TokenType,
+    /// The Vector expression over which is aggregated.
+    pub expr: Box<Expr>,
+    /// Parameter used by some aggregators.
+    pub param: Option<Box<Expr>>,
+    pub grouping: AggModifier,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
     pub op: TokenType,
     pub expr: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+/// <vector expr> <bin-op> ignoring(<label list>) group_left(<label list>) <vector expr>
+/// <vector expr> <bin-op> ignoring(<label list>) group_right(<label list>) <vector expr>
+/// <vector expr> <bin-op> on(<label list>) group_left(<label list>) <vector expr>
+/// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
+///
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
-    pub op: TokenType,  // The operation of the expression.
-    pub lhs: Box<Expr>, // The operands on the left sides of the operator.
-    pub rhs: Box<Expr>, // The operands on the right sides of the operator.
+    /// The operation of the expression.
+    pub op: TokenType,
+    /// The operands on the left sides of the operator.
+    pub lhs: Box<Expr>,
+    /// The operands on the right sides of the operator.
+    pub rhs: Box<Expr>,
 
-    // The matching behavior for the operation if both operands are Vectors.
-    // If they are not this field is None.
-    pub matching: Option<VectorMatching>,
-
-    // If a comparison operator, return 0/1 rather than filtering.
-    pub return_bool: bool,
+    pub matching: BinModifier,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
+    pub offset: Option<Offset>,
+
+    /// at modifier can be earlier than UNIX_EPOCH
+    pub at: Option<AtModifier>,
     pub range: Duration,
-    pub offset: Duration,
-    pub timestamp: Option<i64>,
-    pub start_or_end: TokenType, // Set when @ is used with start() or end()
     pub step: Duration,
 }
 
@@ -84,36 +204,47 @@ pub struct NumberLiteral {
     pub val: f64,
 }
 
-#[derive(Debug, Clone)]
+impl NumberLiteral {
+    pub fn new(val: f64) -> Self {
+        Self { val }
+    }
+}
+
+impl PartialEq for NumberLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        self.val == other.val
+    }
+}
+
+impl Eq for NumberLiteral {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
     pub name: Option<String>,
-    // offset is the actual offset that was set in the query.
-    // This never changes.
-    pub offset: Option<Duration>,
-    pub start_or_end: Option<TokenType>, // Set when @ is used with start() or end()
     pub label_matchers: Matchers,
+    pub offset: Option<Offset>,
+    /// at modifier can be earlier than UNIX_EPOCH
+    pub at: Option<AtModifier>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
-    // It is safe to assume that this is an VectorSelector
-    // if the parser hasn't returned an error.
-    pub vector_selector: Box<Expr>,
+    pub vector_selector: VectorSelector,
     pub range: Duration,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
-    pub func: Function,       // The function that was called.
-    pub args: Vec<Box<Expr>>, // Arguments used in the call.
+    pub func: Function,
+    pub args: FunctionArgs,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
     Aggregate(AggregateExpr),
@@ -129,75 +260,262 @@ pub enum Expr {
     /// of operator precedence.
     Paren(ParenExpr),
 
+    /// SubqueryExpr represents a subquery.
     Subquery(SubqueryExpr),
 
+    /// NumberLiteral represents a number.
     NumberLiteral(NumberLiteral),
 
+    /// StringLiteral represents a string.
     StringLiteral(StringLiteral),
 
+    /// VectorSelector represents a Vector selection.
     VectorSelector(VectorSelector),
 
+    /// MatrixSelector represents a Matrix selection.
     MatrixSelector(MatrixSelector),
 
     /// Call represents a function call.
-    // TODO: need more descriptions
     Call(Call),
 }
 
 impl Expr {
-    pub fn empty_vector_selector() -> Self {
-        let vs = VectorSelector {
-            name: None,
-            offset: None,
-            start_or_end: None,
-            label_matchers: Matchers::empty(),
-        };
-        Self::VectorSelector(vs)
-    }
-
-    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Self {
+    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
         let vs = VectorSelector {
             name,
             offset: None,
-            start_or_end: None,
+            at: None,
             label_matchers: matchers,
         };
-        Self::VectorSelector(vs)
+        Ok(Self::VectorSelector(vs))
     }
-}
 
-#[derive(Debug, Clone, Copy)]
-pub enum VectorMatchCardinality {
-    OneToOne,
-    ManyToOne,
-    OneToMany,
-    ManyToMany,
-}
+    pub fn new_unary_expr(expr: Expr, op: &Token) -> Result<Self, String> {
+        let ue = match expr {
+            Expr::NumberLiteral(NumberLiteral { val }) => {
+                Expr::NumberLiteral(NumberLiteral { val: -val })
+            }
+            _ => Expr::Unary(UnaryExpr {
+                op: op.id,
+                expr: Box::new(expr),
+            }),
+        };
+        Ok(ue)
+    }
 
-impl Display for VectorMatchCardinality {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            VectorMatchCardinality::OneToOne => write!(f, "one-to-one"),
-            VectorMatchCardinality::ManyToOne => write!(f, "many-to-one"),
-            VectorMatchCardinality::OneToMany => write!(f, "one-to-many"),
-            VectorMatchCardinality::ManyToMany => write!(f, "many-to-many"),
+    pub fn new_subquery_expr(expr: Expr, range: Duration, step: Duration) -> Result<Self, String> {
+        let se = Expr::Subquery(SubqueryExpr {
+            expr: Box::new(expr),
+            offset: None,
+            at: None,
+            range,
+            step,
+        });
+        Ok(se)
+    }
+
+    pub fn new_paren_expr(expr: Expr) -> Result<Self, String> {
+        let ex = Expr::Paren(ParenExpr {
+            expr: Box::new(expr),
+        });
+        Ok(ex)
+    }
+
+    pub fn new_number_literal(val: f64) -> Result<Self, String> {
+        Ok(Expr::NumberLiteral(NumberLiteral { val }))
+    }
+
+    pub fn new_string_literal(val: String) -> Result<Self, String> {
+        Ok(Expr::StringLiteral(StringLiteral { val }))
+    }
+
+    /// NOTE: @ and offset is not set here.
+    pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
+        match expr {
+            Expr::VectorSelector(VectorSelector {
+                offset: Some(_), ..
+            }) => Err("no offset modifiers allowed before range".into()),
+            Expr::VectorSelector(VectorSelector { at: Some(_), .. }) => {
+                Err("no @ modifiers allowed before range".into())
+            }
+            Expr::VectorSelector(vs) => {
+                let ms = Expr::MatrixSelector(MatrixSelector {
+                    vector_selector: vs,
+                    range,
+                });
+                Ok(ms)
+            }
+            _ => Err("ranges only allowed for vector selectors".into()),
         }
     }
+
+    /// set at_modifier for specified Expr, but CAN ONLY be set once.
+    pub fn step_invariant_expr(self, at_modifier: AtModifier) -> Result<Self, String> {
+        let already_set_err = Err("@ <timestamp> may not be set multiple times".into());
+        match self {
+            Expr::VectorSelector(mut vs) => match vs.at {
+                None => {
+                    vs.at = Some(at_modifier);
+                    Ok(Expr::VectorSelector(vs))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+                None => {
+                    ms.vector_selector.at = Some(at_modifier);
+                    Ok(Expr::MatrixSelector(ms))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::Subquery(mut s) => match s.at {
+                None => {
+                    s.at = Some(at_modifier);
+                    Ok(Expr::Subquery(s))
+                }
+                Some(_) => already_set_err,
+            },
+            _ => {
+                Err("@ modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+            }
+        }
+    }
+
+    /// set offset field for specified Expr, but CAN ONLY be set once.
+    pub fn offset_expr(self, offset: Offset) -> Result<Self, String> {
+        let already_set_err = Err("offset may not be set multiple times".into());
+        match self {
+            Expr::VectorSelector(mut vs) => match vs.at {
+                None => {
+                    vs.offset = Some(offset);
+                    Ok(Expr::VectorSelector(vs))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+                None => {
+                    ms.vector_selector.offset = Some(offset);
+                    Ok(Expr::MatrixSelector(ms))
+                }
+                Some(_) => already_set_err,
+            },
+            Expr::Subquery(mut s) => match s.at {
+                None => {
+                    s.offset = Some(offset);
+                    Ok(Expr::Subquery(s))
+                }
+                Some(_) => already_set_err,
+            },
+            _ => {
+                Err("offset modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+            }
+        }
+    }
+
+    pub fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
+        Ok(Expr::Call(Call { func, args }))
+    }
+
+    pub fn new_binary_expr(
+        lhs: Expr,
+        op: TokenType,
+        matching: BinModifier,
+        rhs: Expr,
+    ) -> Result<Expr, String> {
+        let ex = BinaryExpr {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            matching,
+        };
+        Ok(Expr::Binary(ex))
+    }
+
+    pub fn new_aggregate_expr(
+        op: TokenType,
+        grouping: AggModifier,
+        args: FunctionArgs,
+    ) -> Result<Expr, String> {
+        if args.is_empty() {
+            return Err("no arguments for aggregate expression provided".into());
+        }
+
+        let mut desired_args_count = 1;
+        let mut param = None;
+        if token::is_aggregator_with_param(op) {
+            desired_args_count = 2;
+            param = Some(args.first());
+        }
+        if args.len() != desired_args_count {
+            return Err(format!(
+                "wrong number of arguments for aggregate expression provided, expected {}, got {}",
+                desired_args_count,
+                args.len()
+            ));
+        }
+        let ex = AggregateExpr {
+            op,
+            expr: args.last(),
+            param,
+            grouping,
+        };
+        Ok(Expr::Aggregate(ex))
+    }
 }
 
-// VectorMatching describes how elements from two Vectors in a binary
-// operation are supposed to be matched.
-#[derive(Debug, Clone)]
-pub struct VectorMatching {
-    // The cardinality of the two Vectors.
-    pub card: VectorMatchCardinality,
-    // MatchingLabels contains the labels which define equality of a pair of
-    // elements from the Vectors.
-    pub matching_labels: Vec<String>,
-    // On includes the given label names from matching,
-    // rather than excluding them.
-    pub on: bool,
-    // Include contains additional labels that should be included in
-    // the result from the side with the lower cardinality.
-    pub include: Vec<String>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_at_modifier() {
+        let cases = vec![
+            // tuple: (seconds, elapsed milliseconds before or after UNIX_EPOCH)
+            (0.0, 0),
+            (1000.3, 1000300),    // after UNIX_EPOCH
+            (1000.9, 1000900),    // after UNIX_EPOCH
+            (1000.9991, 1000999), // after UNIX_EPOCH
+            (1000.9999, 1001000), // after UNIX_EPOCH
+            (-1000.3, 1000300),   // before UNIX_EPOCH
+            (-1000.9, 1000900),   // before UNIX_EPOCH
+        ];
+
+        for (secs, elapsed) in cases {
+            match AtModifier::try_from(secs).unwrap() {
+                AtModifier::At(st) => {
+                    if secs.is_sign_positive() || secs == 0.0 {
+                        assert_eq!(
+                            elapsed,
+                            st.duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis()
+                        )
+                    } else if secs.is_sign_negative() {
+                        assert_eq!(
+                            elapsed,
+                            SystemTime::UNIX_EPOCH
+                                .duration_since(st)
+                                .unwrap()
+                                .as_millis()
+                        )
+                    }
+                }
+                _ => panic!(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_invalid_at_modifier() {
+        let cases = vec![
+            f64::MAX,
+            f64::MIN,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ];
+
+        for secs in cases {
+            assert!(AtModifier::try_from(secs).is_err())
+        }
+    }
 }
