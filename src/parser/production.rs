@@ -24,8 +24,10 @@ pub fn lexeme_to_string(
     lexer: &dyn NonStreamingLexer<LexemeType, TokenType>,
     lexeme: &Result<LexemeType, LexemeType>,
 ) -> String {
-    let span = lexeme.as_ref().unwrap().span();
-    span_to_string(lexer, span)
+    match *lexeme {
+        Ok(l) => span_to_string(lexer, l.span()),
+        Err(e) => format!("{e:?}"),
+    }
 }
 
 pub fn lexeme_to_token(

@@ -352,7 +352,7 @@ impl Lexer {
                 State::Lexeme(T_LEFT_BRACE)
             }
             // the matched } has been consumed inside braces
-            '}' => State::Err("unexpected right bracket '}'".into()),
+            '}' => State::Err("unexpected right brace '}'".into()),
             '[' => {
                 self.reset_colon_scanned();
                 self.dive_into_brackets();
@@ -1056,7 +1056,7 @@ mod tests {
                 vec![(T_LEFT_BRACE, 0, 1)],
                 Some("unexpected end of input inside braces"),
             ),
-            ("}", vec![], Some("unexpected right bracket '}'")),
+            ("}", vec![], Some("unexpected right brace '}'")),
             (
                 "{{",
                 vec![(T_LEFT_BRACE, 0, 1)],

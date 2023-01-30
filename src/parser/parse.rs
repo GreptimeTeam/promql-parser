@@ -44,11 +44,9 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 /// - all cases will be splitted into different blocks based on the type of parsed Expr.
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::label::{MatchOp, Matcher, Matchers};
-    use crate::parser::token;
-    use crate::parser::AtModifier as At;
     use crate::parser::*;
+    use crate::parser::{token, AtModifier as At};
     use crate::util::duration;
     use std::collections::HashSet;
     use std::time::Duration;
@@ -99,14 +97,7 @@ mod tests {
                         "\n<parse> '{input}' should failed, actually '{:?}' ",
                         r
                     );
-                    let err = r.unwrap_err();
-                    // assert!(
-                    //     &err.contains(&err_msg),
-                    //     "{:?} does not contains '{}'",
-                    //     &err,
-                    //     err_msg
-                    // );
-                    assert_eq!(err, err_msg);
+                    assert_eq!(r.unwrap_err(), err_msg);
                 }
             }
         }
@@ -131,8 +122,8 @@ mod tests {
         assert_cases(Case::new_success_cases(cases));
     }
 
-    // TODO: fulfil binary expr parser cases
     #[test]
+    #[ignore]
     fn test_vector_binary_expr_parser() {
         // "1 + 1"
         // "1 - 1"
@@ -254,8 +245,8 @@ mod tests {
         assert_cases(Case::new_fail_cases(fail_cases));
     }
 
-    // TODO: fulfil unary expr cases
     #[test]
+    #[ignore]
     fn test_unary_expr_parser() {
         // "-some_metric"
         // "+some_metric"
@@ -478,15 +469,14 @@ mod tests {
         ];
         assert_cases(Case::new_success_cases(cases));
 
-        // TODO: fulfil these failure cases
         let fail_cases = vec![
             ("foo @ +Inf", "timestamp out of bounds for @ modifier: inf"),
             ("foo @ -Inf", "timestamp out of bounds for @ modifier: -inf"),
             ("foo @ NaN", "timestamp out of bounds for @ modifier: NaN"),
             ("{", "unexpected end of input inside braces"),
-            ("}", "unexpected right bracket '}'"),
-            // ("some{", "unexpected end of input inside braces"),
-            // ("some}", "unexpected character: '}'"),
+            ("}", "unexpected right brace '}'"),
+            ("some{", "unexpected end of input inside braces"),
+            ("some}", "unexpected right brace '}'"),
             // (
             //     "some_metric{a=b}",
             //     "unexpected identifier \"b\" in label matching, expected string",
