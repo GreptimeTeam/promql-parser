@@ -282,7 +282,7 @@ grouping_label -> Result<Token, String>:
 function_call -> Result<Expr, String>:
                 IDENTIFIER function_call_body
                 {
-                        let name = lexeme_to_string($lexer, &$1);
+                        let name = lexeme_to_string($lexer, &$1)?;
                         match get_function(&name) {
                             None => Err(format!("unknown function with name {}", name)),
                             Some(func) => Expr::new_call(func, $2?)
@@ -401,20 +401,20 @@ label_match_list -> Result<Matchers, String>:
 label_matcher -> Result<Matcher, String>:
                 IDENTIFIER match_op STRING
                 {
-                        let name = lexeme_to_string($lexer, &$1);
-                        let value = lexeme_to_string($lexer, &$3);
+                        let name = lexeme_to_string($lexer, &$1)?;
+                        let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2.id, name, value)
                 }
                 | IDENTIFIER match_op error
                 {
-                        let id = lexeme_to_string($lexer, &$1);
+                        let id = lexeme_to_string($lexer, &$1)?;
                         let op = $2.val;
                         let err = $3;
                         Err(format!("matcher err. identifier:{id}, op:{op}, err:{err}"))
                 }
                 | IDENTIFIER error
                 {
-                        let id = lexeme_to_string($lexer, &$1);
+                        let id = lexeme_to_string($lexer, &$1)?;
                         let err = $2;
                         Err(format!("matcher err. identifier:{id}, err:{err}"))
                 }

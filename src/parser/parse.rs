@@ -477,10 +477,10 @@ mod tests {
             ("}", "unexpected right brace '}'"),
             ("some{", "unexpected end of input inside braces"),
             ("some}", "unexpected right brace '}'"),
-            // (
-            //     "some_metric{a=b}",
-            //     "unexpected identifier \"b\" in label matching, expected string",
-            // ),
+            (
+                "some_metric{a=b}",
+                "unexpected identifier \"b\" in label matching, expected string",
+            ),
             // (
             //     r#"some_metric{a:b="b"}"#,
             //     "unexpected character inside braces: ':'",
