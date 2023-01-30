@@ -309,7 +309,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let offset = Duration::from_secs(60 * 90);
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.offset_expr(Offset::Pos(offset)))
             }),
@@ -317,7 +316,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let offset = Duration::from_secs(60 * 60) + Duration::from_millis(30);
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.offset_expr(Offset::Pos(offset)))
             }),
@@ -325,7 +323,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(1603774568f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -333,7 +330,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(-100f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -341,7 +337,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(0.3f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -349,7 +344,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(3f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -357,7 +351,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(3.33f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -366,7 +359,6 @@ mod tests {
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 // Rounding off
                 let at = At::try_from(3.333f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -375,7 +367,6 @@ mod tests {
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 // Rounding off
                 let at = At::try_from(3.334f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -383,7 +374,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(300f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -391,7 +381,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(0.3).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -399,7 +388,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(10f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -407,7 +395,6 @@ mod tests {
                 let name = String::from("foo");
                 let matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let at = At::try_from(-33f64).unwrap();
-
                 Expr::new_vector_selector(Some(name), Matchers::one(matcher))
                     .and_then(|e| e.step_invariant_expr(at))
             }),
@@ -807,13 +794,48 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_function_call_parser() {
-        // "time()"
-        // floor(some_metric{foo!="bar"})
-        // "rate(some_metric[5m])"
-        // "round(some_metric)"
-        // "round(some_metric, 5)"
+        let cases = vec![
+            (
+                "time()",
+                Expr::new_call(get_function("time").unwrap(), FunctionArgs::empty_args()),
+            ),
+            (r#"floor(some_metric{foo!="bar"})"#, {
+                let name = String::from("some_metric");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+                ]));
+                let vs = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                Expr::new_call(get_function("floor").unwrap(), FunctionArgs::new_args(vs))
+            }),
+            ("rate(some_metric[5m])", {
+                let name = String::from("some_metric");
+                let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
+                let ms = Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|vs| Expr::new_matrix_selector(vs, duration::MINUTE_DURATION * 5))
+                    .unwrap();
+                Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ms))
+            }),
+            ("round(some_metric)", {
+                let name = String::from("some_metric");
+                let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
+                let vs = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                Expr::new_call(get_function("round").unwrap(), FunctionArgs::new_args(vs))
+            }),
+            ("round(some_metric, 5)", {
+                let name = String::from("some_metric");
+                let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
+                let vs = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                let nl = Expr::from(5.0);
+                Expr::new_call(
+                    get_function("round").unwrap(),
+                    FunctionArgs::new_args(vs).append_args(nl),
+                )
+            }),
+        ];
+
+        assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
             // ("floor()", ""),
@@ -825,7 +847,6 @@ mod tests {
             // ("non_existent_function_far_bar()", ""),
             // ("rate(some_metric)", ""),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
-
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
