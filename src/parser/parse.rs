@@ -51,67 +51,45 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
-    enum Case {
-        Success {
-            input: String,
-            expected: Result<Expr, String>,
-        },
-        Fail {
-            input: String,
-            err_msg: String,
-        },
+    struct Case {
+        input: String,
+        expected: Result<Expr, String>,
     }
 
     impl Case {
-        fn new_success_case(input: String, expected: Result<Expr, String>) -> Self {
-            Case::Success { input, expected }
-        }
-        fn new_fail_case(input: String, err_msg: String) -> Self {
-            Case::Fail { input, err_msg }
+        fn new(input: String, expected: Result<Expr, String>) -> Self {
+            Case { input, expected }
         }
 
-        fn new_success_result_cases(cases: Vec<(&str, Result<Expr, String>)>) -> Vec<Case> {
+        fn new_result_cases(cases: Vec<(&str, Result<Expr, String>)>) -> Vec<Case> {
             cases
                 .into_iter()
-                .map(|(input, expected)| Case::new_success_case(String::from(input), expected))
+                .map(|(input, expected)| Case::new(String::from(input), expected))
                 .collect()
         }
 
-        fn new_success_expr_cases(cases: Vec<(&str, Expr)>) -> Vec<Case> {
+        fn new_expr_cases(cases: Vec<(&str, Expr)>) -> Vec<Case> {
             cases
                 .into_iter()
-                .map(|(input, expected)| Case::new_success_case(String::from(input), Ok(expected)))
+                .map(|(input, expected)| Case::new(String::from(input), Ok(expected)))
                 .collect()
         }
 
         fn new_fail_cases(cases: Vec<(&str, &str)>) -> Vec<Case> {
             cases
                 .into_iter()
-                .map(|(input, err_msg)| {
-                    Case::new_fail_case(String::from(input), String::from(err_msg))
-                })
+                .map(|(input, expected)| Case::new(String::from(input), Err(expected.into())))
                 .collect()
         }
     }
 
     fn assert_cases(cases: Vec<Case>) {
-        for case in cases {
-            match case {
-                Case::Success { input, expected } => {
-                    let r = parse(&input);
-                    assert!(r.is_ok(), "\n<parse> <{input:?}> failed, err {r:?} ");
-                    assert_eq!(r, expected, "\n<parse> <{input:?}> does not match");
-                }
-
-                Case::Fail { input, err_msg } => {
-                    let r = parse(&input);
-                    assert!(
-                        r.is_err(),
-                        "\n<parse> <{input:?}> should failed, actually '{r:?}' ",
-                    );
-                    assert_eq!(r.unwrap_err(), err_msg);
-                }
-            }
+        for Case { input, expected } in cases {
+            assert_eq!(
+                parse(&input),
+                expected,
+                "\n<parse> <{input:?}> does not match"
+            );
         }
     }
 
@@ -131,7 +109,7 @@ mod tests {
             ("+5.5e-3", Expr::from(0.0055)),
             ("-0755", Expr::from(-493.0)),
         ];
-        assert_cases(Case::new_success_expr_cases(cases));
+        assert_cases(Case::new_expr_cases(cases));
     }
 
     #[test]
@@ -158,7 +136,7 @@ mod tests {
             // '\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'
             // "`" + `\a\b\f\n\r\t\v\\\"\' - \xFF\377\u1234\U00010111\U0001011111☺` + "`"
         ];
-        assert_cases(Case::new_success_expr_cases(cases));
+        assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
             // "`\\``"
@@ -500,7 +478,7 @@ mod tests {
                 Expr::new_vector_selector(Some(name), matchers)
             }),
         ];
-        assert_cases(Case::new_success_result_cases(cases));
+        assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
             ("foo @ +Inf", "timestamp out of bounds for @ modifier: inf"),
@@ -576,14 +554,14 @@ mod tests {
             {
                 let num = f64::MAX - 1f64;
                 let input = format!("foo @ {num}");
-                let err_msg = format!("timestamp out of bounds for @ modifier: {num}");
-                Case::Fail { input, err_msg }
+                let expected = Err(format!("timestamp out of bounds for @ modifier: {num}"));
+                Case { input, expected }
             },
             {
                 let num = f64::MIN - 1f64;
                 let input = format!("foo @ {num}");
-                let err_msg = format!("timestamp out of bounds for @ modifier: {num}");
-                Case::Fail { input, err_msg }
+                let expected = Err(format!("timestamp out of bounds for @ modifier: {num}"));
+                Case { input, expected }
             },
         ];
         assert_cases(fail_cases);
@@ -657,7 +635,7 @@ mod tests {
             }),
         ];
 
-        assert_cases(Case::new_success_result_cases(cases));
+        assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
             ("foo[5mm]", "bad duration syntax: 5mm"),
@@ -807,7 +785,7 @@ mod tests {
             }),
         ];
 
-        assert_cases(Case::new_success_result_cases(cases));
+        assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
             // ("sum without(==)(some_metric)", ""),
