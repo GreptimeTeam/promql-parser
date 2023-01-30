@@ -360,11 +360,11 @@ impl Lexer {
             }
             // the matched ] has been consumed inside brackets
             ']' => State::Err("unexpected right bracket ']'".into()),
-            ch => State::Err(format!("unexpected character: {ch}")),
+            ch => State::Err(format!("unexpected character: {ch:?}")),
         }
     }
 
-    /// the first number has been seen, so first backup.
+    /// the first number has been consumed, so first backup.
     fn accept_duration(&mut self) -> State {
         self.backup();
         self.scan_number();
@@ -375,7 +375,7 @@ impl Lexer {
         State::Lexeme(T_DURATION)
     }
 
-    /// the first number has been seen, so first backup.
+    /// the first number has been consumed, so first backup.
     fn accept_number_or_duration(&mut self) -> State {
         self.backup();
         if self.scan_number() {
@@ -517,7 +517,7 @@ impl Lexer {
     }
 
     /// scans a string escape sequence. The initial escaping character (\)
-    /// has already been seen.
+    /// has already been consumed.
     // FIXME: more escape logic happens here, mostly to check if number is valid.
     // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex.go#L552
     fn accept_escape(&mut self, symbol: char) -> State {
@@ -528,7 +528,7 @@ impl Lexer {
         }
     }
 
-    /// scans a quoted string. The initial quote has already been seen.
+    /// scans a quoted string. The initial quote has already been consumed.
     fn accept_string(&mut self, symbol: char) -> State {
         while let Some(ch) = self.pop() {
             if ch == '\\' {
@@ -593,14 +593,14 @@ impl Lexer {
 
     // this won't affect the cursor.
     fn is_colon_the_first_char_in_brackets(&mut self) -> bool {
-        // note: colon has already been seen, so first backup
+        // note: colon has already been consumed, so first backup
         self.backup();
         let matched = self.last_char_matches(|ch| ch == '[');
         self.pop();
         matched
     }
 
-    // left brackets has already be seen.
+    // left brackets has already be consumed.
     fn inside_brackets(&mut self) -> State {
         match self.pop() {
             Some(ch) if ch.is_ascii_whitespace() => State::Space,
@@ -928,8 +928,8 @@ mod tests {
     #[test]
     fn test_selectors() {
         let cases = vec![
-            ("北京", vec![], Some("unexpected character: 北")),
-            ("北京='a'", vec![], Some("unexpected character: 北")),
+            ("北京", vec![], Some("unexpected character: '北'")),
+            ("北京='a'", vec![], Some("unexpected character: '北'")),
             ("0a='a'", vec![], Some("bad number or duration syntax: 0a")),
             (
                 "{foo='bar'}",

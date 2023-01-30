@@ -54,6 +54,8 @@ pub struct BinModifier {
 /// while all other labels are preserved in the output.
 /// `by` does the opposite and drops labels that are not listed in the by clause,
 /// even if their label values are identical between all elements of the vector.
+///
+/// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggModifier {
     By(Labels),
@@ -318,14 +320,6 @@ impl Expr {
         Ok(ex)
     }
 
-    pub fn new_number_literal(val: f64) -> Result<Self, String> {
-        Ok(Expr::NumberLiteral(NumberLiteral { val }))
-    }
-
-    pub fn new_string_literal(val: String) -> Result<Self, String> {
-        Ok(Expr::StringLiteral(StringLiteral { val }))
-    }
-
     /// NOTE: @ and offset is not set here.
     pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
         match expr {
@@ -456,6 +450,24 @@ impl Expr {
             grouping,
         };
         Ok(Expr::Aggregate(ex))
+    }
+}
+
+impl From<String> for Expr {
+    fn from(val: String) -> Self {
+        Expr::StringLiteral(StringLiteral { val })
+    }
+}
+
+impl From<&str> for Expr {
+    fn from(s: &str) -> Self {
+        Expr::StringLiteral(StringLiteral { val: s.into() })
+    }
+}
+
+impl From<f64> for Expr {
+    fn from(val: f64) -> Self {
+        Expr::NumberLiteral(NumberLiteral { val })
     }
 }
 

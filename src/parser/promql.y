@@ -255,22 +255,17 @@ grouping_label_list -> Result<Labels, String>:
                         v.insert($3?.val);
                         Ok(v)
                 }
-                | grouping_label
-                {
-                        let mut labels = HashSet::new();
-                        labels.insert($1?.val);
-                        Ok(labels)
-                }
+                | grouping_label { Ok(HashSet::from([$1?.val])) }
                 | grouping_label_list error { Err(format!("err in grouping opts {}", $2)) }
                 ;
 
 grouping_label -> Result<Token, String>:
                 maybe_label
                 {
-                        if !is_label(&$1.val) {
-                            Err(format!("{} is not valid label in grouping opts", $1.val))
-                        } else {
+                        if is_label(&$1.val) {
                             Ok($1)
+                        } else {
+                            Err(format!("{} is not valid label in grouping opts", $1.val))
                         }
                 }
                 | error { Err($1) }
@@ -528,7 +523,7 @@ match_op -> Token:
  * Literals.
  */
 number_literal -> Result<Expr, String>:
-                signed_or_unsigned_number { Expr::new_number_literal($1?) }
+                signed_or_unsigned_number { Ok(Expr::from($1?)) }
                 ;
 
 
@@ -543,11 +538,7 @@ signed_number -> Result<f64, String>:
                 ;
 
 number -> Result<f64, String>:
-                NUMBER
-                {
-                        let s = $lexer.span_str($span);
-                        parse_golang_str_radix(s)
-                }
+                NUMBER { parse_golang_str_radix($lexer.span_str($span)) }
                 ;
 
 duration -> Result<Duration, String>:
@@ -555,7 +546,7 @@ duration -> Result<Duration, String>:
                 ;
 
 string_literal -> Result<Expr, String>:
-                STRING { Expr::new_string_literal(span_to_string($lexer, $span)) }
+                STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
                 ;
 
 /*
