@@ -92,6 +92,7 @@ pub(crate) fn token_display(id: TokenType) -> &'static str {
         T_TIMES => "x",
 
         // Operators.
+        T_OPERATORS_START => "operators_start",
         T_ADD => "+",
         T_DIV => "/",
         T_EQLC => "==",
@@ -111,8 +112,10 @@ pub(crate) fn token_display(id: TokenType) -> &'static str {
         T_SUB => "-",
         T_AT => "@",
         T_ATAN2 => "atan2",
+        T_OPERATORS_END => "operators_end",
 
         // Aggregators.
+        T_AGGREGATORS_START => "aggregators_start",
         T_AVG => "avg",
         T_BOTTOMK => "bottomk",
         T_COUNT => "count",
@@ -125,8 +128,10 @@ pub(crate) fn token_display(id: TokenType) -> &'static str {
         T_STDVAR => "stdvar",
         T_SUM => "sum",
         T_TOPK => "topk",
+        T_AGGREGATORS_END => "aggregators_end",
 
         // Keywords.
+        T_KEYWORDS_START => "keywords_start",
         T_BOOL => "bool",
         T_BY => "by",
         T_GROUP_LEFT => "group_left",
@@ -135,10 +140,20 @@ pub(crate) fn token_display(id: TokenType) -> &'static str {
         T_OFFSET => "offset",
         T_ON => "on",
         T_WITHOUT => "without",
+        T_KEYWORDS_END => "keywords_end",
 
         // Preprocessors.
+        T_PREPROCESSOR_START => "preprocessor_start",
         T_START => "start",
         T_END => "end",
+        T_PREPROCESSOR_END => "preprocessor_end",
+
+        T_STARTSYMBOLS_START
+        | T_START_METRIC
+        | T_START_SERIES_DESCRIPTION
+        | T_START_EXPRESSION
+        | T_START_METRIC_SELECTOR
+        | T_STARTSYMBOLS_END => "not used",
 
         _ => "unknown token",
     }
@@ -184,21 +199,128 @@ mod tests {
 
     #[test]
     fn test_token_display() {
-        assert_eq!("@", token_display(T_AT));
-        assert_eq!("sum", token_display(T_SUM));
-        assert_eq!("start", token_display(T_START));
-        assert_eq!("unknown token", token_display(255));
+        assert_eq!(token_display(T_EQL), "=");
+        assert_eq!(token_display(T_BLANK), "_");
+        assert_eq!(token_display(T_COLON), ":");
+        assert_eq!(token_display(T_COMMA), ",");
+        assert_eq!(token_display(T_COMMENT), "#");
+        assert_eq!(token_display(T_DURATION), "[du]");
+        assert_eq!(token_display(T_EOF), "<eof>");
+        assert_eq!(token_display(T_ERROR), "{Err}");
+        assert_eq!(token_display(T_IDENTIFIER), "{ID}");
+        assert_eq!(token_display(T_LEFT_BRACE), "{");
+        assert_eq!(token_display(T_LEFT_BRACKET), "[");
+        assert_eq!(token_display(T_LEFT_PAREN), "(");
+        assert_eq!(token_display(T_METRIC_IDENTIFIER), "{Metric_ID}");
+        assert_eq!(token_display(T_NUMBER), "{Num}");
+        assert_eq!(token_display(T_RIGHT_BRACE), "}");
+        assert_eq!(token_display(T_RIGHT_BRACKET), "]");
+        assert_eq!(token_display(T_RIGHT_PAREN), ")");
+        assert_eq!(token_display(T_SEMICOLON), ",");
+        assert_eq!(token_display(T_SPACE), "<space>");
+        assert_eq!(token_display(T_STRING), "{Str}");
+        assert_eq!(token_display(T_TIMES), "x");
+        assert_eq!(token_display(T_OPERATORS_START), "operators_start");
+        assert_eq!(token_display(T_ADD), "+");
+        assert_eq!(token_display(T_DIV), "/");
+        assert_eq!(token_display(T_EQLC), "==");
+        assert_eq!(token_display(T_EQL_REGEX), "=~");
+        assert_eq!(token_display(T_GTE), ">=");
+        assert_eq!(token_display(T_GTR), ">");
+        assert_eq!(token_display(T_LAND), "and");
+        assert_eq!(token_display(T_LOR), "or");
+        assert_eq!(token_display(T_LSS), "<");
+        assert_eq!(token_display(T_LTE), "<=");
+        assert_eq!(token_display(T_LUNLESS), "unless");
+        assert_eq!(token_display(T_MOD), "%");
+        assert_eq!(token_display(T_MUL), "*");
+        assert_eq!(token_display(T_NEQ), "!=");
+        assert_eq!(token_display(T_NEQ_REGEX), "!~");
+        assert_eq!(token_display(T_POW), "^");
+        assert_eq!(token_display(T_SUB), "-");
+        assert_eq!(token_display(T_AT), "@");
+        assert_eq!(token_display(T_ATAN2), "atan2");
+        assert_eq!(token_display(T_OPERATORS_END), "operators_end");
+        assert_eq!(token_display(T_AGGREGATORS_START), "aggregators_start");
+        assert_eq!(token_display(T_AVG), "avg");
+        assert_eq!(token_display(T_BOTTOMK), "bottomk");
+        assert_eq!(token_display(T_COUNT), "count");
+        assert_eq!(token_display(T_COUNT_VALUES), "count_values");
+        assert_eq!(token_display(T_GROUP), "group");
+        assert_eq!(token_display(T_MAX), "max");
+        assert_eq!(token_display(T_MIN), "min");
+        assert_eq!(token_display(T_QUANTILE), "quantile");
+        assert_eq!(token_display(T_STDDEV), "stddev");
+        assert_eq!(token_display(T_STDVAR), "stdvar");
+        assert_eq!(token_display(T_SUM), "sum");
+        assert_eq!(token_display(T_TOPK), "topk");
+        assert_eq!(token_display(T_AGGREGATORS_END), "aggregators_end");
+        assert_eq!(token_display(T_KEYWORDS_START), "keywords_start");
+        assert_eq!(token_display(T_BOOL), "bool");
+        assert_eq!(token_display(T_BY), "by");
+        assert_eq!(token_display(T_GROUP_LEFT), "group_left");
+        assert_eq!(token_display(T_GROUP_RIGHT), "group_right");
+        assert_eq!(token_display(T_IGNORING), "ignoring");
+        assert_eq!(token_display(T_OFFSET), "offset");
+        assert_eq!(token_display(T_ON), "on");
+        assert_eq!(token_display(T_WITHOUT), "without");
+        assert_eq!(token_display(T_KEYWORDS_END), "keywords_end");
+        assert_eq!(token_display(T_PREPROCESSOR_START), "preprocessor_start");
+        assert_eq!(token_display(T_START), "start");
+        assert_eq!(token_display(T_END), "end");
+        assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessor_end");
+
+        // if new token added in promql.y, this has to be updated
+        for i in 70..=75 {
+            assert_eq!(token_display(i), "not used");
+        }
+
+        for i in 76..=255 {
+            assert_eq!(token_display(i), "unknown token");
+        }
     }
 
     #[test]
     fn test_get_keyword_tokens() {
+        assert!(matches!(get_keyword_token("and"), Some(T_LAND)));
+        assert!(matches!(get_keyword_token("or"), Some(T_LOR)));
+        assert!(matches!(get_keyword_token("unless"), Some(T_LUNLESS)));
+        assert!(matches!(get_keyword_token("atan2"), Some(T_ATAN2)));
+        assert!(matches!(get_keyword_token("sum"), Some(T_SUM)));
+        assert!(matches!(get_keyword_token("avg"), Some(T_AVG)));
+        assert!(matches!(get_keyword_token("count"), Some(T_COUNT)));
+        assert!(matches!(get_keyword_token("min"), Some(T_MIN)));
+        assert!(matches!(get_keyword_token("max"), Some(T_MAX)));
+        assert!(matches!(get_keyword_token("group"), Some(T_GROUP)));
+        assert!(matches!(get_keyword_token("stddev"), Some(T_STDDEV)));
+        assert!(matches!(get_keyword_token("stdvar"), Some(T_STDVAR)));
+        assert!(matches!(get_keyword_token("topk"), Some(T_TOPK)));
+        assert!(matches!(get_keyword_token("bottomk"), Some(T_BOTTOMK)));
+        assert!(matches!(
+            get_keyword_token("count_values"),
+            Some(T_COUNT_VALUES)
+        ));
         assert!(matches!(get_keyword_token("quantile"), Some(T_QUANTILE)));
         assert!(matches!(get_keyword_token("offset"), Some(T_OFFSET)));
-        assert!(matches!(get_keyword_token("on"), Some(T_ON)));
-        assert!(matches!(get_keyword_token("ignoring"), Some(T_IGNORING)));
         assert!(matches!(get_keyword_token("by"), Some(T_BY)));
         assert!(matches!(get_keyword_token("without"), Some(T_WITHOUT)));
+        assert!(matches!(get_keyword_token("on"), Some(T_ON)));
+        assert!(matches!(get_keyword_token("ignoring"), Some(T_IGNORING)));
+        assert!(matches!(
+            get_keyword_token("group_left"),
+            Some(T_GROUP_LEFT)
+        ));
+        assert!(matches!(
+            get_keyword_token("group_right"),
+            Some(T_GROUP_RIGHT)
+        ));
+        assert!(matches!(get_keyword_token("bool"), Some(T_BOOL)));
+        assert!(matches!(get_keyword_token("start"), Some(T_START)));
+        assert!(matches!(get_keyword_token("end"), Some(T_END)));
+        assert!(matches!(get_keyword_token("inf"), Some(T_NUMBER)));
+        assert!(matches!(get_keyword_token("nan"), Some(T_NUMBER)));
 
+        // not keywords
         assert!(matches!(get_keyword_token("at"), None));
         assert!(matches!(get_keyword_token("unknown"), None));
     }
