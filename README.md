@@ -1,21 +1,36 @@
-# PromQL Lexer and Parser for Rust
+[![codecov](https://codecov.io/gh/GreptimeTeam/promql-parser/branch/develop/graph/badge.svg?token=4GEPVMJYNG)](https://app.codecov.io/gh/GreptimeTeam/promql-parser/tree/develop)
+
+# PromQL Lexer and Parser
 
 The goal of this project is to build a PromQL lexer and parser capable of
 parsing PromQL that conforms with [Prometheus Query][querying-prometheus].
 
 ## Example
 
-TODO
+TODO: update example after publish to crates.io
+
+```
+use promql_parser::parser;
+
+let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+
+match parser::parse(promql) {
+    Ok(ast) => println!("AST: {:?}", ast),
+    Err(info) => println!("Err: {:?}", info),
+}
+```
+
+or you can directly run examples in this repo:
+
+```
+cargo run --example parser
+```
 
 ## PromQL compliance
 
 This crate declares compatible with [prometheus 0372e25][prom-0372e25], which is
 prometheus release 2.40 at Nov 29, 2022. Any revision on PromQL after this
 commit is not guaranteed.
-
-## Design
-
-TODO
 
 ## Contributing
 
