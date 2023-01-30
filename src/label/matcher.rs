@@ -74,10 +74,6 @@ impl Matcher {
         }
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
     // matches returns whether the matcher matches the given string value.
     pub fn is_match(&self, s: &str) -> bool {
         match &self.op {

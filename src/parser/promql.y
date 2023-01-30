@@ -193,16 +193,6 @@ label_matcher -> Result<Matcher, String>:
 /*
  * Metric descriptions.
  */
-metric -> Result<Labels, String>:
-                metric_identifier label_set
-                {
-                        let label = Label::new(METRIC_NAME.to_string(), $1.val);
-                        Ok($2?.append(label))
-                }
-                | label_set { $1 }
-                ;
-
-
 metric_identifier -> Token:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
@@ -226,41 +216,6 @@ metric_identifier -> Token:
                 | WITHOUT { lexeme_to_token($lexer, $1) }
                 | START { lexeme_to_token($lexer, $1) }
                 | END { lexeme_to_token($lexer, $1) }
-                ;
-
-label_set -> Result<Labels, String>:
-                LEFT_BRACE label_set_list RIGHT_BRACE { $2 }
-                | LEFT_BRACE label_set_list COMMA RIGHT_BRACE { $2 }
-                | LEFT_BRACE RIGHT_BRACE { Ok(Labels::empty()) }
-                ;
-
-label_set_list -> Result<Labels, String>:
-                label_set_list COMMA label_set_item { Ok($1?.append($3?)) }
-                | label_set_item { Ok(Labels::new(vec![$1?])) }
-                ;
-
-label_set_item -> Result<Label, String>:
-                IDENTIFIER EQL STRING
-                {
-                        let name = lexeme_to_string($lexer, &$1);
-                        let value = lexeme_to_string($lexer, &$3);
-                        Ok(Label::new(name, value))
-                }
-                | IDENTIFIER EQL error
-                {
-                        let err = $3;
-                        Err(format!("label set error, {err}"))
-                }
-                | IDENTIFIER error
-                {
-                        let err = $2;
-                        Err(format!("label set error, {err}"))
-                }
-                | error
-                {
-                        let err = $1;
-                        Err(format!("label set error, {err}"))
-                }
                 ;
 
 error -> String:
@@ -385,9 +340,6 @@ string_literal -> Result<Expr, String>:
 %%
 use std::time::Duration;
 
-/* FIXME: rebase after rules are merged */
-use crate::parser::{
-    Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string,
-};
-use crate::label::{Label, Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
+use crate::parser::{Expr, Token, lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
 use crate::util::{parse_duration, parse_golang_str_radix};
