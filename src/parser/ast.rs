@@ -210,7 +210,7 @@ impl NumberLiteral {
 
 impl PartialEq for NumberLiteral {
     fn eq(&self, other: &Self) -> bool {
-        self.val == other.val
+        self.val == other.val || self.val.is_nan() && other.val.is_nan()
     }
 }
 
