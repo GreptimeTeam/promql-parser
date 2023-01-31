@@ -547,7 +547,7 @@ signed_number -> Result<f64, String>:
                 ;
 
 number -> Result<f64, String>:
-                NUMBER { parse_golang_str_radix($lexer.span_str($span)) }
+                NUMBER { parse_str_radix($lexer.span_str($span)) }
                 ;
 
 duration -> Result<Duration, String>:
@@ -581,4 +581,4 @@ use crate::parser::{
     VectorMatchCardinality, VectorMatchModifier,
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
-use crate::util::{parse_duration, parse_golang_str_radix};
+use crate::util::{parse_duration, parse_str_radix};
