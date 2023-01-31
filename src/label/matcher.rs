@@ -113,6 +113,11 @@ impl Matchers {
         }
     }
 
+    pub fn one(matcher: Matcher) -> Self {
+        let matchers = HashSet::from([matcher]);
+        Self { matchers }
+    }
+
     pub fn new(matchers: HashSet<Matcher>) -> Self {
         Self { matchers }
     }
