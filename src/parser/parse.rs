@@ -23,7 +23,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
                 println!("{err:?}")
             }
             match res {
-                Some(r) => check_ast(r),
+                Some(r) => r,
                 None => Err("empty AST".into()),
             }
         }
@@ -32,8 +32,9 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 
 // TODO: check the validation of the expr
 // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/parse.go#L436
-fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
-    expr
+#[allow(dead_code)]
+fn check_ast(_expr: Expr) -> Result<Expr, String> {
+    todo!();
 }
 
 /// cases in original prometheus is a huge slices which are constructed more than 3000 lines,
@@ -45,8 +46,7 @@ fn check_ast(expr: Result<Expr, String>) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use crate::label::{MatchOp, Matcher, Matchers};
-    use crate::parser::*;
-    use crate::parser::{token, AtModifier as At};
+    use crate::parser::{token, AggModifier, AtModifier as At, Expr, FunctionArgs, Offset};
     use crate::util::duration;
     use std::collections::HashSet;
     use std::time::Duration;
@@ -86,7 +86,7 @@ mod tests {
     fn assert_cases(cases: Vec<Case>) {
         for Case { input, expected } in cases {
             assert_eq!(
-                parse(&input),
+                crate::parser::parse(&input),
                 expected,
                 "\n<parse> <{input:?}> does not match"
             );
