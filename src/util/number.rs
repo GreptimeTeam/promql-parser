@@ -12,34 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// parse str radix from golang format.
+/// parse str radix from golang format, but: if 8 or 9 is included
+/// in octal literal, it will be treated as decimal literal.
 /// This function panics if str is not dec, oct, hex format
-pub fn parse_golang_str_radix(s: &str) -> Result<f64, String> {
-    let s: String = s
+pub fn parse_str_radix(s: &str) -> Result<f64, String> {
+    let st: String = s
         .chars()
         .map(|c| c.to_ascii_lowercase())
         .filter(|c| !c.is_whitespace())
         .collect();
 
-    if s.starts_with('0') || s.starts_with("-0") || s.starts_with("+0") {
-        let i = if s.starts_with("-0x") {
-            i64::from_str_radix(s.strip_prefix("-0x").unwrap(), 16).map(|x| -x)
-        } else if s.starts_with("+0x") {
-            i64::from_str_radix(s.strip_prefix("+0x").unwrap(), 16)
-        } else if s.starts_with("0x") {
-            i64::from_str_radix(s.strip_prefix("0x").unwrap(), 16)
-        } else if s.starts_with("-0") {
-            i64::from_str_radix(s.strip_prefix("-0").unwrap(), 8).map(|x| -x)
-        } else if s.starts_with("+0") {
-            i64::from_str_radix(s.strip_prefix("+0").unwrap(), 8)
+    if st.starts_with('0') || st.starts_with("-0") || st.starts_with("+0") {
+        let i = if st.starts_with("-0x") {
+            i64::from_str_radix(st.strip_prefix("-0x").unwrap(), 16).map(|x| -x)
+        } else if st.starts_with("+0x") {
+            i64::from_str_radix(st.strip_prefix("+0x").unwrap(), 16)
+        } else if st.starts_with("0x") {
+            i64::from_str_radix(st.strip_prefix("0x").unwrap(), 16)
+        } else if st.contains('8') || st.contains('9') {
+            st.parse()
+        } else if st.starts_with("-0") {
+            i64::from_str_radix(st.strip_prefix("-0").unwrap(), 8).map(|x| -x)
+        } else if st.starts_with("+0") {
+            i64::from_str_radix(st.strip_prefix("+0").unwrap(), 8)
         } else {
-            i64::from_str_radix(s.strip_prefix('0').unwrap(), 8) // starts with '0'
+            i64::from_str_radix(st.strip_prefix('0').unwrap(), 8) // starts with '0'
         };
         return i
             .map(|x| x as f64)
             .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"));
     }
-    s.parse::<f64>()
+    st.parse()
         .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
 }
 
@@ -48,19 +51,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_golang_str_radix() {
-        assert_eq!(parse_golang_str_radix("0x2f").unwrap(), 47_f64);
-        assert_eq!(parse_golang_str_radix("+0x2f").unwrap(), 47_f64);
-        assert_eq!(parse_golang_str_radix("- 0x2f ").unwrap(), -47_f64);
-        assert_eq!(parse_golang_str_radix("017").unwrap(), 15_f64);
-        assert_eq!(parse_golang_str_radix("-017").unwrap(), -15_f64);
-        assert_eq!(parse_golang_str_radix("+017").unwrap(), 15_f64);
-        assert_eq!(parse_golang_str_radix("2023.0128").unwrap(), 2023.0128_f64);
-        assert_eq!(parse_golang_str_radix("-3.14").unwrap(), -3.14_f64);
-        assert_eq!(parse_golang_str_radix("+2.718").unwrap(), 2.718_f64);
+    fn test_parse_str_radix() {
+        assert_eq!(parse_str_radix("0x2f").unwrap(), 47_f64);
+        assert_eq!(parse_str_radix("+0x2f").unwrap(), 47_f64);
+        assert_eq!(parse_str_radix("- 0x2f ").unwrap(), -47_f64);
+        assert_eq!(parse_str_radix("017").unwrap(), 15_f64);
+        assert_eq!(parse_str_radix("-017").unwrap(), -15_f64);
+        assert_eq!(parse_str_radix("+017").unwrap(), 15_f64);
+        assert_eq!(parse_str_radix("2023.0128").unwrap(), 2023.0128_f64);
+        assert_eq!(parse_str_radix("-3.14").unwrap(), -3.14_f64);
+        assert_eq!(parse_str_radix("+2.718").unwrap(), 2.718_f64);
+        assert_eq!(parse_str_radix("089").unwrap(), 89_f64);
+        assert_eq!(parse_str_radix("+089").unwrap(), 89_f64);
+        assert_eq!(parse_str_radix("-089").unwrap(), -89_f64);
 
-        assert!(parse_golang_str_radix("rust").is_err());
-        assert!(parse_golang_str_radix("0xgolang").is_err());
-        assert!(parse_golang_str_radix("0clojure").is_err());
+        assert!(parse_str_radix("rust").is_err());
+        assert!(parse_str_radix("0xgolang").is_err());
+        assert!(parse_str_radix("0clojure").is_err());
     }
 }

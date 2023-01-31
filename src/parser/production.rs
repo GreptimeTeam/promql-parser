@@ -23,9 +23,10 @@ pub fn span_to_string(lexer: &dyn NonStreamingLexer<LexemeType, TokenType>, span
 pub fn lexeme_to_string(
     lexer: &dyn NonStreamingLexer<LexemeType, TokenType>,
     lexeme: &Result<LexemeType, LexemeType>,
-) -> String {
-    let span = lexeme.as_ref().unwrap().span();
-    span_to_string(lexer, span)
+) -> Result<String, String> {
+    lexeme
+        .map(|l| span_to_string(lexer, l.span()))
+        .map_err(|e| format!("ParseError {e:?}"))
 }
 
 pub fn lexeme_to_token(
@@ -36,6 +37,7 @@ pub fn lexeme_to_token(
     Token::new(lexeme.tok_id(), span_to_string(lexer, lexeme.span()))
 }
 
+// TODO: more test cases
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,8 +59,9 @@ mod tests {
         let lexeme = LexemeType::new(token::T_IDENTIFIER, 43, 3);
         let lexer = lex::lexer(input);
         assert!(lexer.is_ok());
+
         let lexeme_str = lexeme_to_string(&lexer.unwrap(), &Ok(lexeme));
-        assert_eq!(lexeme_str, "job");
+        assert_eq!(lexeme_str, Ok(String::from("job")));
     }
 
     #[test]
