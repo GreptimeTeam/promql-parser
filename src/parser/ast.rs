@@ -144,7 +144,6 @@ pub struct EvalStmt {
 }
 
 /// <aggr-op> [without|by (<label list>)] ([parameter,] <vector expression>)
-/// or
 /// <aggr-op>([parameter,] <vector expression>) [without|by (<label list>)]
 ///
 /// parameter is only required for count_values, quantile, topk and bottomk.
@@ -187,15 +186,15 @@ pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
 
+/// <instant_query> '[' <range> ':' [<resolution>] ']' [ @ <float_literal> ] [ offset <duration> ]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Offset>,
-
-    /// at modifier can be earlier than UNIX_EPOCH
     pub at: Option<AtModifier>,
     pub range: Duration,
-    pub step: Duration,
+    /// Default is the global evaluation interval.
+    pub step: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -211,7 +210,7 @@ impl NumberLiteral {
 
 impl PartialEq for NumberLiteral {
     fn eq(&self, other: &Self) -> bool {
-        self.val == other.val
+        self.val == other.val || self.val.is_nan() && other.val.is_nan()
     }
 }
 
@@ -227,7 +226,6 @@ pub struct VectorSelector {
     pub name: Option<String>,
     pub label_matchers: Matchers,
     pub offset: Option<Offset>,
-    /// at modifier can be earlier than UNIX_EPOCH
     pub at: Option<AtModifier>,
 }
 
@@ -302,7 +300,11 @@ impl Expr {
         Ok(ue)
     }
 
-    pub fn new_subquery_expr(expr: Expr, range: Duration, step: Duration) -> Result<Self, String> {
+    pub fn new_subquery_expr(
+        expr: Expr,
+        range: Duration,
+        step: Option<Duration>,
+    ) -> Result<Self, String> {
         let se = Expr::Subquery(SubqueryExpr {
             expr: Box::new(expr),
             offset: None,
@@ -340,27 +342,26 @@ impl Expr {
         }
     }
 
-    /// set at_modifier for specified Expr, but CAN ONLY be set once.
-    pub fn step_invariant_expr(self, at_modifier: AtModifier) -> Result<Self, String> {
+    pub fn at_expr(self, at: AtModifier) -> Result<Self, String> {
         let already_set_err = Err("@ <timestamp> may not be set multiple times".into());
         match self {
             Expr::VectorSelector(mut vs) => match vs.at {
                 None => {
-                    vs.at = Some(at_modifier);
+                    vs.at = Some(at);
                     Ok(Expr::VectorSelector(vs))
                 }
                 Some(_) => already_set_err,
             },
             Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
                 None => {
-                    ms.vector_selector.at = Some(at_modifier);
+                    ms.vector_selector.at = Some(at);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
             },
             Expr::Subquery(mut s) => match s.at {
                 None => {
-                    s.at = Some(at_modifier);
+                    s.at = Some(at);
                     Ok(Expr::Subquery(s))
                 }
                 Some(_) => already_set_err,
@@ -375,21 +376,21 @@ impl Expr {
     pub fn offset_expr(self, offset: Offset) -> Result<Self, String> {
         let already_set_err = Err("offset may not be set multiple times".into());
         match self {
-            Expr::VectorSelector(mut vs) => match vs.at {
+            Expr::VectorSelector(mut vs) => match vs.offset {
                 None => {
                     vs.offset = Some(offset);
                     Ok(Expr::VectorSelector(vs))
                 }
                 Some(_) => already_set_err,
             },
-            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+            Expr::MatrixSelector(mut ms) => match ms.vector_selector.offset {
                 None => {
                     ms.vector_selector.offset = Some(offset);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
             },
-            Expr::Subquery(mut s) => match s.at {
+            Expr::Subquery(mut s) => match s.offset {
                 None => {
                     s.offset = Some(offset);
                     Ok(Expr::Subquery(s))

@@ -26,15 +26,16 @@ pub fn lexeme_to_string(
 ) -> Result<String, String> {
     lexeme
         .map(|l| span_to_string(lexer, l.span()))
-        .map_err(|e| format!("ParseError {e:?}"))
+        .map_err(|e| format!("ParseStringError {e:?}"))
 }
 
 pub fn lexeme_to_token(
     lexer: &dyn NonStreamingLexer<LexemeType, TokenType>,
     lexeme: Result<LexemeType, LexemeType>,
-) -> Token {
-    let lexeme = lexeme.unwrap();
-    Token::new(lexeme.tok_id(), span_to_string(lexer, lexeme.span()))
+) -> Result<Token, String> {
+    lexeme
+        .map(|l| Token::new(l.tok_id(), span_to_string(lexer, l.span())))
+        .map_err(|e| format!("ParseTokenError {e:?}"))
 }
 
 // TODO: more test cases
@@ -71,6 +72,6 @@ mod tests {
         let lexer = lex::lexer(input);
         assert!(lexer.is_ok());
         let token = lexeme_to_token(&lexer.unwrap(), Ok(lexeme));
-        assert_eq!(Token::new(token::T_IDENTIFIER, "job".into()), token);
+        assert_eq!(Ok(Token::new(token::T_IDENTIFIER, "job".into())), token);
     }
 }

@@ -149,12 +149,18 @@ expr -> Result<Expr, String>:
  * Aggregations.
  */
 aggregate_expr -> Result<Expr, String>:
-                aggregate_op aggregate_modifier function_call_body { Expr::new_aggregate_expr($1.id, $2?, $3?) }
-                | aggregate_op function_call_body aggregate_modifier { Expr::new_aggregate_expr($1.id, $3?, $2?) }
+                aggregate_op aggregate_modifier function_call_body
+                {
+                        Expr::new_aggregate_expr($1?.id, $2?, $3?)
+                }
+                | aggregate_op function_call_body aggregate_modifier
+                {
+                        Expr::new_aggregate_expr($1?.id, $3?, $2?)
+                }
                 | aggregate_op function_call_body
                 {
                         let modifier = AggModifier::By(HashSet::new());
-                        Expr::new_aggregate_expr($1.id, modifier, $2?)
+                        Expr::new_aggregate_expr($1?.id, modifier, $2?)
                 }
                 | aggregate_op error { Err($2) }
                 ;
@@ -270,9 +276,10 @@ grouping_label_list -> Result<Labels, String>:
 grouping_label -> Result<Token, String>:
                 maybe_label
                 {
-                        let label = &$1.val;
+                        let token = $1?;
+                        let label = &token.val;
                         if is_label(label) {
-                            Ok($1)
+                            Ok(token)
                         } else {
                             Err(format!("{label} is not valid label in grouping opts"))
                         }
@@ -328,17 +335,17 @@ step_invariant_expr -> Result<Expr, String>:
                 expr AT signed_or_unsigned_number
                 {
                         let at = AtModifier::try_from($3?)?;
-                        $1?.step_invariant_expr(at)
+                        $1?.at_expr(at)
                 }
                 | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
                 {
-                        let at = AtModifier::try_from($3)?;
-                        $1?.step_invariant_expr(at)
+                        let at = AtModifier::try_from($3?)?;
+                        $1?.at_expr(at)
                 }
                 | expr AT error { Err($3) }
                 ;
 
-at_modifier_preprocessors -> Token:
+at_modifier_preprocessors -> Result<Token, String>:
                 START { lexeme_to_token($lexer, $1) }
                 | END { lexeme_to_token($lexer, $1) }
                 ;
@@ -348,12 +355,16 @@ at_modifier_preprocessors -> Token:
  */
 matrix_selector -> Result<Expr, String>:
                 expr LEFT_BRACKET duration RIGHT_BRACKET
-                { Expr::new_matrix_selector($1?, $3?) }
+                {
+                        Expr::new_matrix_selector($1?, $3?)
+                }
                 ;
 
 subquery_expr -> Result<Expr, String>:
                 expr LEFT_BRACKET duration COLON maybe_duration RIGHT_BRACKET
-                { Expr::new_subquery_expr($1?, $3?, $5?) }
+                {
+                        Expr::new_subquery_expr($1?, $3?, $5?)
+                }
                 | expr LEFT_BRACKET duration COLON duration error { Err($6) }
                 | expr LEFT_BRACKET duration COLON error { Err($5) }
                 | expr LEFT_BRACKET duration error { Err($4) }
@@ -366,7 +377,7 @@ subquery_expr -> Result<Expr, String>:
 unary_expr -> Result<Expr, String>:
                 /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
                 /* FIXME: unary_op has same precedence with MUL, otherwise Rule Conflict */
-                unary_op expr { Expr::new_unary_expr($2?, &$1) }
+                unary_op expr { Expr::new_unary_expr($2?, &$1?) }
                 ;
 
 /*
@@ -375,15 +386,15 @@ unary_expr -> Result<Expr, String>:
 vector_selector -> Result<Expr, String>:
                 metric_identifier label_matchers
                 {
-                        let name = $1.val;
-                        let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
+                        let name = $1?.val;
+                        let matcher = Matcher::new_eq_metric_matcher(name.clone());
                         let matchers = $2?.append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
                 }
                 | metric_identifier
                 {
-                        let name = $1.val;
-                        let matcher = Matcher::new(MatchOp::Equal, METRIC_NAME.into(), name.clone());
+                        let name = $1?.val;
+                        let matcher = Matcher::new_eq_metric_matcher(name.clone());
                         let matchers = Matchers::empty().append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
                 }
@@ -407,12 +418,12 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
                         let value = lexeme_to_string($lexer, &$3)?;
-                        Matcher::new_matcher($2.id, name, value)
+                        Matcher::new_matcher($2?.id, name, value)
                 }
                 | IDENTIFIER match_op error
                 {
                         let id = lexeme_to_string($lexer, &$1)?;
-                        let op = $2.val;
+                        let op = $2?.val;
                         let err = $3;
                         Err(format!("matcher err. identifier:{id}, op:{op}, err:{err}"))
                 }
@@ -432,7 +443,7 @@ label_matcher -> Result<Matcher, String>:
 /*
  * Metric descriptions.
  */
-metric_identifier -> Token:
+metric_identifier -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
                 | BY { lexeme_to_token($lexer, $1) }
@@ -469,7 +480,7 @@ error -> String:
 /*
  * Keyword lists.
  */
-aggregate_op -> Token:
+aggregate_op -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
                 | COUNT { lexeme_to_token($lexer, $1) }
@@ -486,7 +497,7 @@ aggregate_op -> Token:
 
 // inside of grouping options label names can be recognized as keywords by the lexer.
 // This is a list of keywords that could also be a label name.
-maybe_label -> Token:
+maybe_label -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
                 | BOOL { lexeme_to_token($lexer, $1) }
                 | BOTTOMK { lexeme_to_token($lexer, $1) }
@@ -516,12 +527,12 @@ maybe_label -> Token:
                 | ATAN2 { lexeme_to_token($lexer, $1) }
                 ;
 
-unary_op -> Token:
+unary_op -> Result<Token, String>:
                 ADD { lexeme_to_token($lexer, $1) }
                 | SUB { lexeme_to_token($lexer, $1) }
                 ;
 
-match_op -> Token:
+match_op -> Result<Token, String>:
                 EQL { lexeme_to_token($lexer, $1) }
                 | NEQ { lexeme_to_token($lexer, $1) }
                 | EQL_REGEX { lexeme_to_token($lexer, $1) }
@@ -551,19 +562,29 @@ number -> Result<f64, String>:
                 ;
 
 duration -> Result<Duration, String>:
-                DURATION { parse_duration($lexer.span_str($span)) }
+                DURATION
+                {
+                        parse_duration($lexer.span_str($span))
+                }
                 ;
 
 string_literal -> Result<Expr, String>:
-                STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
+                STRING
+                {
+                        Ok(Expr::from(span_to_string($lexer, $span)))
+                }
                 ;
 
 /*
  * Wrappers for optional arguments.
  */
-maybe_duration -> Result<Duration, String>:
-                { Ok(Duration::ZERO) }
-                | duration { $1 }
+
+maybe_duration -> Result<Option<Duration>, String>:
+                { Ok(None) }
+                | duration
+                {
+                        $1.map(Some)
+                }
                 ;
 
 maybe_grouping_labels -> Result<Labels, String>:
@@ -575,7 +596,7 @@ maybe_grouping_labels -> Result<Labels, String>:
 
 use std::collections::HashSet;
 use std::time::Duration;
-use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
+use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::{
     AggModifier, AtModifier, BinModifier, Expr, FunctionArgs, Offset, Token,
     VectorMatchCardinality, VectorMatchModifier,
