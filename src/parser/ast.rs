@@ -99,6 +99,26 @@ impl TryFrom<Token> for AtModifier {
     }
 }
 
+impl TryFrom<NumberLiteral> for AtModifier {
+    type Error = String;
+
+    fn try_from(num: NumberLiteral) -> Result<Self, Self::Error> {
+        let NumberLiteral { val } = num;
+        AtModifier::try_from(val)
+    }
+}
+
+impl TryFrom<Expr> for AtModifier {
+    type Error = String;
+
+    fn try_from(ex: Expr) -> Result<Self, Self::Error> {
+        match ex {
+            Expr::NumberLiteral(NumberLiteral { val }) => AtModifier::try_from(val),
+            _ => Err(format!("invalid f64 after @ modifier")),
+        }
+    }
+}
+
 impl TryFrom<f64> for AtModifier {
     type Error = String;
 
