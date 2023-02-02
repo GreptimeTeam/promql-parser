@@ -35,7 +35,7 @@ pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
     OneToMany(Labels),
-    // ManyToMany, // useless so far
+    ManyToMany, // logical/set binary operators
 }
 
 /// Binary Expr Modifier
@@ -51,7 +51,7 @@ pub struct BinModifier {
 }
 
 impl BinModifier {
-    pub fn empty() -> Self {
+    pub fn default_modifier() -> Self {
         Self {
             card: VectorMatchCardinality::OneToOne,
             matching: VectorMatchModifier::On(HashSet::new()),
