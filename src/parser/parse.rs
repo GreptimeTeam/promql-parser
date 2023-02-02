@@ -1001,42 +1001,41 @@ mod tests {
                         })
                 },
             ),
-            // (
-            //     r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] @ 1603775091)[4m:3s]"#,
-            //     {
-            //         let name = String::from("foo");
-            //         let matchers = Matchers::new(HashSet::from([
-            //             Matcher::new_eq_metric_matcher(name.clone()),
-            //             Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-            //         ]));
-            //         Expr::new_vector_selector(Some(name), matchers)
-            //             .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
-            //             .and_then(|ex| {
-            //                 Expr::new_call(
-            //                     get_function("rate").unwrap(),
-            //                     FunctionArgs::new_args(ex),
-            //                 )
-            //             })
-            //             .and_then(|ex| {
-            //                 Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None)
-            //             })
-            //             .and_then(|ex| ex.at_expr(At::try_from(1603775091_f64).unwrap()))
-            //             .and_then(|ex| {
-            //                 Expr::new_call(
-            //                     get_function("min_over_time").unwrap(),
-            //                     FunctionArgs::new_args(ex),
-            //                 )
-            //             })
-            //             .and_then(|ex| {
-            //                 Expr::new_subquery_expr(
-            //                     ex,
-            //                     duration::MINUTE_DURATION * 4,
-            //                     Some(Duration::from_secs(3)),
-            //                 )
-            //             })
-            //     },
-            // )
-            // ,
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] @ 1603775091)[4m:3s]"#,
+                {
+                    let name = String::from("foo");
+                    let matchers = Matchers::new(HashSet::from([
+                        Matcher::new_eq_metric_matcher(name.clone()),
+                        Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
+                    ]));
+                    Expr::new_vector_selector(Some(name), matchers)
+                        .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
+                        .and_then(|ex| {
+                            Expr::new_call(
+                                get_function("rate").unwrap(),
+                                FunctionArgs::new_args(ex),
+                            )
+                        })
+                        .and_then(|ex| {
+                            Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None)
+                        })
+                        .and_then(|ex| ex.at_expr(At::try_from(1603775091_f64).unwrap()))
+                        .and_then(|ex| {
+                            Expr::new_call(
+                                get_function("min_over_time").unwrap(),
+                                FunctionArgs::new_args(ex),
+                            )
+                        })
+                        .and_then(|ex| {
+                            Expr::new_subquery_expr(
+                                ex,
+                                duration::MINUTE_DURATION * 4,
+                                Some(Duration::from_secs(3)),
+                            )
+                        })
+                },
+            ),
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] @ -160377509)[4m:3s]"#,
                 {
