@@ -283,7 +283,20 @@ pub struct VectorSelector {
     pub at: Option<AtModifier>,
 }
 
-/// directly create an instant vector with only METRIC_NAME matcher
+/// directly create an instant vector with only METRIC_NAME matcher.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use promql_parser::parser::{Expr, VectorSelector};
+/// use promql_parser::label::{MatchOp, Matcher, Matchers};
+///
+/// let name = String::from("foo");
+/// let matcher = Matcher::new_eq_metric_matcher(name.clone());
+/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
+/// assert_eq!(Expr::VectorSelector(VectorSelector::from("foo")), vs.unwrap());
 impl From<String> for VectorSelector {
     fn from(name: String) -> Self {
         let matcher = Matcher::new_eq_metric_matcher(name.clone());
@@ -546,6 +559,12 @@ impl From<&str> for Expr {
 impl From<f64> for Expr {
     fn from(val: f64) -> Self {
         Expr::NumberLiteral(NumberLiteral { val })
+    }
+}
+
+impl From<VectorSelector> for Expr {
+    fn from(vs: VectorSelector) -> Self {
+        Expr::VectorSelector(vs)
     }
 }
 
