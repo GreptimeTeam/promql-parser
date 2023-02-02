@@ -16,6 +16,7 @@
 use crate::label::{Labels, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
 /// Matching Modifier, for VectorMatching of binary expr.
@@ -103,8 +104,7 @@ impl TryFrom<NumberLiteral> for AtModifier {
     type Error = String;
 
     fn try_from(num: NumberLiteral) -> Result<Self, Self::Error> {
-        let NumberLiteral { val } = num;
-        AtModifier::try_from(val)
+        AtModifier::try_from(num.val)
     }
 }
 
@@ -113,8 +113,8 @@ impl TryFrom<Expr> for AtModifier {
 
     fn try_from(ex: Expr) -> Result<Self, Self::Error> {
         match ex {
-            Expr::NumberLiteral(NumberLiteral { val }) => AtModifier::try_from(val),
-            _ => Err(format!("invalid f64 after @ modifier")),
+            Expr::NumberLiteral(nl) => AtModifier::try_from(nl),
+            _ => Err("invalid float value after @ modifier".into()),
         }
     }
 }
@@ -178,9 +178,9 @@ pub struct AggregateExpr {
     pub grouping: AggModifier,
 }
 
+/// UnaryExpr will negate the expr
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
-    pub op: TokenType,
     pub expr: Box<Expr>,
 }
 
@@ -236,6 +236,14 @@ impl PartialEq for NumberLiteral {
 
 impl Eq for NumberLiteral {}
 
+impl Neg for NumberLiteral {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        NumberLiteral { val: -self.val }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
@@ -247,6 +255,15 @@ pub struct VectorSelector {
     pub label_matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+impl Neg for VectorSelector {
+    type Output = UnaryExpr;
+
+    fn neg(self) -> Self::Output {
+        let ex = Expr::VectorSelector(self);
+        UnaryExpr { expr: Box::new(ex) }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -307,17 +324,12 @@ impl Expr {
         Ok(Self::VectorSelector(vs))
     }
 
-    pub fn new_unary_expr(expr: Expr, op: &Token) -> Result<Self, String> {
-        let ue = match expr {
-            Expr::NumberLiteral(NumberLiteral { val }) => {
-                Expr::NumberLiteral(NumberLiteral { val: -val })
-            }
-            _ => Expr::Unary(UnaryExpr {
-                op: op.id,
-                expr: Box::new(expr),
-            }),
-        };
-        Ok(ue)
+    pub fn new_unary_expr(expr: Expr) -> Result<Self, String> {
+        match expr {
+            Expr::StringLiteral(_) => Err("unary expression only allowed on expressions of type scalar or instant vector, got: string".into()),
+            Expr::MatrixSelector(_) => Err("unary expression only allowed on expressions of type scalar or instant vector, got: range vector".into()),
+            _ => Ok(-expr),
+        }
     }
 
     pub fn new_subquery_expr(
@@ -489,6 +501,19 @@ impl From<&str> for Expr {
 impl From<f64> for Expr {
     fn from(val: f64) -> Self {
         Expr::NumberLiteral(NumberLiteral { val })
+    }
+}
+
+impl Neg for Expr {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Expr::NumberLiteral(nl) => Expr::NumberLiteral(-nl),
+            _ => Expr::Unary(UnaryExpr {
+                expr: Box::new(self),
+            }),
+        }
     }
 }
 

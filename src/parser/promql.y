@@ -115,9 +115,8 @@ START_METRIC_SELECTOR
 %left MUL DIV MOD ATAN2
 %right POW
 
-// Offset modifiers do not have associativity.
-%nonassoc OFFSET
-%nonassoc AT
+// Offset and At modifiers do not have associativity.
+%nonassoc OFFSET AT
 
 // This ensures that it is always attempted to parse range or subquery selectors when a left
 // bracket is encountered.
@@ -167,24 +166,24 @@ aggregate_modifier -> Result<AggModifier, String>:
  * Binary expressions.
  */
 // Operator precedence only works if each of those is listed separately.
-/* binary_expr -> Result<Expr, String>: */
-/*                 expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) } */
-/*                 ; */
+binary_expr -> Result<Expr, String>:
+                expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                ;
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
 // reduces allocations
@@ -306,6 +305,7 @@ paren_expr -> Result<Expr, String>:
  */
 offset_expr -> Result<Expr, String>:
                 expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
+                | expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
                 | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
                 ;
 
@@ -315,23 +315,12 @@ offset_expr -> Result<Expr, String>:
  * the original name of this production head is step_invariant_expr
  */
 at_expr -> Result<Expr, String>:
-                expr AT number_literal
-                {
-                        match $3? {
-                            Expr::NumberLiteral(NumberLiteral {val}) => {
-                                $1?.at_expr(AtModifier::try_from(val)?)
-                            },
-                            _ => Err(format!("invalid f64 after @ modifier")),
-                        }
-                }
+                expr AT number_literal { $1?.at_expr(AtModifier::try_from($3?)?) }
+                | expr AT ADD number_literal { $1?.at_expr(AtModifier::try_from($4?)?) }
                 | expr AT SUB number_literal
                 {
-                        match $4? {
-                            Expr::NumberLiteral(NumberLiteral {val}) => {
-                                $1?.at_expr(AtModifier::try_from(-val)?)
-                            },
-                            _ => Err(format!("invalid f64 after @ modifier")),
-                        }
+                        let nl = $4.map(|nl| -nl);
+                        $1?.at_expr(AtModifier::try_from(nl?)?)
                 }
                 | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
                 {
@@ -366,14 +355,8 @@ subquery_expr -> Result<Expr, String>:
  * Unary expressions.
  */
 unary_expr -> Result<Expr, String>:
-                /* gives the rule the same precedence as MUL. This aligns with mathematical conventions */
-                /* FIXME: unary_op has same precedence with MUL, otherwise Rule Conflict */
                 ADD expr { $2 }
-                | SUB expr
-                {
-                        let token = lexeme_to_token($lexer, $1)?;
-                        Expr::new_unary_expr($2?, &token)
-                }
+                | SUB expr { Expr::new_unary_expr($2?) }
                 ;
 
 /*
@@ -500,11 +483,6 @@ maybe_label -> Result<Token, String>:
                 | ATAN2 { lexeme_to_token($lexer, $1) }
                 ;
 
-unary_op -> Result<Token, String>:
-                ADD { lexeme_to_token($lexer, $1) }
-                | SUB { lexeme_to_token($lexer, $1) }
-                ;
-
 match_op -> Result<Token, String>:
                 EQL { lexeme_to_token($lexer, $1) }
                 | NEQ { lexeme_to_token($lexer, $1) }
@@ -554,7 +532,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::{
-    AggModifier, AtModifier, BinModifier, Expr, FunctionArgs, NumberLiteral,
+    AggModifier, AtModifier, BinModifier, Expr, FunctionArgs,
     Offset, Token, VectorMatchCardinality, VectorMatchModifier,
     get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
 };
