@@ -47,7 +47,8 @@ fn check_ast(_expr: Expr) -> Result<Expr, String> {
 mod tests {
     use crate::label::{MatchOp, Matcher, Matchers};
     use crate::parser::{
-        get_function, token, AggModifier, AtModifier as At, Expr, FunctionArgs, Offset,
+        get_function, token, AggModifier, AtModifier as At, BinModifier, Expr, FunctionArgs,
+        Offset, VectorSelector,
     };
     use crate::util::duration;
     use std::collections::HashSet;
@@ -154,26 +155,137 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_vector_binary_expr() {
-        // "1 + 1"
-        // "1 - 1"
-        // "1 * 1"
-        // "1 / 1"
-        // "1 % 1"
-        // "1 == bool 1"
-        // "1 != bool 1"
-        // "1 > bool 1"
-        // "1 >= bool 1"
-        // "1 < bool 1"
-        // "1 <= bool 1"
-        // "-1^2"
-        // "-1*2"
-        // "-1+2"
-        // "-1^-2" // unary on binary expr
-        // "+1 + -2 * 1"
-        // "1 + 2/(3*1)"
-        // "1 < bool 2 - 1 * 2"
+        let cases = vec![
+            ("1 + 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_ADD, matching, rhs)
+            }),
+            ("1 - 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_SUB, matching, rhs)
+            }),
+            ("1 * 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_MUL, matching, rhs)
+            }),
+            ("1 / 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_DIV, matching, rhs)
+            }),
+            ("1 % 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_MOD, matching, rhs)
+            }),
+            ("1 == bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_EQLC, matching, rhs)
+            }),
+            ("1 != bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_NEQ, matching, rhs)
+            }),
+            ("1 > bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_GTR, matching, rhs)
+            }),
+            ("1 >= bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_GTE, matching, rhs)
+            }),
+            ("1 < bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_LSS, matching, rhs)
+            }),
+            ("1 <= bool 1", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(1.0);
+                let matching = BinModifier::empty().return_bool(true);
+                Expr::new_binary_expr(lhs, token::T_LTE, matching, rhs)
+            }),
+            ("-1^2", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(2.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_POW, matching, rhs).map(|ex| -ex)
+            }),
+            ("-1*2", {
+                let lhs = Expr::from(-1.0);
+                let rhs = Expr::from(2.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_MUL, matching, rhs)
+            }),
+            ("-1+2", {
+                let lhs = Expr::from(-1.0);
+                let rhs = Expr::from(2.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_ADD, matching, rhs)
+            }),
+            ("-1^-2", {
+                let lhs = Expr::from(1.0);
+                let rhs = Expr::from(-2.0);
+                let matching = BinModifier::empty();
+                Expr::new_binary_expr(lhs, token::T_POW, matching, rhs).map(|ex| -ex)
+            }),
+            ("+1 + -2 * 1", {
+                Expr::new_binary_expr(
+                    Expr::from(-2.0),
+                    token::T_MUL,
+                    BinModifier::empty(),
+                    Expr::from(1.0),
+                )
+                .and_then(|ex| {
+                    Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, BinModifier::empty(), ex)
+                })
+            }),
+            // "1 + 2/(3*1)"
+            ("1 < bool 2 - 1 * 2", {
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_MUL,
+                    BinModifier::empty(),
+                    Expr::from(2.0),
+                )
+                .and_then(|ex| {
+                    Expr::new_binary_expr(Expr::from(2.0), token::T_SUB, BinModifier::empty(), ex)
+                })
+                .and_then(|ex| {
+                    Expr::new_binary_expr(
+                        Expr::from(1.0),
+                        token::T_LSS,
+                        BinModifier::empty().return_bool(true),
+                        ex,
+                    )
+                })
+            }),
+            // ("foo * bar", {
+            //     let lhs = Expr::from(1.0);
+            //     let rhs = Expr::from(1.0);
+            //     let matching = BinModifier::empty();
+            //     Expr::new_binary_expr(lhs, token::T_ADD, matching, rhs)
+            // }),
+        ];
+        assert_cases(Case::new_result_cases(cases));
         // "foo * bar"
         // "foo * sum"
         // "foo == 1"
@@ -280,23 +392,21 @@ mod tests {
     #[test]
     fn test_unary_expr() {
         let cases = vec![
-            ("-some_metric", {
-                let name = String::from("some_metric");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher)).map(|ex| -ex)
-            }),
-            ("+some_metric", {
-                let name = String::from("some_metric");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-            }),
-            (" +some_metric", {
-                let name = String::from("some_metric");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-            }),
+            (
+                "-some_metric",
+                Expr::new_unary_expr(Expr::VectorSelector(VectorSelector::from("some_metric")))
+                    .unwrap(),
+            ),
+            (
+                "+some_metric",
+                Expr::VectorSelector(VectorSelector::from("some_metric")),
+            ),
+            (
+                " +some_metric",
+                Expr::VectorSelector(VectorSelector::from("some_metric")),
+            ),
         ];
-        assert_cases(Case::new_result_cases(cases));
+        assert_cases(Case::new_expr_cases(cases));
 
         let cases = vec![
             (r#"-"string""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
@@ -308,190 +418,181 @@ mod tests {
     #[test]
     fn test_vector_selector() {
         let cases = vec![
-            ("foo", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-            }),
-            ("min", {
-                let name = String::from("min");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-            }),
-            ("foo offset 5m", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(60 * 5))))
-            }),
-            ("foo offset -7m", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let offset = Duration::from_secs(60 * 7);
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.offset_expr(Offset::Neg(offset)))
-            }),
-            ("foo OFFSET 1h30m", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let offset = Duration::from_secs(60 * 90);
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.offset_expr(Offset::Pos(offset)))
-            }),
-            ("foo OFFSET 1h30ms", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let offset = Duration::from_secs(60 * 60) + Duration::from_millis(30);
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.offset_expr(Offset::Pos(offset)))
-            }),
-            ("foo @ 1603774568", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(1603774568f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ -100", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(-100f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ .3", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(0.3f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3.", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(3f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3.33", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(3.33f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3.3333", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                // Rounding off
-                let at = At::try_from(3.333f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3.3335", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                // Rounding off
-                let at = At::try_from(3.334f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3e2", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(300f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 3e-1", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(0.3).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ 0xA", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(10f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            ("foo @ -3.3e1", {
-                let name = String::from("foo");
-                let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let at = At::try_from(-33f64).unwrap();
-                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
-                    .and_then(|ex| ex.at_expr(at))
-            }),
-            (r#"foo:bar{a="bc"}"#, {
-                let name = String::from("foo:bar");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
-            }),
-            (r#"foo{NaN='bc'}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
-            }),
-            (r#"foo{bar='}'}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
-            }),
-            (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
-                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
-                    Matcher::new_matcher(
-                        token::T_EQL_REGEX,
-                        String::from("test"),
-                        String::from("test"),
-                    )
-                    .unwrap(),
-                    Matcher::new_matcher(
-                        token::T_NEQ_REGEX,
-                        String::from("bar"),
-                        String::from("baz"),
-                    )
-                    .unwrap(),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
-            }),
-            (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
-                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
-                    Matcher::new_matcher(
-                        token::T_EQL_REGEX,
-                        String::from("test"),
-                        String::from("test"),
-                    )
-                    .unwrap(),
-                    Matcher::new_matcher(
-                        token::T_NEQ_REGEX,
-                        String::from("bar"),
-                        String::from("baz"),
-                    )
-                    .unwrap(),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
-            }),
+            ("foo", Expr::VectorSelector(VectorSelector::from("foo"))),
+            ("min", Expr::VectorSelector(VectorSelector::from("min"))),
+            (
+                "foo offset 5m",
+                Expr::VectorSelector(VectorSelector::from("foo"))
+                    .offset_expr(Offset::Pos(Duration::from_secs(60 * 5))),
+            ),
+            // ("foo offset -7m", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let offset = Duration::from_secs(60 * 7);
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.offset_expr(Offset::Neg(offset)))
+            // }),
+            // ("foo OFFSET 1h30m", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let offset = Duration::from_secs(60 * 90);
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.offset_expr(Offset::Pos(offset)))
+            // }),
+            // ("foo OFFSET 1h30ms", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let offset = Duration::from_secs(60 * 60) + Duration::from_millis(30);
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.offset_expr(Offset::Pos(offset)))
+            // }),
+            // ("foo @ 1603774568", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(1603774568f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ -100", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(-100f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ .3", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(0.3f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3.", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(3f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3.33", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(3.33f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3.3333", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     // Rounding off
+            //     let at = At::try_from(3.333f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3.3335", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     // Rounding off
+            //     let at = At::try_from(3.334f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3e2", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(300f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 3e-1", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(0.3).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ 0xA", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(10f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // ("foo @ -3.3e1", {
+            //     let name = String::from("foo");
+            //     let matcher = Matcher::new_eq_metric_matcher(name.clone());
+            //     let at = At::try_from(-33f64).unwrap();
+            //     Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            //         .and_then(|ex| ex.at_expr(at))
+            // }),
+            // (r#"foo:bar{a="bc"}"#, {
+            //     let name = String::from("foo:bar");
+            //     let matchers = Matchers::new(HashSet::from([
+            //         Matcher::new_eq_metric_matcher(name.clone()),
+            //         Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
+            //     ]));
+            //     Expr::new_vector_selector(Some(name), matchers)
+            // }),
+            // (r#"foo{NaN='bc'}"#, {
+            //     let name = String::from("foo");
+            //     let matchers = Matchers::new(HashSet::from([
+            //         Matcher::new_eq_metric_matcher(name.clone()),
+            //         Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
+            //     ]));
+            //     Expr::new_vector_selector(Some(name), matchers)
+            // }),
+            // (r#"foo{bar='}'}"#, {
+            //     let name = String::from("foo");
+            //     let matchers = Matchers::new(HashSet::from([
+            //         Matcher::new_eq_metric_matcher(name.clone()),
+            //         Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
+            //     ]));
+            //     Expr::new_vector_selector(Some(name), matchers)
+            // }),
+            // (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
+            //     let name = String::from("foo");
+            //     let matchers = Matchers::new(HashSet::from([
+            //         Matcher::new_eq_metric_matcher(name.clone()),
+            //         Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
+            //         Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+            //         Matcher::new_matcher(
+            //             token::T_EQL_REGEX,
+            //             String::from("test"),
+            //             String::from("test"),
+            //         )
+            //         .unwrap(),
+            //         Matcher::new_matcher(
+            //             token::T_NEQ_REGEX,
+            //             String::from("bar"),
+            //             String::from("baz"),
+            //         )
+            //         .unwrap(),
+            //     ]));
+            //     Expr::new_vector_selector(Some(name), matchers)
+            // }),
+            // (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
+            //     let name = String::from("foo");
+            //     let matchers = Matchers::new(HashSet::from([
+            //         Matcher::new_eq_metric_matcher(name.clone()),
+            //         Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
+            //         Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+            //         Matcher::new_matcher(
+            //             token::T_EQL_REGEX,
+            //             String::from("test"),
+            //             String::from("test"),
+            //         )
+            //         .unwrap(),
+            //         Matcher::new_matcher(
+            //             token::T_NEQ_REGEX,
+            //             String::from("bar"),
+            //             String::from("baz"),
+            //         )
+            //         .unwrap(),
+            //     ]));
+            //     Expr::new_vector_selector(Some(name), matchers)
+            // }),
         ];
-        assert_cases(Case::new_result_cases(cases));
+        assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
             ("foo @ +Inf", "timestamp out of bounds for @ modifier: inf"),

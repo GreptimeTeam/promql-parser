@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #![allow(dead_code)]
-use crate::label::{Labels, Matchers};
+use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use std::collections::HashSet;
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -47,6 +48,31 @@ pub struct BinModifier {
     pub matching: VectorMatchModifier,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
+}
+
+impl BinModifier {
+    pub fn empty() -> Self {
+        Self {
+            card: VectorMatchCardinality::OneToOne,
+            matching: VectorMatchModifier::On(HashSet::new()),
+            return_bool: false,
+        }
+    }
+
+    pub fn card(mut self, card: VectorMatchCardinality) -> Self {
+        self.card = card;
+        self
+    }
+
+    pub fn matching(mut self, matching: VectorMatchModifier) -> Self {
+        self.matching = matching;
+        self
+    }
+
+    pub fn return_bool(mut self, return_bool: bool) -> Self {
+        self.return_bool = return_bool;
+        self
+    }
 }
 
 /// Aggregation Modifier
@@ -255,6 +281,25 @@ pub struct VectorSelector {
     pub label_matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+/// directly create an instant vector with only METRIC_NAME matcher
+impl From<String> for VectorSelector {
+    fn from(name: String) -> Self {
+        let matcher = Matcher::new_eq_metric_matcher(name.clone());
+        VectorSelector {
+            name: Some(name),
+            offset: None,
+            at: None,
+            label_matchers: Matchers::one(matcher),
+        }
+    }
+}
+
+impl From<&str> for VectorSelector {
+    fn from(name: &str) -> Self {
+        VectorSelector::from(name.to_string())
+    }
 }
 
 impl Neg for VectorSelector {

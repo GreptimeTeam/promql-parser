@@ -126,12 +126,12 @@ START_METRIC_SELECTOR
 expr -> Result<Expr, String>:
                 aggregate_expr { $1 }
                 | at_expr { $1 }
-                /* | binary_expr { $1 } */
+                | binary_expr { $1 }
                 | function_call { $1 }
                 | matrix_selector { $1 }
                 | number_literal { $1 }
                 | offset_expr { $1 }
-                | paren_expr { $1 }
+                /* | paren_expr { $1 } */
                 | string_literal { $1 }
                 | subquery_expr { $1 }
                 | unary_expr  { $1 }
@@ -355,8 +355,8 @@ subquery_expr -> Result<Expr, String>:
  * Unary expressions.
  */
 unary_expr -> Result<Expr, String>:
-                ADD expr { $2 }
-                | SUB expr { Expr::new_unary_expr($2?) }
+                ADD expr %prec MUL { $2 }
+                | SUB expr %prec MUL { Expr::new_unary_expr($2?) }
                 ;
 
 /*
