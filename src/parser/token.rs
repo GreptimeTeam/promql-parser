@@ -179,18 +179,41 @@ impl Display for Token {
     }
 }
 
+impl From<TokenType> for Token {
+    fn from(id: TokenType) -> Self {
+        let val = token_display(id).to_string();
+        Token { id, val }
+    }
+}
+
 impl Token {
     pub fn new(id: TokenType, val: String) -> Self {
         Self { id, val }
     }
 
     pub fn is_aggregator_with_param(&self) -> bool {
-        is_aggregator_with_param(self.id)
+        self.id == T_TOPK
+            || self.id == T_BOTTOMK
+            || self.id == T_COUNT_VALUES
+            || self.id == T_QUANTILE
     }
-}
 
-pub fn is_aggregator_with_param(id: TokenType) -> bool {
-    id == T_TOPK || id == T_BOTTOMK || id == T_COUNT_VALUES || id == T_QUANTILE
+    pub fn is_comparison_operator(&self) -> bool {
+        self.id == T_EQLC
+            || self.id == T_NEQ
+            || self.id == T_LTE
+            || self.id == T_LSS
+            || self.id == T_GTE
+            || self.id == T_GTR
+    }
+
+    pub fn is_set_operator(&self) -> bool {
+        self.id == T_LAND || self.id == T_LOR || self.id == T_LUNLESS
+    }
+
+    pub fn is_operator(&self) -> bool {
+        self.id > T_OPERATORS_START && self.id < T_OPERATORS_END
+    }
 }
 
 #[cfg(test)]
@@ -327,14 +350,6 @@ mod tests {
 
     #[test]
     fn test_with_param() {
-        assert!(is_aggregator_with_param(T_TOPK));
-        assert!(is_aggregator_with_param(T_BOTTOMK));
-        assert!(is_aggregator_with_param(T_COUNT_VALUES));
-        assert!(is_aggregator_with_param(T_QUANTILE));
-
-        assert!(!is_aggregator_with_param(T_COUNT));
-        assert!(!is_aggregator_with_param(T_SUM));
-
         assert!(Token::new(T_TOPK, "top".into()).is_aggregator_with_param());
         assert!(Token::new(T_BOTTOMK, "bottomk".into()).is_aggregator_with_param());
         assert!(Token::new(T_COUNT_VALUES, "count_values".into()).is_aggregator_with_param());
@@ -343,5 +358,56 @@ mod tests {
         assert!(!Token::new(T_MAX, "max".into()).is_aggregator_with_param());
         assert!(!Token::new(T_MIN, "min".into()).is_aggregator_with_param());
         assert!(!Token::new(T_AVG, "avg".into()).is_aggregator_with_param());
+    }
+
+    #[test]
+    fn test_comparison_operator() {
+        assert!(Token::from(T_EQLC).is_comparison_operator());
+        assert!(Token::from(T_NEQ).is_comparison_operator());
+        assert!(Token::from(T_LTE).is_comparison_operator());
+        assert!(Token::from(T_LSS).is_comparison_operator());
+        assert!(Token::from(T_GTE).is_comparison_operator());
+        assert!(Token::from(T_GTR).is_comparison_operator());
+
+        assert!(!Token::from(T_ADD).is_comparison_operator());
+        assert!(!Token::from(T_LAND).is_comparison_operator());
+    }
+
+    #[test]
+    fn test_is_set_operator() {
+        assert!(Token::from(T_LAND).is_set_operator());
+        assert!(Token::from(T_LOR).is_set_operator());
+        assert!(Token::from(T_LUNLESS).is_set_operator());
+
+        assert!(!Token::from(T_ADD).is_set_operator());
+        assert!(!Token::from(T_MAX).is_set_operator());
+        assert!(!Token::from(T_NEQ).is_set_operator());
+    }
+
+    #[test]
+    fn test_is_operator() {
+        assert!(Token::from(T_ADD).is_operator());
+        assert!(Token::from(T_DIV).is_operator());
+        assert!(Token::from(T_EQLC).is_operator());
+        assert!(Token::from(T_EQL_REGEX).is_operator());
+        assert!(Token::from(T_GTE).is_operator());
+        assert!(Token::from(T_GTR).is_operator());
+        assert!(Token::from(T_LAND).is_operator());
+        assert!(Token::from(T_LOR).is_operator());
+        assert!(Token::from(T_LSS).is_operator());
+        assert!(Token::from(T_LTE).is_operator());
+        assert!(Token::from(T_LUNLESS).is_operator());
+        assert!(Token::from(T_MOD).is_operator());
+        assert!(Token::from(T_MUL).is_operator());
+        assert!(Token::from(T_NEQ).is_operator());
+        assert!(Token::from(T_NEQ_REGEX).is_operator());
+        assert!(Token::from(T_POW).is_operator());
+        assert!(Token::from(T_SUB).is_operator());
+        assert!(Token::from(T_AT).is_operator());
+        assert!(Token::from(T_ATAN2).is_operator());
+
+        assert!(!Token::from(T_SUM).is_operator());
+        assert!(!Token::from(T_OPERATORS_START).is_operator());
+        assert!(!Token::from(T_OPERATORS_END).is_operator());
     }
 }

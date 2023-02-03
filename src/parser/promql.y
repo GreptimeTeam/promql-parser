@@ -131,7 +131,7 @@ expr -> Result<Expr, String>:
                 | matrix_selector { $1 }
                 | number_literal { $1 }
                 | offset_expr { $1 }
-                /* | paren_expr { $1 } */
+                | paren_expr { $1 }
                 | string_literal { $1 }
                 | subquery_expr { $1 }
                 | unary_expr  { $1 }
@@ -187,55 +187,41 @@ binary_expr -> Result<Expr, String>:
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
 // reduces allocations
-bin_modifier -> Result<BinModifier, String>:
+bin_modifier -> Result<Option<BinModifier>, String>:
                 group_modifiers { $1 }
                 ;
 
-bool_modifier -> Result<BinModifier, String>:
-                {
-                        let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(HashSet::new());
-                        let return_bool = false;
-                        Ok(BinModifier {card, matching, return_bool})
-                }
+bool_modifier -> Result<Option<BinModifier>, String>:
+                { Ok(None) }
                 | BOOL
                 {
-                        let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(HashSet::new());
-                        let return_bool = true;
-                        Ok(BinModifier {card, matching, return_bool})
+                        let modifier = BinModifier::default_modifier().return_bool(true);
+                        Ok(Some(modifier))
                 }
                 ;
 
-on_or_ignoring -> Result<BinModifier, String>:
+on_or_ignoring -> Result<Option<BinModifier>, String>:
                 bool_modifier IGNORING grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.matching = VectorMatchModifier::Ignoring($3?);
-                        Ok(modifier)
+                        Ok(BinModifier::update_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
                 }
                 | bool_modifier ON grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.matching = VectorMatchModifier::On($3?);
-                        Ok(modifier)
+                        Ok(BinModifier::update_matching($1?, Some(VectorMatchModifier::On($3?))))
                 }
                 ;
 
-group_modifiers -> Result<BinModifier, String>:
+/* FIXME: group_op without labels */
+group_modifiers -> Result<Option<BinModifier>, String>:
                 bool_modifier { $1 }
                 | on_or_ignoring { $1 }
-                | on_or_ignoring GROUP_LEFT maybe_grouping_labels
+                | on_or_ignoring GROUP_LEFT grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.card = VectorMatchCardinality::ManyToOne($3?);
-                        Ok(modifier)
+                        Ok(BinModifier::update_card($1?, VectorMatchCardinality::ManyToOne($3?)))
                 }
-                | on_or_ignoring GROUP_RIGHT maybe_grouping_labels
+                | on_or_ignoring GROUP_RIGHT grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.card = VectorMatchCardinality::OneToMany($3?);
-                        Ok(modifier)
+                        Ok(BinModifier::update_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
                 ;
 
@@ -519,11 +505,6 @@ maybe_duration -> Result<Option<Duration>, String>:
                 {
                         $1.map(Some)
                 }
-                ;
-
-maybe_grouping_labels -> Result<Labels, String>:
-                { Ok(HashSet::new()) }
-                | grouping_labels { $1 }
                 ;
 
 %%

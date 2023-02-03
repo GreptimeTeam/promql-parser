@@ -15,8 +15,7 @@
 #![allow(dead_code)]
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, T_END, T_START};
-use crate::parser::{Function, FunctionArgs, Token, TokenType};
-use std::collections::HashSet;
+use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -26,6 +25,19 @@ use std::time::{Duration, SystemTime};
 pub enum VectorMatchModifier {
     On(Labels),
     Ignoring(Labels),
+}
+
+impl VectorMatchModifier {
+    pub fn labels(&self) -> &Labels {
+        match self {
+            VectorMatchModifier::On(l) => l,
+            VectorMatchModifier::Ignoring(l) => l,
+        }
+    }
+
+    pub fn is_on(&self) -> bool {
+        matches!(*self, VectorMatchModifier::On(_))
+    }
 }
 
 /// The label list provided with the group_left or group_right modifier contains
@@ -38,6 +50,16 @@ pub enum VectorMatchCardinality {
     ManyToMany, // logical/set binary operators
 }
 
+impl VectorMatchCardinality {
+    pub fn labels(&self) -> Option<&Labels> {
+        match self {
+            VectorMatchCardinality::ManyToOne(l) => Some(l),
+            VectorMatchCardinality::OneToMany(l) => Some(l),
+            _ => None,
+        }
+    }
+}
+
 /// Binary Expr Modifier
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinModifier {
@@ -45,33 +67,81 @@ pub struct BinModifier {
     /// If they are not this field is None.
     pub card: VectorMatchCardinality,
     /// on/ignoring on labels
-    pub matching: VectorMatchModifier,
+    pub matching: Option<VectorMatchModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
 }
 
-impl BinModifier {
-    pub fn default_modifier() -> Self {
+impl Default for BinModifier {
+    fn default() -> Self {
         Self {
             card: VectorMatchCardinality::OneToOne,
-            matching: VectorMatchModifier::On(HashSet::new()),
+            matching: None,
             return_bool: false,
         }
     }
+}
 
+impl BinModifier {
+    pub fn default_modifier() -> Self {
+        Default::default()
+    }
     pub fn card(mut self, card: VectorMatchCardinality) -> Self {
         self.card = card;
         self
     }
 
-    pub fn matching(mut self, matching: VectorMatchModifier) -> Self {
+    pub fn matching(mut self, matching: Option<VectorMatchModifier>) -> Self {
         self.matching = matching;
         self
+    }
+
+    pub fn update_matching(
+        modifier: Option<BinModifier>,
+        matching: Option<VectorMatchModifier>,
+    ) -> Option<BinModifier> {
+        let modifier = match modifier {
+            Some(modifier) => modifier,
+            None => Default::default(),
+        };
+        Some(modifier.matching(matching))
+    }
+
+    pub fn update_card(
+        modifier: Option<BinModifier>,
+        card: VectorMatchCardinality,
+    ) -> Option<BinModifier> {
+        let modifier = match modifier {
+            Some(modifier) => modifier,
+            None => Default::default(),
+        };
+        Some(modifier.card(card))
     }
 
     pub fn return_bool(mut self, return_bool: bool) -> Self {
         self.return_bool = return_bool;
         self
+    }
+
+    pub fn is_labels_joint(&self) -> bool {
+        if let Some(labels) = self.card.labels() {
+            if let Some(matching) = &self.matching {
+                return matching.labels().is_disjoint(labels);
+            };
+        };
+        false
+    }
+
+    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+        if let Some(labels) = self.card.labels() {
+            if let Some(matching) = &self.matching {
+                return Some(matching.labels().intersection(labels).into_iter().collect());
+            }
+        };
+        None
+    }
+    pub fn is_on(&self) -> bool {
+        matches!(&self.matching, Some(matching) if matching.is_on())
     }
 }
 
@@ -196,7 +266,7 @@ pub struct EvalStmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     /// The used aggregation operation.
-    pub op: TokenType,
+    pub op: Token,
     /// The Vector expression over which is aggregated.
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
@@ -218,13 +288,40 @@ pub struct UnaryExpr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
     /// The operation of the expression.
-    pub op: TokenType,
+    pub op: Token,
     /// The operands on the left sides of the operator.
     pub lhs: Box<Expr>,
     /// The operands on the right sides of the operator.
     pub rhs: Box<Expr>,
 
-    pub matching: BinModifier,
+    pub matching: Option<BinModifier>,
+}
+
+impl BinaryExpr {
+    pub fn is_on(&self) -> bool {
+        matches!(&self.matching, Some(matching) if matching.is_on())
+    }
+
+    pub fn return_bool(&self) -> bool {
+        match &self.matching {
+            Some(matching) => matching.return_bool,
+            None => false,
+        }
+    }
+
+    pub fn is_labels_joint(&self) -> bool {
+        match &self.matching {
+            Some(matching) => matching.is_labels_joint(),
+            None => false,
+        }
+    }
+
+    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+        match &self.matching {
+            Some(matching) => matching.intersect_labels(),
+            None => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -500,9 +597,10 @@ impl Expr {
     pub fn new_binary_expr(
         lhs: Expr,
         op: TokenType,
-        matching: BinModifier,
+        matching: Option<BinModifier>,
         rhs: Expr,
     ) -> Result<Expr, String> {
+        let op = Token::from(op);
         let ex = BinaryExpr {
             op,
             lhs: Box::new(lhs),
@@ -521,9 +619,11 @@ impl Expr {
             return Err("no arguments for aggregate expression provided".into());
         }
 
+        let op = Token::from(op);
+
         let mut desired_args_count = 1;
         let mut param = None;
-        if token::is_aggregator_with_param(op) {
+        if op.is_aggregator_with_param() {
             desired_args_count = 2;
             param = Some(args.first());
         }
@@ -541,6 +641,29 @@ impl Expr {
             grouping,
         };
         Ok(Expr::Aggregate(ex))
+    }
+
+    pub fn value_type(&self) -> ValueType {
+        match self {
+            Expr::Aggregate(_) => ValueType::Vector,
+            Expr::Unary(ex) => ex.expr.value_type(),
+            Expr::Binary(ex) => {
+                if ex.lhs.value_type() == ValueType::Scalar
+                    && ex.rhs.value_type() == ValueType::Scalar
+                {
+                    ValueType::Scalar
+                } else {
+                    ValueType::Vector
+                }
+            }
+            Expr::Paren(ex) => ex.expr.value_type(),
+            Expr::Subquery(_) => ValueType::Matrix,
+            Expr::NumberLiteral(_) => ValueType::Scalar,
+            Expr::StringLiteral(_) => ValueType::String,
+            Expr::VectorSelector(_) => ValueType::Vector,
+            Expr::MatrixSelector(_) => ValueType::Matrix,
+            Expr::Call(ex) => ex.func.return_type,
+        }
     }
 }
 
@@ -578,6 +701,115 @@ impl Neg for Expr {
                 expr: Box::new(self),
             }),
         }
+    }
+}
+
+/// check_ast checks the validity of the provided AST. This includes type checking.
+/// Recursively check correct typing for child nodes and raise errors in case of bad typing.
+#[allow(dead_code)]
+pub fn check_ast(expr: Expr) -> Result<Expr, String> {
+    match expr {
+        Expr::Binary(mut ex) => {
+            if !ex.op.is_operator() {
+                let val = ex.op.val;
+                return Err(format!(
+                    "binary expression does not support operator '{val}'"
+                ));
+            }
+
+            if ex.return_bool() && !ex.op.is_comparison_operator() {
+                return Err("bool modifier can only be used on comparison operators".into());
+            }
+
+            if ex.op.is_comparison_operator()
+                && ex.lhs.value_type() == ValueType::Scalar
+                && ex.rhs.value_type() == ValueType::Scalar
+                && !ex.return_bool()
+            {
+                return Err("comparisons between scalars must use BOOL modifier".into());
+            }
+
+            // For `on` matching, a label can only appear in one of the lists.
+            // Every time series of the result vector must be uniquely identifiable.
+            if ex.is_on() && ex.is_labels_joint() {
+                if let Some(labels) = ex.intersect_labels() {
+                    if labels.len() > 0 {
+                        let label = labels[0];
+                        return Err(format!(
+                            "label '{label}' must not occur in ON and GROUP clause at once"
+                        ));
+                    }
+                };
+            }
+
+            let lhs = check_ast(*ex.lhs.clone())?;
+            let rhs = check_ast(*ex.rhs.clone())?;
+
+            if lhs.value_type() != ValueType::Scalar && lhs.value_type() != ValueType::Vector {
+                return Err(
+                    "binary expression must contain only scalar and instant vector types".into(),
+                );
+            }
+            if rhs.value_type() != ValueType::Scalar && rhs.value_type() != ValueType::Vector {
+                return Err(
+                    "binary expression must contain only scalar and instant vector types".into(),
+                );
+            }
+
+            if (lhs.value_type() == ValueType::Scalar || rhs.value_type() == ValueType::Scalar)
+                && ex.op.is_set_operator()
+            {
+                let val = ex.op.val;
+                return Err(format!(
+                    "set operator '{val}' not allowed in binary scalar expression"
+                ));
+            }
+
+            if lhs.value_type() != ValueType::Vector || rhs.value_type() != ValueType::Vector {
+                if let Some(modifier) = &ex.matching {
+                    if let Some(matching) = &modifier.matching {
+                        if matching.labels().len() > 0 {
+                            return Err(
+                                "vector matching only allowed between instant vectors".into()
+                            );
+                        }
+                    };
+                };
+            }
+
+            if lhs.value_type() == ValueType::Vector
+                && rhs.value_type() == ValueType::Vector
+                && ex.op.is_set_operator()
+            {
+                if let Some(modifier) = &ex.matching {
+                    if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
+                        || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
+                    {
+                        let val = ex.op.val;
+                        return Err(format!("no grouping allowed for '{val}' operation"));
+                    }
+                    if modifier.card == VectorMatchCardinality::OneToOne {
+                        return Err("set operations must always be many-to-many".into());
+                    }
+                };
+            }
+
+            if ex.op.is_set_operator() {
+                match ex.matching {
+                    Some(mut matching) => {
+                        matching.card = VectorMatchCardinality::ManyToMany;
+                        ex.matching = Some(matching);
+                    }
+                    None => {
+                        let modifier: BinModifier = Default::default();
+                        ex.matching = Some(modifier.card(VectorMatchCardinality::ManyToMany));
+                    }
+                }
+            }
+            Ok(Expr::Binary(ex))
+        }
+        // TODO: check other exprs
+        _ => Ok(expr),
     }
 }
 
