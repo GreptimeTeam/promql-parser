@@ -278,11 +278,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_unary_expr() {
-        // "-some_metric"
-        // "+some_metric"
-        // " +some_metric"
+        let cases = vec![
+            ("-some_metric", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_metric_matcher(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::one(matcher)).map(|ex| -ex)
+            }),
+            ("+some_metric", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_metric_matcher(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            }),
+            (" +some_metric", {
+                let name = String::from("some_metric");
+                let matcher = Matcher::new_eq_metric_matcher(name.clone());
+                Expr::new_vector_selector(Some(name), Matchers::one(matcher))
+            }),
+        ];
+        assert_cases(Case::new_result_cases(cases));
+
+        let cases = vec![
+            (r#"-"string""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
+            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector")
+        ];
+        assert_cases(Case::new_fail_cases(cases));
     }
 
     #[test]
@@ -1272,8 +1292,6 @@ mod tests {
             // ("1 unless 1", "set operator \"unless\" not allowed in binary scalar expression"),
             // ("1 !~ 1", `unexpected character after '!': '~'`),
             // ("1 =~ 1", `unexpected character after '=': '~'`),
-            // (`-"string"`, `unary expression only allowed on expressions of type scalar or instant vector, got "string"`),
-            // (`-test[5m]`, `unary expression only allowed on expressions of type scalar or instant vector, got "range vector"`),
             // ("*test", "unexpected <op:*>"),
             // ("1 offset 1d", "1:1: parse error: offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"),
             // (
