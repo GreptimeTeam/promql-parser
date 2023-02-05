@@ -124,6 +124,7 @@ START_METRIC_SELECTOR
 
 %%
 expr -> Result<Expr, String>:
+/* check_ast from bottom to up for nested exprs */
                 aggregate_expr { check_ast($1?) }
                 | at_expr { check_ast($1?) }
                 | binary_expr { check_ast($1?) }
