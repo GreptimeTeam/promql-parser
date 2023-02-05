@@ -18,10 +18,8 @@ pub fn parse(input: &str) -> Result<Expr, String> {
     match lex::lexer(input) {
         Err(e) => Err(e),
         Ok(lexer) => {
-            let (res, errs) = crate::promql_y::parse(&lexer);
-            for err in errs {
-                println!("{err:?}")
-            }
+            // NOTE: the errs is ignored so far.
+            let (res, _errs) = crate::promql_y::parse(&lexer);
             match res {
                 Some(r) => r,
                 None => Err("empty AST".into()),
@@ -120,7 +118,7 @@ mod tests {
                 Expr::from("double-quoted string \\\" with escaped quote"),
             ),
             (
-                // this case is the same with the previous one
+                // this case is the same with the previous upper one
                 r#""double-quoted string \" with escaped quote""#,
                 Expr::from(r#"double-quoted string \" with escaped quote"#),
             ),

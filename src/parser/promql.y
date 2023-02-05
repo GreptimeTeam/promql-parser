@@ -211,7 +211,6 @@ on_or_ignoring -> Result<Option<BinModifier>, String>:
                 }
                 ;
 
-/* FIXME: group_op without labels */
 group_modifiers -> Result<Option<BinModifier>, String>:
                 bool_modifier { $1 }
                 | on_or_ignoring { $1 }

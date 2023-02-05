@@ -272,7 +272,7 @@ pub struct AggregateExpr {
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
-    pub grouping: AggModifier,
+    pub modifier: AggModifier,
 }
 
 /// UnaryExpr will negate the expr
@@ -619,7 +619,7 @@ impl Expr {
 
     pub fn new_aggregate_expr(
         op: TokenType,
-        grouping: AggModifier,
+        modifier: AggModifier,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
         if args.is_empty() {
@@ -645,7 +645,7 @@ impl Expr {
             op,
             expr: args.last(),
             param,
-            grouping,
+            modifier,
         };
         Ok(Expr::Aggregate(ex))
     }
@@ -730,110 +730,106 @@ impl Neg for Expr {
 /// Recursively check correct typing for child nodes and raise errors in case of bad typing.
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
-        Expr::Binary(mut ex) => {
-            if !ex.op.is_operator() {
-                let val = ex.op.val;
-                return Err(format!(
-                    "binary expression does not support operator '{val}'"
-                ));
-            }
-
-            if ex.return_bool() && !ex.op.is_comparison_operator() {
-                return Err("bool modifier can only be used on comparison operators".into());
-            }
-
-            if ex.op.is_comparison_operator()
-                && ex.lhs.value_type() == ValueType::Scalar
-                && ex.rhs.value_type() == ValueType::Scalar
-                && !ex.return_bool()
-            {
-                return Err("comparisons between scalars must use BOOL modifier".into());
-            }
-
-            // For `on` matching, a label can only appear in one of the lists.
-            // Every time series of the result vector must be uniquely identifiable.
-            if ex.is_on() && ex.is_labels_joint() {
-                if let Some(labels) = ex.intersect_labels() {
-                    if !labels.is_empty() {
-                        let label = labels[0];
-                        return Err(format!(
-                            "label '{label}' must not occur in ON and GROUP clause at once"
-                        ));
-                    }
-                };
-            }
-
-            let lhs = check_ast(*ex.lhs.clone())?;
-            let rhs = check_ast(*ex.rhs.clone())?;
-
-            if ex.op.is_set_operator() {
-                if lhs.value_type() == ValueType::Scalar || rhs.value_type() == ValueType::Scalar {
-                    let val = ex.op.val;
-                    return Err(format!(
-                        "set operator '{val}' not allowed in binary scalar expression"
-                    ));
-                }
-
-                match ex.modifier {
-                    Some(ref mut modifier) => {
-                        if modifier.card == VectorMatchCardinality::OneToOne {
-                            modifier.card = VectorMatchCardinality::ManyToMany(HashSet::new());
-                        }
-                    }
-                    None => {
-                        ex.modifier = Some(
-                            BinModifier::default_modifier()
-                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
-                        );
-                    }
-                }
-            }
-
-            if lhs.value_type() != ValueType::Scalar && lhs.value_type() != ValueType::Vector {
-                return Err(
-                    "binary expression must contain only scalar and instant vector types".into(),
-                );
-            }
-            if rhs.value_type() != ValueType::Scalar && rhs.value_type() != ValueType::Vector {
-                return Err(
-                    "binary expression must contain only scalar and instant vector types".into(),
-                );
-            }
-
-            if lhs.value_type() != ValueType::Vector || rhs.value_type() != ValueType::Vector {
-                if let Some(modifier) = &ex.modifier {
-                    if let Some(matching) = &modifier.matching {
-                        if !matching.labels().is_empty() {
-                            return Err(
-                                "vector matching only allowed between instant vectors".into()
-                            );
-                        }
-                    };
-                };
-            }
-
-            if lhs.value_type() == ValueType::Vector
-                && rhs.value_type() == ValueType::Vector
-                && ex.op.is_set_operator()
-            {
-                if let Some(modifier) = &ex.modifier {
-                    if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
-                        || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
-                    {
-                        let val = ex.op.val;
-                        return Err(format!("no grouping allowed for '{val}' operation"));
-                    }
-                    if modifier.card == VectorMatchCardinality::OneToOne {
-                        return Err("set operations must always be many-to-many".into());
-                    }
-                };
-            }
-
-            Ok(Expr::Binary(ex))
-        }
+        Expr::Binary(ex) => check_ast_for_binary_expr(ex),
         // TODO: check other exprs
         _ => Ok(expr),
     }
+}
+
+fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
+    if !ex.op.is_operator() {
+        let val = ex.op.val;
+        return Err(format!(
+            "binary expression does not support operator '{val}'"
+        ));
+    }
+
+    if ex.return_bool() && !ex.op.is_comparison_operator() {
+        return Err("bool modifier can only be used on comparison operators".into());
+    }
+
+    if ex.op.is_comparison_operator()
+        && ex.lhs.value_type() == ValueType::Scalar
+        && ex.rhs.value_type() == ValueType::Scalar
+        && !ex.return_bool()
+    {
+        return Err("comparisons between scalars must use BOOL modifier".into());
+    }
+
+    // For `on` matching, a label can only appear in one of the lists.
+    // Every time series of the result vector must be uniquely identifiable.
+    if ex.is_on() && ex.is_labels_joint() {
+        if let Some(labels) = ex.intersect_labels() {
+            if !labels.is_empty() {
+                let label = labels[0];
+                return Err(format!(
+                    "label '{label}' must not occur in ON and GROUP clause at once"
+                ));
+            }
+        };
+    }
+
+    let lhs = check_ast(*ex.lhs.clone())?;
+    let rhs = check_ast(*ex.rhs.clone())?;
+
+    if ex.op.is_set_operator() {
+        if lhs.value_type() == ValueType::Scalar || rhs.value_type() == ValueType::Scalar {
+            let val = ex.op.val;
+            return Err(format!(
+                "set operator '{val}' not allowed in binary scalar expression"
+            ));
+        }
+
+        match ex.modifier {
+            Some(ref mut modifier) => {
+                if modifier.card == VectorMatchCardinality::OneToOne {
+                    modifier.card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                }
+            }
+            None => {
+                ex.modifier = Some(
+                    BinModifier::default_modifier()
+                        .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                );
+            }
+        }
+    }
+
+    if lhs.value_type() != ValueType::Scalar && lhs.value_type() != ValueType::Vector {
+        return Err("binary expression must contain only scalar and instant vector types".into());
+    }
+    if rhs.value_type() != ValueType::Scalar && rhs.value_type() != ValueType::Vector {
+        return Err("binary expression must contain only scalar and instant vector types".into());
+    }
+
+    if lhs.value_type() != ValueType::Vector || rhs.value_type() != ValueType::Vector {
+        if let Some(modifier) = &ex.modifier {
+            if let Some(matching) = &modifier.matching {
+                if !matching.labels().is_empty() {
+                    return Err("vector matching only allowed between instant vectors".into());
+                }
+            };
+        };
+    }
+
+    if lhs.value_type() == ValueType::Vector
+        && rhs.value_type() == ValueType::Vector
+        && ex.op.is_set_operator()
+    {
+        if let Some(modifier) = &ex.modifier {
+            if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
+                || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
+            {
+                let val = ex.op.val;
+                return Err(format!("no grouping allowed for '{val}' operation"));
+            }
+            if modifier.card == VectorMatchCardinality::OneToOne {
+                return Err("set operations must always be many-to-many".into());
+            }
+        };
+    }
+
+    Ok(Expr::Binary(ex))
 }
 
 #[cfg(test)]
