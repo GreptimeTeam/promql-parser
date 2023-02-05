@@ -191,6 +191,12 @@ impl Token {
         Self { id, val }
     }
 
+    // IsAggregator returns true if the Item belongs to the aggregator functions.
+    // Returns false otherwise
+    pub fn is_aggregator(&self) -> bool {
+        self.id > T_AGGREGATORS_START && self.id < T_AGGREGATORS_END
+    }
+
     pub fn is_aggregator_with_param(&self) -> bool {
         self.id == T_TOPK
             || self.id == T_BOTTOMK
@@ -409,5 +415,24 @@ mod tests {
         assert!(!Token::from(T_SUM).is_operator());
         assert!(!Token::from(T_OPERATORS_START).is_operator());
         assert!(!Token::from(T_OPERATORS_END).is_operator());
+    }
+
+    #[test]
+    fn test_is_aggregator() {
+        assert!(Token::from(T_AVG).is_aggregator());
+        assert!(Token::from(T_BOTTOMK).is_aggregator());
+        assert!(Token::from(T_COUNT).is_aggregator());
+        assert!(Token::from(T_COUNT_VALUES).is_aggregator());
+        assert!(Token::from(T_GROUP).is_aggregator());
+        assert!(Token::from(T_MAX).is_aggregator());
+        assert!(Token::from(T_MIN).is_aggregator());
+        assert!(Token::from(T_QUANTILE).is_aggregator());
+        assert!(Token::from(T_STDDEV).is_aggregator());
+        assert!(Token::from(T_STDVAR).is_aggregator());
+        assert!(Token::from(T_SUM).is_aggregator());
+        assert!(Token::from(T_TOPK).is_aggregator());
+
+        assert!(!Token::from(T_LOR).is_aggregator());
+        assert!(!Token::from(T_ADD).is_aggregator());
     }
 }

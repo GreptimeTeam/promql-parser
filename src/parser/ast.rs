@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::label::{Labels, Matcher, Matchers};
-use crate::parser::token::{self, T_END, T_START};
+use crate::parser::token::{self, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK};
 use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
@@ -745,8 +745,39 @@ impl Neg for Expr {
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
         Expr::Binary(ex) => check_ast_for_binary_expr(ex),
+        Expr::Aggregate(ex) => check_ast_for_aggregate_expr(ex),
         // TODO: check other exprs
         _ => Ok(expr),
+    }
+}
+
+fn expect_type(
+    actual: Option<ValueType>,
+    expected: ValueType,
+    context: &str,
+) -> Result<bool, String> {
+    match actual {
+        Some(actual) => {
+            if actual == expected {
+                Ok(true)
+            } else {
+                Err(format!(
+                    "expected type {expected} in {context}, got {actual}"
+                ))
+            }
+        }
+        None => Err(format!("expected type {expected} in {context}, got None")),
+    }
+}
+
+fn expect_param_type(
+    actual: Option<&Expr>,
+    expected: ValueType,
+    context: &str,
+) -> Result<bool, String> {
+    match actual {
+        Some(expr) => expect_type(Some(expr.value_type()), expected, context),
+        None => expect_type(None, expected, context),
     }
 }
 
@@ -831,6 +862,39 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     }
 
     Ok(Expr::Binary(ex))
+}
+
+fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
+    if !ex.op.is_aggregator() {
+        let val = ex.op.val;
+        return Err(format!(
+            "aggregation operator expected in aggregation expression but got '{val}'"
+        ));
+    }
+
+    expect_type(
+        Some(ex.expr.value_type()),
+        ValueType::Vector,
+        "aggregation expression",
+    )?;
+
+    if ex.op.id == T_TOPK || ex.op.id == T_BOTTOMK || ex.op.id == T_QUANTILE {
+        expect_param_type(
+            ex.param.as_deref(),
+            ValueType::Scalar,
+            "aggregation expression",
+        )?;
+    }
+
+    if ex.op.id == T_COUNT_VALUES {
+        expect_param_type(
+            ex.param.as_deref(),
+            ValueType::String,
+            "aggregation expression",
+        )?;
+    }
+
+    Ok(Expr::Aggregate(ex))
 }
 
 #[cfg(test)]
