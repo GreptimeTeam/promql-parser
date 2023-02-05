@@ -132,9 +132,18 @@ mod tests {
                 "`backtick-quoted string`",
                 Expr::from("backtick-quoted string"),
             ),
-            // "\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"
-            // '\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'
-            // "`" + `\a\b\f\n\r\t\v\\\"\' - \xFF\377\u1234\U00010111\U0001011111☺` + "`"
+            (
+                r#""\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺""#,
+                Expr::from(r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#),
+            ),
+            (
+                r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
+                Expr::from(r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#),
+            ),
+            (
+                r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
+                Expr::from(r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#),
+            ),
         ];
         assert_cases(Case::new_expr_cases(cases));
 
@@ -1094,86 +1103,86 @@ mod tests {
         let cases = vec![
             ("sum by (foo) (some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                let matching = AggModifier::By(HashSet::from([String::from("foo")]));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("avg by (foo)(some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                let matching = AggModifier::By(HashSet::from([String::from("foo")]));
-                Expr::new_aggregate_expr(token::T_AVG, matching, FunctionArgs::new_args(ex))
+                let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
+                Expr::new_aggregate_expr(token::T_AVG, modifier, FunctionArgs::new_args(ex))
             }),
             ("max by (foo)(some_metric)", {
-                let matching = AggModifier::By(HashSet::from([String::from("foo")]));
+                let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_MAX, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_MAX, modifier, FunctionArgs::new_args(ex))
             }),
             ("sum without (foo) (some_metric)", {
-                let matching = AggModifier::Without(HashSet::from([String::from("foo")]));
+                let modifier = AggModifier::Without(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("sum (some_metric) without (foo)", {
-                let matching = AggModifier::Without(HashSet::from([String::from("foo")]));
+                let modifier = AggModifier::Without(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("stddev(some_metric)", {
-                let matching = AggModifier::By(HashSet::new());
+                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_STDDEV, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_STDDEV, modifier, FunctionArgs::new_args(ex))
             }),
             ("stdvar by (foo)(some_metric)", {
-                let matching = AggModifier::By(HashSet::from([String::from("foo")]));
+                let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_STDVAR, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_STDVAR, modifier, FunctionArgs::new_args(ex))
             }),
             ("sum by ()(some_metric)", {
-                let matching = AggModifier::By(HashSet::new());
+                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,bar,)(some_metric)", {
-                let matching =
+                let modifier =
                     AggModifier::By(HashSet::from([String::from("foo"), String::from("bar")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,)(some_metric)", {
-                let matching = AggModifier::By(HashSet::from([String::from("foo")]));
+                let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
             ("topk(5, some_metric)", {
-                let matching = AggModifier::By(HashSet::new());
+                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from(5.0);
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_TOPK, matching, args)
+                Expr::new_aggregate_expr(token::T_TOPK, modifier, args)
             }),
             (r#"count_values("value", some_metric)"#, {
-                let matching = AggModifier::By(HashSet::new());
+                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from("value");
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_COUNT_VALUES, matching, args)
+                Expr::new_aggregate_expr(token::T_COUNT_VALUES, modifier, args)
             }),
             (
                 "sum without(and, by, avg, count, alert, annotations)(some_metric)",
                 {
-                    let matching = AggModifier::Without(
+                    let modifier = AggModifier::Without(
                         vec!["and", "by", "avg", "count", "alert", "annotations"]
                             .into_iter()
                             .map(String::from)
                             .collect(),
                     );
                     let ex = Expr::from(VectorSelector::from("some_metric"));
-                    Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                    Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
                 },
             ),
             ("sum(sum)", {
-                let matching = AggModifier::By(HashSet::new());
+                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("sum"));
-                Expr::new_aggregate_expr(token::T_SUM, matching, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
             }),
         ];
         assert_cases(Case::new_result_cases(cases));
@@ -1525,9 +1534,59 @@ mod tests {
                 .and_then(|ex| ex.at_expr(At::try_from(123_f64).unwrap()))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION))),
             ),
-            // (foo + bar{nm="val"})[5m:]
-            // (foo + bar{nm="val"})[5m:] offset 10m
-            // (foo + bar{nm="val"} @ 1234)[5m:] @ 1603775019
+            (r#"(foo + bar{nm="val"})[5m:]"#, {
+                let name = String::from("bar");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
+                ]));
+
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_ADD,
+                    None,
+                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                )
+                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
+            }),
+            (r#"(foo + bar{nm="val"})[5m:] offset 10m"#, {
+                let name = String::from("bar");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
+                ]));
+
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_ADD,
+                    None,
+                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                )
+                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
+                .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION * 10)))
+            }),
+            (r#"(foo + bar{nm="val"} @ 1234)[5m:] @ 1603775019"#, {
+                let name = String::from("bar");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
+                ]));
+                let rhs = Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| ex.at_expr(At::try_from(1234_f64).unwrap()))
+                    .unwrap();
+
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_ADD,
+                    None,
+                    rhs,
+                )
+                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
+                .and_then(|ex| ex.at_expr(At::try_from(1603775019_f64).unwrap()))
+            }),
         ];
         assert_cases(Case::new_result_cases(cases));
 
@@ -1595,8 +1654,32 @@ mod tests {
                 ]));
                 Expr::new_vector_selector(Some(name), matchers)
             }),
-            // foo unless on(start) bar
-            // foo unless on(end) bar
+            ("foo unless on(start) bar", {
+                let modifier = BinModifier::default_modifier()
+                    .matching(Some(VectorMatchModifier::On(HashSet::from([
+                        String::from("start"),
+                    ]))))
+                    .card(VectorMatchCardinality::ManyToMany(HashSet::new()));
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LUNLESS,
+                    Some(modifier),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
+            ("foo unless on(end) bar", {
+                let modifier = BinModifier::default_modifier()
+                    .matching(Some(VectorMatchModifier::On(HashSet::from([
+                        String::from("end"),
+                    ]))))
+                    .card(VectorMatchCardinality::ManyToMany(HashSet::new()));
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LUNLESS,
+                    Some(modifier),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
         ];
         assert_cases(Case::new_result_cases(cases));
 
@@ -1608,7 +1691,7 @@ mod tests {
     }
 
     #[test]
-    fn test_corner_cases() {
+    fn test_corner_fail_cases() {
         let fail_cases = vec![
             ("", "no expression found in input: ''"),
             (

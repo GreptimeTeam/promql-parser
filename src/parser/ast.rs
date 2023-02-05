@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
@@ -56,7 +55,8 @@ impl VectorMatchCardinality {
         match self {
             VectorMatchCardinality::ManyToOne(l) => Some(l),
             VectorMatchCardinality::OneToMany(l) => Some(l),
-            _ => None,
+            VectorMatchCardinality::ManyToMany(l) => Some(l),
+            VectorMatchCardinality::OneToOne => None,
         }
     }
 }
@@ -300,28 +300,29 @@ pub struct BinaryExpr {
 
 impl BinaryExpr {
     pub fn is_on(&self) -> bool {
-        matches!(&self.modifier, Some(matching) if matching.is_on())
+        matches!(&self.modifier, Some(modifier) if modifier.is_on())
     }
 
     pub fn return_bool(&self) -> bool {
         match &self.modifier {
-            Some(matching) => matching.return_bool,
+            Some(modifier) => modifier.return_bool,
             None => false,
         }
     }
 
+    /// check if labels of card and matching are joint
     pub fn is_labels_joint(&self) -> bool {
         match &self.modifier {
-            Some(matching) => matching.is_labels_joint(),
+            Some(modifier) => modifier.is_labels_joint(),
             None => false,
         }
     }
 
+    /// intersect labels of card and matching
     pub fn intersect_labels(&self) -> Option<Vec<&String>> {
-        match &self.modifier {
-            Some(matching) => matching.intersect_labels(),
-            None => None,
-        }
+        self.modifier
+            .as_ref()
+            .and_then(|modifier| modifier.intersect_labels())
     }
 }
 
@@ -376,9 +377,21 @@ pub struct StringLiteral {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
     pub name: Option<String>,
-    pub label_matchers: Matchers,
+    pub matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+impl From<String> for VectorSelector {
+    fn from(name: String) -> Self {
+        let matcher = Matcher::new_eq_metric_matcher(name.clone());
+        VectorSelector {
+            name: Some(name),
+            offset: None,
+            at: None,
+            matchers: Matchers::one(matcher),
+        }
+    }
 }
 
 /// directly create an instant vector with only METRIC_NAME matcher.
@@ -391,22 +404,15 @@ pub struct VectorSelector {
 /// use promql_parser::parser::{Expr, VectorSelector};
 /// use promql_parser::label::{MatchOp, Matcher, Matchers};
 ///
-/// let name = String::from("foo");
-/// let matcher = Matcher::new_eq_metric_matcher(name.clone());
-/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
-/// assert_eq!(Expr::VectorSelector(VectorSelector::from("foo")), vs.unwrap());
-impl From<String> for VectorSelector {
-    fn from(name: String) -> Self {
-        let matcher = Matcher::new_eq_metric_matcher(name.clone());
-        VectorSelector {
-            name: Some(name),
-            offset: None,
-            at: None,
-            label_matchers: Matchers::one(matcher),
-        }
-    }
-}
-
+/// let matcher = Matcher::new_eq_metric_matcher(String::from("foo"));
+/// let vs = VectorSelector {
+///     name: Some(String::from("foo")),
+///     offset: None,
+///     at: None,
+///     matchers: Matchers::one(matcher),
+/// };
+///
+/// assert_eq!(VectorSelector::from("foo"), vs);
 impl From<&str> for VectorSelector {
     fn from(name: &str) -> Self {
         VectorSelector::from(name.to_string())
@@ -475,7 +481,7 @@ impl Expr {
             name,
             offset: None,
             at: None,
-            label_matchers: matchers,
+            matchers,
         };
         Ok(Self::VectorSelector(vs))
     }
@@ -686,6 +692,21 @@ impl From<f64> for Expr {
     }
 }
 
+/// directly create an Expr::VectorSelector from instant vector
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use promql_parser::parser::{Expr, VectorSelector};
+/// use promql_parser::label::{MatchOp, Matcher, Matchers};
+///
+/// let name = String::from("foo");
+/// let matcher = Matcher::new_eq_metric_matcher(name.clone());
+/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
+///
+/// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
 impl From<VectorSelector> for Expr {
     fn from(vs: VectorSelector) -> Self {
         Expr::VectorSelector(vs)
@@ -707,7 +728,6 @@ impl Neg for Expr {
 
 /// check_ast checks the validity of the provided AST. This includes type checking.
 /// Recursively check correct typing for child nodes and raise errors in case of bad typing.
-#[allow(dead_code)]
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
         Expr::Binary(mut ex) => {
@@ -734,7 +754,7 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
             // Every time series of the result vector must be uniquely identifiable.
             if ex.is_on() && ex.is_labels_joint() {
                 if let Some(labels) = ex.intersect_labels() {
-                    if labels.len() > 0 {
+                    if !labels.is_empty() {
                         let label = labels[0];
                         return Err(format!(
                             "label '{label}' must not occur in ON and GROUP clause at once"
@@ -783,7 +803,7 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
             if lhs.value_type() != ValueType::Vector || rhs.value_type() != ValueType::Vector {
                 if let Some(modifier) = &ex.modifier {
                     if let Some(matching) = &modifier.matching {
-                        if matching.labels().len() > 0 {
+                        if !matching.labels().is_empty() {
                             return Err(
                                 "vector matching only allowed between instant vectors".into()
                             );
