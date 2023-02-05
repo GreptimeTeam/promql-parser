@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::label::{Labels, Matcher, Matchers};
+use crate::label::{Labels, Matcher, Matchers, METRIC_NAME};
 use crate::parser::token::{self, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK};
 use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
 use std::ops::Neg;
@@ -126,7 +126,7 @@ impl BinModifier {
     pub fn is_labels_joint(&self) -> bool {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return matching.labels().is_disjoint(labels);
+                return !matching.labels().is_disjoint(labels);
             };
         };
         false
@@ -990,9 +990,20 @@ fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
 fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
     // A Vector selector must contain at least one non-empty matcher to prevent
     // implicit selection of all metrics (e.g. by a typo).
-    if ex.matchers.matchers.is_empty() {
+    if ex.matchers.is_empty_matchers() {
         return Err("vector selector must contain at least one non-empty matcher".into());
     }
+
+    let mut du = ex.matchers.duplicated_matchers(METRIC_NAME);
+    du.sort();
+    if du.len() >= 2 {
+        let du1 = du[0];
+        let du2 = du[1];
+        return Err(format!(
+            "metric name must not be set twice: '{du1}' or '{du2}'"
+        ));
+    }
+
     Ok(Expr::VectorSelector(ex))
 }
 
