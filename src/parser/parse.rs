@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{check_ast, lex, Expr};
+use crate::parser::{lex, Expr};
 
 pub fn parse(input: &str) -> Result<Expr, String> {
     match lex::lexer(input) {
@@ -23,7 +23,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
                 println!("{err:?}")
             }
             match res {
-                Some(r) => check_ast(r?),
+                Some(r) => r,
                 None => Err("empty AST".into()),
             }
         }
@@ -41,7 +41,7 @@ mod tests {
     use crate::label::{MatchOp, Matcher, Matchers};
     use crate::parser::{
         get_function, token, AggModifier, AtModifier as At, BinModifier, Expr, FunctionArgs,
-        Offset, VectorMatchCardinality, VectorSelector,
+        Offset, VectorMatchCardinality, VectorMatchModifier, VectorSelector,
     };
     use crate::util::duration;
     use std::collections::HashSet;
@@ -150,195 +150,204 @@ mod tests {
     #[test]
     fn test_vector_binary_expr() {
         let cases = vec![
-            // (
-            //     "1 + 1",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, Expr::from(1.0)),
-            // ),
-            // (
-            //     "1 - 1",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_SUB, None, Expr::from(1.0)),
-            // ),
-            // (
-            //     "1 * 1",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_MUL, None, Expr::from(1.0)),
-            // ),
-            // (
-            //     "1 / 1",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_DIV, None, Expr::from(1.0)),
-            // ),
-            // (
-            //     "1 % 1",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_MOD, None, Expr::from(1.0)),
-            // ),
-            // (
-            //     "1 == bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_EQLC,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "1 != bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_NEQ,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "1 > bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_GTR,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "1 >= bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_GTE,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "1 < bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_LSS,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "1 <= bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(1.0),
-            //         token::T_LTE,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "-1^2",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_POW, None, Expr::from(2.0))
-            //         .map(|ex| -ex),
-            // ),
-            // (
-            //     "-1*2",
-            //     Expr::new_binary_expr(Expr::from(-1.0), token::T_MUL, None, Expr::from(2.0)),
-            // ),
-            // (
-            //     "-1+2",
-            //     Expr::new_binary_expr(Expr::from(-1.0), token::T_ADD, None, Expr::from(2.0)),
-            // ),
-            // (
-            //     "-1^-2",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_POW, None, Expr::from(-2.0))
-            //         .map(|ex| -ex),
-            // ),
-            // (
-            //     "+1 + -2 * 1",
-            //     Expr::new_binary_expr(Expr::from(-2.0), token::T_MUL, None, Expr::from(1.0))
-            //         .and_then(|ex| Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, ex)),
-            // ),
-            // (
-            //     "1 + 2/(3*1)",
-            //     Expr::new_binary_expr(Expr::from(3.0), token::T_MUL, None, Expr::from(1.0))
-            //         .and_then(Expr::new_paren_expr)
-            //         .and_then(|ex| Expr::new_binary_expr(Expr::from(2.0), token::T_DIV, None, ex))
-            //         .and_then(|ex| Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, ex)),
-            // ),
-            // (
-            //     "1 < bool 2 - 1 * 2",
-            //     Expr::new_binary_expr(Expr::from(1.0), token::T_MUL, None, Expr::from(2.0))
-            //         .and_then(|ex| Expr::new_binary_expr(Expr::from(2.0), token::T_SUB, None, ex))
-            //         .and_then(|ex| {
-            //             Expr::new_binary_expr(
-            //                 Expr::from(1.0),
-            //                 token::T_LSS,
-            //                 Some(BinModifier::default_modifier().return_bool(true)),
-            //                 ex,
-            //             )
-            //         }),
-            // ),
-            // (
-            //     "foo * bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_MUL,
-            //         None,
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo * sum",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_MUL,
-            //         None,
-            //         Expr::from(VectorSelector::from("sum")),
-            //     ),
-            // ),
-            // (
-            //     "foo == 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_EQLC,
-            //         None,
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "foo == bool 1",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_EQLC,
-            //         Some(BinModifier::default_modifier().return_bool(true)),
-            //         Expr::from(1.0),
-            //     ),
-            // ),
-            // (
-            //     "2.5 / bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(2.5),
-            //         token::T_DIV,
-            //         None,
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo and bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_LAND,
-            //         Some(BinModifier::default_modifier().card(VectorMatchCardinality::ManyToMany)),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo or bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_LOR,
-            //         Some(BinModifier::default_modifier().card(VectorMatchCardinality::ManyToMany)),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo unless bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_LUNLESS,
-            //         Some(BinModifier::default_modifier().card(VectorMatchCardinality::ManyToMany)),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
+            (
+                "1 + 1",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, Expr::from(1.0)),
+            ),
+            (
+                "1 - 1",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_SUB, None, Expr::from(1.0)),
+            ),
+            (
+                "1 * 1",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_MUL, None, Expr::from(1.0)),
+            ),
+            (
+                "1 / 1",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_DIV, None, Expr::from(1.0)),
+            ),
+            (
+                "1 % 1",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_MOD, None, Expr::from(1.0)),
+            ),
+            (
+                "1 == bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_EQLC,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "1 != bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_NEQ,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "1 > bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_GTR,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "1 >= bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_GTE,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "1 < bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_LSS,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "1 <= bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(1.0),
+                    token::T_LTE,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "-1^2",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_POW, None, Expr::from(2.0))
+                    .map(|ex| -ex),
+            ),
+            (
+                "-1*2",
+                Expr::new_binary_expr(Expr::from(-1.0), token::T_MUL, None, Expr::from(2.0)),
+            ),
+            (
+                "-1+2",
+                Expr::new_binary_expr(Expr::from(-1.0), token::T_ADD, None, Expr::from(2.0)),
+            ),
+            (
+                "-1^-2",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_POW, None, Expr::from(-2.0))
+                    .map(|ex| -ex),
+            ),
+            (
+                "+1 + -2 * 1",
+                Expr::new_binary_expr(Expr::from(-2.0), token::T_MUL, None, Expr::from(1.0))
+                    .and_then(|ex| Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, ex)),
+            ),
+            (
+                "1 + 2/(3*1)",
+                Expr::new_binary_expr(Expr::from(3.0), token::T_MUL, None, Expr::from(1.0))
+                    .and_then(Expr::new_paren_expr)
+                    .and_then(|ex| Expr::new_binary_expr(Expr::from(2.0), token::T_DIV, None, ex))
+                    .and_then(|ex| Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, ex)),
+            ),
+            (
+                "1 < bool 2 - 1 * 2",
+                Expr::new_binary_expr(Expr::from(1.0), token::T_MUL, None, Expr::from(2.0))
+                    .and_then(|ex| Expr::new_binary_expr(Expr::from(2.0), token::T_SUB, None, ex))
+                    .and_then(|ex| {
+                        Expr::new_binary_expr(
+                            Expr::from(1.0),
+                            token::T_LSS,
+                            Some(BinModifier::default_modifier().return_bool(true)),
+                            ex,
+                        )
+                    }),
+            ),
+            (
+                "foo * bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_MUL,
+                    None,
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo * sum",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_MUL,
+                    None,
+                    Expr::from(VectorSelector::from("sum")),
+                ),
+            ),
+            (
+                "foo == 1",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_EQLC,
+                    None,
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "foo == bool 1",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_EQLC,
+                    Some(BinModifier::default_modifier().return_bool(true)),
+                    Expr::from(1.0),
+                ),
+            ),
+            (
+                "2.5 / bar",
+                Expr::new_binary_expr(
+                    Expr::from(2.5),
+                    token::T_DIV,
+                    None,
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo and bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo or bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LOR,
+                    Some(
+                        BinModifier::default_modifier()
+                            .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo unless bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LUNLESS,
+                    Some(
+                        BinModifier::default_modifier()
+                            .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
             (
                 // Test and/or precedence and reassigning of operands.
                 "foo + bar or bla and blub",
@@ -348,220 +357,297 @@ mod tests {
                         token::T_ADD,
                         None,
                         Expr::from(VectorSelector::from("bar")),
-                    )
-                    .unwrap();
+                    );
                     let rhs = Expr::new_binary_expr(
                         Expr::from(VectorSelector::from("bla")),
                         token::T_LAND,
                         Some(
                             BinModifier::default_modifier()
-                                .card(VectorMatchCardinality::ManyToMany),
+                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
                         ),
                         Expr::from(VectorSelector::from("blub")),
-                    )
-                    .unwrap();
+                    );
                     Expr::new_binary_expr(
-                        lhs,
+                        lhs.unwrap(),
                         token::T_LOR,
                         Some(
                             BinModifier::default_modifier()
-                                .card(VectorMatchCardinality::ManyToMany),
+                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
                         ),
-                        rhs,
+                        rhs.unwrap(),
                     )
                 },
             ),
-            // (
-            //     // Test and/or/unless precedence.
-            //     "foo and bar unless baz or qux",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_LAND,
-            //         None,
-            //         Expr::from(VectorSelector::from("bar")),
-            //     )
-            //     .and_then(|ex| {
-            //         Expr::new_binary_expr(
-            //             Expr::from(ex),
-            //             token::T_LUNLESS,
-            //             None,
-            //             Expr::from(VectorSelector::from("baz")),
-            //         )
-            //     })
-            //     .and_then(|ex| {
-            //         Expr::new_binary_expr(
-            //             Expr::from(ex),
-            //             token::T_LOR,
-            //             None,
-            //             Expr::from(VectorSelector::from("qux")),
-            //         )
-            //     }),
-            // ),
-            // (
-            //     // Test precedence and reassigning of operands.
-            //     "bar + on(foo) bla / on(baz, buz) group_right(test) blub",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("bla")),
-            //         token::T_DIV,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .card(VectorMatchCardinality::OneToMany(HashSet::from([
-            //                     String::from("test"),
-            //                 ])))
-            //                 .matching(Some(VectorMatchModifier::On(HashSet::from([
-            //                     String::from("baz"),
-            //                     String::from("buz"),
-            //                 ])))),
-            //         ),
-            //         Expr::from(VectorSelector::from("blub")),
-            //     )
-            //     .and_then(|ex| {
-            //         Expr::new_binary_expr(
-            //             Expr::from(VectorSelector::from("bar")),
-            //             token::T_ADD,
-            //             Some(BinModifier::default_modifier().matching(Some(
-            //                 VectorMatchModifier::On(HashSet::from([String::from("foo")])),
-            //             ))),
-            //             ex,
-            //         )
-            //     }),
-            // ),
-            // (
-            //     "foo * on(test,blub) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_MUL,
-            //         Some(
-            //             BinModifier::default_modifier().matching(Some(VectorMatchModifier::On(
-            //                 HashSet::from([String::from("test"), String::from("blub")]),
-            //             ))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo * on(test,blub) group_left bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_MUL,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::On(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::ManyToOne(HashSet::new())),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // // FIXME: matching on bool operator should be done in check_ast function
-            // // "foo and on(test,blub) bar"
-            // // "foo and on() bar"
-            // // "foo and ignoring(test,blub) bar"
-            // // "foo and ignoring() bar"
-            // // "foo unless on(bar) baz"
-            // (
-            //     "foo / on(test,blub) group_left(bar) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_DIV,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::On(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::ManyToOne(HashSet::from([
-            //                     String::from("bar"),
-            //                 ]))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo / ignoring(test,blub) group_left(blub) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_DIV,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::ManyToOne(HashSet::from([
-            //                     String::from("blub"),
-            //                 ]))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo / ignoring(test,blub) group_left(bar) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_DIV,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::ManyToOne(HashSet::from([
-            //                     String::from("bar"),
-            //                 ]))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo - on(test,blub) group_right(bar,foo) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_SUB,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::On(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::OneToMany(HashSet::from([
-            //                     String::from("bar"),
-            //                     String::from("foo"),
-            //                 ]))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "foo - ignoring(test,blub) group_right(bar,foo) bar",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("foo")),
-            //         token::T_SUB,
-            //         Some(
-            //             BinModifier::default_modifier()
-            //                 .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
-            //                     String::from("test"),
-            //                     String::from("blub"),
-            //                 ]))))
-            //                 .card(VectorMatchCardinality::OneToMany(HashSet::from([
-            //                     String::from("bar"),
-            //                     String::from("foo"),
-            //                 ]))),
-            //         ),
-            //         Expr::from(VectorSelector::from("bar")),
-            //     ),
-            // ),
-            // (
-            //     "a + sum",
-            //     Expr::new_binary_expr(
-            //         Expr::from(VectorSelector::from("a")),
-            //         token::T_ADD,
-            //         None,
-            //         Expr::from(VectorSelector::from("sum")),
-            //     ),
-            // ),
+            (
+                // Test and/or/unless precedence.
+                "foo and bar unless baz or qux",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+                .and_then(|ex| {
+                    Expr::new_binary_expr(
+                        Expr::from(ex),
+                        token::T_LUNLESS,
+                        Some(
+                            BinModifier::default_modifier()
+                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                        ),
+                        Expr::from(VectorSelector::from("baz")),
+                    )
+                })
+                .and_then(|ex| {
+                    Expr::new_binary_expr(
+                        Expr::from(ex),
+                        token::T_LOR,
+                        Some(
+                            BinModifier::default_modifier()
+                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                        ),
+                        Expr::from(VectorSelector::from("qux")),
+                    )
+                }),
+            ),
+            (
+                // Test precedence and reassigning of operands.
+                "bar + on(foo) bla / on(baz, buz) group_right(test) blub",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("bla")),
+                    token::T_DIV,
+                    Some(
+                        BinModifier::default_modifier()
+                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                                String::from("test"),
+                            ])))
+                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                                String::from("baz"),
+                                String::from("buz"),
+                            ])))),
+                    ),
+                    Expr::from(VectorSelector::from("blub")),
+                )
+                .and_then(|ex| {
+                    Expr::new_binary_expr(
+                        Expr::from(VectorSelector::from("bar")),
+                        token::T_ADD,
+                        Some(BinModifier::default_modifier().matching(Some(
+                            VectorMatchModifier::On(HashSet::from([String::from("foo")])),
+                        ))),
+                        ex,
+                    )
+                }),
+            ),
+            (
+                "foo * on(test,blub) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_MUL,
+                    Some(
+                        BinModifier::default_modifier().matching(Some(VectorMatchModifier::On(
+                            HashSet::from([String::from("test"), String::from("blub")]),
+                        ))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo * on(test,blub) group_left bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_MUL,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::ManyToOne(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            ("foo and on(test,blub) bar", {
+                let matching = VectorMatchModifier::On(HashSet::from([
+                    String::from("test"),
+                    String::from("blub"),
+                ]));
+                let card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(matching))
+                            .card(card),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
+            ("foo and on() bar", {
+                let matching = VectorMatchModifier::On(HashSet::new());
+                let card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(matching))
+                            .card(card),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
+            ("foo and ignoring(test,blub) bar", {
+                let matching = VectorMatchModifier::Ignoring(HashSet::from([
+                    String::from("test"),
+                    String::from("blub"),
+                ]));
+                let card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(matching))
+                            .card(card),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
+            ("foo and ignoring() bar", {
+                let matching = VectorMatchModifier::Ignoring(HashSet::new());
+                let card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LAND,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(matching))
+                            .card(card),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                )
+            }),
+            ("foo unless on(bar) baz", {
+                let matching = VectorMatchModifier::On(HashSet::from([String::from("bar")]));
+                let card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_LUNLESS,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(matching))
+                            .card(card),
+                    ),
+                    Expr::from(VectorSelector::from("baz")),
+                )
+            }),
+            (
+                "foo / on(test,blub) group_left(bar) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_DIV,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                                String::from("bar"),
+                            ]))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo / ignoring(test,blub) group_left(blub) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_DIV,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                                String::from("blub"),
+                            ]))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo / ignoring(test,blub) group_left(bar) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_DIV,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                                String::from("bar"),
+                            ]))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo - on(test,blub) group_right(bar,foo) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_SUB,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                                String::from("bar"),
+                                String::from("foo"),
+                            ]))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "foo - ignoring(test,blub) group_right(bar,foo) bar",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("foo")),
+                    token::T_SUB,
+                    Some(
+                        BinModifier::default_modifier()
+                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                                String::from("test"),
+                                String::from("blub"),
+                            ]))))
+                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                                String::from("bar"),
+                                String::from("foo"),
+                            ]))),
+                    ),
+                    Expr::from(VectorSelector::from("bar")),
+                ),
+            ),
+            (
+                "a + sum",
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("a")),
+                    token::T_ADD,
+                    None,
+                    Expr::from(VectorSelector::from("sum")),
+                ),
+            ),
         ];
         assert_cases(Case::new_result_cases(cases));
 

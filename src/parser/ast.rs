@@ -16,6 +16,7 @@
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
+use std::collections::HashSet;
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -47,7 +48,7 @@ pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
     OneToMany(Labels),
-    ManyToMany, // logical/set binary operators
+    ManyToMany(Labels), // logical/set binary operators
 }
 
 impl VectorMatchCardinality {
@@ -294,30 +295,30 @@ pub struct BinaryExpr {
     /// The operands on the right sides of the operator.
     pub rhs: Box<Expr>,
 
-    pub matching: Option<BinModifier>,
+    pub modifier: Option<BinModifier>,
 }
 
 impl BinaryExpr {
     pub fn is_on(&self) -> bool {
-        matches!(&self.matching, Some(matching) if matching.is_on())
+        matches!(&self.modifier, Some(matching) if matching.is_on())
     }
 
     pub fn return_bool(&self) -> bool {
-        match &self.matching {
+        match &self.modifier {
             Some(matching) => matching.return_bool,
             None => false,
         }
     }
 
     pub fn is_labels_joint(&self) -> bool {
-        match &self.matching {
+        match &self.modifier {
             Some(matching) => matching.is_labels_joint(),
             None => false,
         }
     }
 
     pub fn intersect_labels(&self) -> Option<Vec<&String>> {
-        match &self.matching {
+        match &self.modifier {
             Some(matching) => matching.intersect_labels(),
             None => None,
         }
@@ -597,7 +598,7 @@ impl Expr {
     pub fn new_binary_expr(
         lhs: Expr,
         op: TokenType,
-        matching: Option<BinModifier>,
+        modifier: Option<BinModifier>,
         rhs: Expr,
     ) -> Result<Expr, String> {
         let op = Token::from(op);
@@ -605,7 +606,7 @@ impl Expr {
             op,
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            matching,
+            modifier,
         };
         Ok(Expr::Binary(ex))
     }
@@ -745,6 +746,29 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
             let lhs = check_ast(*ex.lhs.clone())?;
             let rhs = check_ast(*ex.rhs.clone())?;
 
+            if ex.op.is_set_operator() {
+                if lhs.value_type() == ValueType::Scalar || rhs.value_type() == ValueType::Scalar {
+                    let val = ex.op.val;
+                    return Err(format!(
+                        "set operator '{val}' not allowed in binary scalar expression"
+                    ));
+                }
+
+                match ex.modifier {
+                    Some(ref mut modifier) => {
+                        if modifier.card == VectorMatchCardinality::OneToOne {
+                            modifier.card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                        }
+                    }
+                    None => {
+                        ex.modifier = Some(
+                            BinModifier::default_modifier()
+                                .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
+                        );
+                    }
+                }
+            }
+
             if lhs.value_type() != ValueType::Scalar && lhs.value_type() != ValueType::Vector {
                 return Err(
                     "binary expression must contain only scalar and instant vector types".into(),
@@ -756,17 +780,8 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
                 );
             }
 
-            if (lhs.value_type() == ValueType::Scalar || rhs.value_type() == ValueType::Scalar)
-                && ex.op.is_set_operator()
-            {
-                let val = ex.op.val;
-                return Err(format!(
-                    "set operator '{val}' not allowed in binary scalar expression"
-                ));
-            }
-
             if lhs.value_type() != ValueType::Vector || rhs.value_type() != ValueType::Vector {
-                if let Some(modifier) = &ex.matching {
+                if let Some(modifier) = &ex.modifier {
                     if let Some(matching) = &modifier.matching {
                         if matching.labels().len() > 0 {
                             return Err(
@@ -781,7 +796,7 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
                 && rhs.value_type() == ValueType::Vector
                 && ex.op.is_set_operator()
             {
-                if let Some(modifier) = &ex.matching {
+                if let Some(modifier) = &ex.modifier {
                     if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
                         || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
                     {
@@ -794,18 +809,6 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
                 };
             }
 
-            if ex.op.is_set_operator() {
-                match ex.matching {
-                    Some(mut matching) => {
-                        matching.card = VectorMatchCardinality::ManyToMany;
-                        ex.matching = Some(matching);
-                    }
-                    None => {
-                        let modifier: BinModifier = Default::default();
-                        ex.matching = Some(modifier.card(VectorMatchCardinality::ManyToMany));
-                    }
-                }
-            }
             Ok(Expr::Binary(ex))
         }
         // TODO: check other exprs
