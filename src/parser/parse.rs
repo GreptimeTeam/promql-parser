@@ -826,7 +826,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             (r#"foo{NaN='bc'}"#, {
                 let name = String::from("foo");
@@ -834,7 +834,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             (r#"foo{bar='}'}"#, {
                 let name = String::from("foo");
@@ -842,7 +842,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
                 let name = String::from("foo");
@@ -863,7 +863,7 @@ mod tests {
                     )
                     .unwrap(),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
                 let name = String::from("foo");
@@ -884,7 +884,7 @@ mod tests {
                     )
                     .unwrap(),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
         ];
         assert_cases(Case::new_result_cases(cases));
@@ -1029,10 +1029,10 @@ mod tests {
                 let name_matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let label_matcher =
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
-                Expr::new_vector_selector(
-                    Some(name),
-                    Matchers::new(HashSet::from([name_matcher, label_matcher])),
-                )
+                Expr::new_vector_selector(Matchers::new(HashSet::from([
+                    name_matcher,
+                    label_matcher,
+                ])))
                 .and_then(|ex| Expr::new_matrix_selector(ex, duration::YEAR_DURATION * 5))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::DAY_DURATION * 3)))
             }),
@@ -1041,10 +1041,10 @@ mod tests {
                 let name_matcher = Matcher::new_eq_metric_matcher(name.clone());
                 let label_matcher =
                     Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
-                Expr::new_vector_selector(
-                    Some(name),
-                    Matchers::new(HashSet::from([name_matcher, label_matcher])),
-                )
+                Expr::new_vector_selector(Matchers::new(HashSet::from([
+                    name_matcher,
+                    label_matcher,
+                ])))
                 .and_then(|ex| Expr::new_matrix_selector(ex, duration::YEAR_DURATION * 5))
                 .and_then(|ex| ex.at_expr(At::try_from(1603774699_f64).unwrap()))
             }),
@@ -1206,7 +1206,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
                 ]));
-                let ex = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                let ex = Expr::new_vector_selector(matchers).unwrap();
                 Expr::new_call(get_function("floor").unwrap(), FunctionArgs::new_args(ex))
             }),
             ("rate(some_metric[5m])", {
@@ -1256,7 +1256,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                Expr::new_vector_selector(matchers).and_then(|ex| {
                     Expr::new_subquery_expr(
                         ex,
                         duration::MINUTE_DURATION * 10,
@@ -1270,7 +1270,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                Expr::new_vector_selector(matchers).and_then(|ex| {
                     Expr::new_subquery_expr(
                         ex,
                         duration::MINUTE_DURATION * 10 + duration::SECOND_DURATION * 5,
@@ -1288,7 +1288,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                     .and_then(|ex| {
                         Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
@@ -1313,7 +1313,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                     .and_then(|ex| {
                         Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
@@ -1341,7 +1341,7 @@ mod tests {
                         Matcher::new_eq_metric_matcher(name.clone()),
                         Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                     ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    Expr::new_vector_selector(matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -1376,7 +1376,7 @@ mod tests {
                         Matcher::new_eq_metric_matcher(name.clone()),
                         Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                     ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    Expr::new_vector_selector(matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -1411,7 +1411,7 @@ mod tests {
                         Matcher::new_eq_metric_matcher(name.clone()),
                         Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
                     ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    Expr::new_vector_selector(matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -1531,7 +1531,7 @@ mod tests {
                     Expr::from(VectorSelector::from("foo")),
                     token::T_ADD,
                     None,
-                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                    Expr::new_vector_selector(matchers).unwrap(),
                 )
                 .and_then(|ex| Expr::new_paren_expr(ex))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
@@ -1547,7 +1547,7 @@ mod tests {
                     Expr::from(VectorSelector::from("foo")),
                     token::T_ADD,
                     None,
-                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                    Expr::new_vector_selector(matchers).unwrap(),
                 )
                 .and_then(|ex| Expr::new_paren_expr(ex))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
@@ -1559,7 +1559,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
                 ]));
-                let rhs = Expr::new_vector_selector(Some(name), matchers)
+                let rhs = Expr::new_vector_selector(matchers)
                     .and_then(|ex| ex.at_expr(At::try_from(1234_f64).unwrap()))
                     .unwrap();
 
@@ -1630,7 +1630,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("end"), String::from("foo")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             (r#"end{start="foo"}"#, {
                 let name = String::from("end");
@@ -1638,7 +1638,7 @@ mod tests {
                     Matcher::new_eq_metric_matcher(name.clone()),
                     Matcher::new(MatchOp::Equal, String::from("start"), String::from("foo")),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(matchers)
             }),
             ("foo unless on(start) bar", {
                 let modifier = BinModifier::default_modifier()

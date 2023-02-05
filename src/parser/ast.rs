@@ -390,7 +390,7 @@ pub struct StringLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
-    pub name: Option<String>,
+    /// "__name__" will be set into the matchers if metric name is specified
     pub matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
@@ -398,9 +398,8 @@ pub struct VectorSelector {
 
 impl From<String> for VectorSelector {
     fn from(name: String) -> Self {
-        let matcher = Matcher::new_eq_metric_matcher(name.clone());
-        VectorSelector {
-            name: Some(name),
+        let matcher = Matcher::new_eq_metric_matcher(name);
+        Self {
             offset: None,
             at: None,
             matchers: Matchers::one(matcher),
@@ -420,7 +419,6 @@ impl From<String> for VectorSelector {
 ///
 /// let matcher = Matcher::new_eq_metric_matcher(String::from("foo"));
 /// let vs = VectorSelector {
-///     name: Some(String::from("foo")),
 ///     offset: None,
 ///     at: None,
 ///     matchers: Matchers::one(matcher),
@@ -430,6 +428,22 @@ impl From<String> for VectorSelector {
 impl From<&str> for VectorSelector {
     fn from(name: &str) -> Self {
         VectorSelector::from(name.to_string())
+    }
+}
+
+impl From<Matchers> for VectorSelector {
+    fn from(matchers: Matchers) -> Self {
+        Self {
+            offset: None,
+            at: None,
+            matchers,
+        }
+    }
+}
+
+impl From<Matcher> for VectorSelector {
+    fn from(matcher: Matcher) -> Self {
+        VectorSelector::from(Matchers::one(matcher))
     }
 }
 
@@ -490,9 +504,8 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
+    pub fn new_vector_selector(matchers: Matchers) -> Result<Self, String> {
         let vs = VectorSelector {
-            name,
             offset: None,
             at: None,
             matchers,
@@ -718,7 +731,7 @@ impl From<f64> for Expr {
 ///
 /// let name = String::from("foo");
 /// let matcher = Matcher::new_eq_metric_matcher(name.clone());
-/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
+/// let vs = Expr::new_vector_selector(Matchers::one(matcher));
 ///
 /// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
 impl From<VectorSelector> for Expr {
@@ -746,8 +759,14 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
         Expr::Binary(ex) => check_ast_for_binary_expr(ex),
         Expr::Aggregate(ex) => check_ast_for_aggregate_expr(ex),
-        // TODO: check other exprs
-        _ => Ok(expr),
+        Expr::Call(ex) => check_ast_for_call(ex),
+        Expr::Unary(ex) => check_ast_for_unary(ex),
+        Expr::Subquery(ex) => check_ast_for_subquery(ex),
+        Expr::VectorSelector(ex) => check_ast_for_vector_selector(ex),
+        Expr::Paren(_) => Ok(expr),
+        Expr::NumberLiteral(_) => Ok(expr),
+        Expr::StringLiteral(_) => Ok(expr),
+        Expr::MatrixSelector(_) => Ok(expr),
     }
 }
 
@@ -770,17 +789,6 @@ fn expect_type(
     }
 }
 
-fn expect_param_type(
-    actual: Option<&Expr>,
-    expected: ValueType,
-    context: &str,
-) -> Result<bool, String> {
-    match actual {
-        Some(expr) => expect_type(Some(expr.value_type()), expected, context),
-        None => expect_type(None, expected, context),
-    }
-}
-
 /// the original logic is redundant in prometheus, and the following coding blocks
 /// have been optimized for readability, but all logic SHOULD be covered.
 fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
@@ -795,9 +803,12 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
         return Err("bool modifier can only be used on comparison operators".into());
     }
 
+    let lhs_value_type = ex.lhs.value_type();
+    let rhs_value_type = ex.rhs.value_type();
+
     if ex.op.is_comparison_operator()
-        && ex.lhs.value_type() == ValueType::Scalar
-        && ex.rhs.value_type() == ValueType::Scalar
+        && lhs_value_type == ValueType::Scalar
+        && rhs_value_type == ValueType::Scalar
         && !ex.return_bool()
     {
         return Err("comparisons between scalars must use BOOL modifier".into());
@@ -817,14 +828,14 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     }
 
     if ex.op.is_set_operator() {
-        if ex.lhs.value_type() == ValueType::Scalar || ex.rhs.value_type() == ValueType::Scalar {
+        if lhs_value_type == ValueType::Scalar || rhs_value_type == ValueType::Scalar {
             let val = ex.op.val;
             return Err(format!(
                 "set operator '{val}' not allowed in binary scalar expression"
             ));
         }
 
-        if ex.lhs.value_type() == ValueType::Vector && ex.rhs.value_type() == ValueType::Vector {
+        if lhs_value_type == ValueType::Vector && rhs_value_type == ValueType::Vector {
             if let Some(ref modifier) = ex.modifier {
                 if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
                     || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
@@ -848,14 +859,14 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
         }
     }
 
-    if ex.lhs.value_type() != ValueType::Scalar && ex.lhs.value_type() != ValueType::Vector {
+    if lhs_value_type != ValueType::Scalar && lhs_value_type != ValueType::Vector {
         return Err("binary expression must contain only scalar and instant vector types".into());
     }
-    if ex.rhs.value_type() != ValueType::Scalar && ex.rhs.value_type() != ValueType::Vector {
+    if rhs_value_type != ValueType::Scalar && rhs_value_type != ValueType::Vector {
         return Err("binary expression must contain only scalar and instant vector types".into());
     }
 
-    if (ex.lhs.value_type() != ValueType::Vector || ex.rhs.value_type() != ValueType::Vector)
+    if (lhs_value_type != ValueType::Vector || rhs_value_type != ValueType::Vector)
         && !ex.is_matching_empty_labels()
     {
         return Err("vector matching only allowed between instant vectors".into());
@@ -878,6 +889,14 @@ fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
         "aggregation expression",
     )?;
 
+    let expect_param_type =
+        |actual: Option<&Expr>, expected: ValueType, context: &str| -> Result<bool, String> {
+            match actual {
+                Some(expr) => expect_type(Some(expr.value_type()), expected, context),
+                None => expect_type(None, expected, context),
+            }
+        };
+
     if ex.op.id == T_TOPK || ex.op.id == T_BOTTOMK || ex.op.id == T_QUANTILE {
         expect_param_type(
             ex.param.as_deref(),
@@ -895,6 +914,86 @@ fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
     }
 
     Ok(Expr::Aggregate(ex))
+}
+
+fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
+    let expected_args_len = ex.func.arg_types.len();
+    let name = ex.func.name;
+    let actual_args_len = ex.args.len();
+
+    // NOTE: check label_join function
+    if ex.func.variadic {
+        let expected_args_len_without_default = expected_args_len - 1;
+        if expected_args_len_without_default > actual_args_len {
+            return Err(format!(
+                "expected at least {expected_args_len_without_default} argument(s) in call to {name}, got {actual_args_len}"
+            ));
+        }
+
+        // label_join do not have a maximum threshold
+        if actual_args_len > expected_args_len && name.ne("label_join") {
+            return Err(format!(
+                "expected at most {expected_args_len} argument(s) in call to {name}, got {actual_args_len}"
+            ));
+        }
+    }
+
+    if !ex.func.variadic && expected_args_len != actual_args_len {
+        return Err(format!(
+            "expected {expected_args_len} argument(s) in call to {name}, got {actual_args_len}"
+        ));
+    }
+
+    for (idx, actual_arg) in ex.args.args.iter().enumerate() {
+        // the actual args len bigger than the expected args
+        if idx > ex.func.arg_types.len() {
+            // this is for label_join function
+            if !ex.func.variadic {
+                // This is not a vararg function so we should not check the
+                // type of the extra arguments.
+                break;
+            }
+            let idx = ex.func.arg_types.len() - 1;
+            expect_type(
+                Some(actual_arg.value_type()),
+                ex.func.arg_types[idx],
+                &format!("call to function {name}"),
+            )?;
+        }
+    }
+
+    Ok(Expr::Call(ex))
+}
+
+fn check_ast_for_unary(ex: UnaryExpr) -> Result<Expr, String> {
+    let value_type = ex.expr.value_type();
+    if value_type != ValueType::Scalar && value_type != ValueType::Vector {
+        return Err(format!(
+            "unary expression only allowed on expressions of type scalar or instant vector, got {value_type}"
+        ));
+    }
+
+    Ok(Expr::Unary(ex))
+}
+
+fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
+    let value_type = ex.expr.value_type();
+    if value_type != ValueType::Vector {
+        return Err(format!(
+            "subquery is only allowed on instant vector, got {value_type} instead"
+        ));
+    }
+
+    Ok(Expr::Subquery(ex))
+}
+
+fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
+    // A Vector selector must contain at least one non-empty matcher to prevent
+    // implicit selection of all metrics (e.g. by a typo).
+    if ex.matchers.matchers.is_empty() {
+        return Err("vector selector must contain at least one non-empty matcher".into());
+    }
+    Ok(Expr::VectorSelector(ex))
 }
 
 #[cfg(test)]
