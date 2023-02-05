@@ -15,7 +15,6 @@
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, T_END, T_START};
 use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
-use std::collections::HashSet;
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -47,7 +46,7 @@ pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
     OneToMany(Labels),
-    ManyToMany(Labels), // logical/set binary operators
+    ManyToMany, // logical/set binary operators
 }
 
 impl VectorMatchCardinality {
@@ -55,7 +54,7 @@ impl VectorMatchCardinality {
         match self {
             VectorMatchCardinality::ManyToOne(l) => Some(l),
             VectorMatchCardinality::OneToMany(l) => Some(l),
-            VectorMatchCardinality::ManyToMany(l) => Some(l),
+            VectorMatchCardinality::ManyToMany => None,
             VectorMatchCardinality::OneToOne => None,
         }
     }
@@ -783,14 +782,12 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
         match ex.modifier {
             Some(ref mut modifier) => {
                 if modifier.card == VectorMatchCardinality::OneToOne {
-                    modifier.card = VectorMatchCardinality::ManyToMany(HashSet::new());
+                    modifier.card = VectorMatchCardinality::ManyToMany;
                 }
             }
             None => {
-                ex.modifier = Some(
-                    BinModifier::default_modifier()
-                        .card(VectorMatchCardinality::ManyToMany(HashSet::new())),
-                );
+                ex.modifier =
+                    Some(BinModifier::default_modifier().card(VectorMatchCardinality::ManyToMany));
             }
         }
     }
