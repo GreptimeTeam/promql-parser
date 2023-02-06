@@ -30,5 +30,5 @@ pub use function::{get_function, Function, FunctionArgs};
 pub use lex::{is_label, lexer, LexemeType};
 pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
-pub use token::{Token, TokenType};
+pub use token::{StorageType, Token, TokenType};
 pub use value::{Value, ValueType};

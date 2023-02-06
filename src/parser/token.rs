@@ -19,10 +19,19 @@ use std::fmt::{self, Display};
 lrlex::lrlex_mod!("token_map");
 pub use token_map::*;
 
-pub type TokenType = u8;
+pub type StorageType = u8;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TokenType(StorageType);
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "id: {}", self.0)
+    }
+}
 
 lazy_static! {
-    static ref KEYWORDS: HashMap<&'static str, TokenType> =
+    static ref KEYWORDS: HashMap<&'static str, StorageType> =
         [
             // Operators.
             ("and", T_LAND),
@@ -66,7 +75,7 @@ lazy_static! {
 
 /// this is for debug so far, maybe pretty feature in the future.
 #[allow(dead_code)]
-pub(crate) fn token_display(id: TokenType) -> &'static str {
+pub(crate) fn token_display(id: StorageType) -> &'static str {
     match id {
         // Token.
         T_EQL => "=",
@@ -163,7 +172,7 @@ pub(crate) fn token_display(id: TokenType) -> &'static str {
 /// When changing this list, make sure to also change
 /// the maybe_label grammar rule in the generated parser
 /// to avoid misinterpretation of labels as keywords.
-pub fn get_keyword_token(s: &str) -> Option<TokenType> {
+pub fn get_keyword_token(s: &str) -> Option<StorageType> {
     KEYWORDS.get(s).copied()
 }
 
@@ -179,40 +188,45 @@ impl Display for Token {
     }
 }
 
-impl From<TokenType> for Token {
-    fn from(id: TokenType) -> Self {
-        let val = token_display(id).to_string();
-        Token { id, val }
+impl Token {
+    pub fn new(id: StorageType, val: String) -> Self {
+        Self {
+            id: TokenType(id),
+            val,
+        }
+    }
+
+    pub fn id(&self) -> StorageType {
+        self.id.id()
     }
 }
 
-impl Token {
-    pub fn new(id: TokenType, val: String) -> Self {
-        Self { id, val }
+impl TokenType {
+    pub fn new(id: StorageType) -> Self {
+        Self(id)
     }
-
+    pub fn id(&self) -> StorageType {
+        self.0
+    }
     pub fn is_aggregator_with_param(&self) -> bool {
-        self.id == T_TOPK
-            || self.id == T_BOTTOMK
-            || self.id == T_COUNT_VALUES
-            || self.id == T_QUANTILE
+        self.0 == T_TOPK || self.0 == T_BOTTOMK || self.0 == T_COUNT_VALUES || self.0 == T_QUANTILE
     }
 
     pub fn is_comparison_operator(&self) -> bool {
-        self.id == T_EQLC
-            || self.id == T_NEQ
-            || self.id == T_LTE
-            || self.id == T_LSS
-            || self.id == T_GTE
-            || self.id == T_GTR
+        self.0 == T_EQLC
+            || self.0 == T_NEQ
+            || self.0 == T_LTE
+            || self.0 == T_LSS
+            || self.0 == T_GTE
+            || self.0 == T_GTR
     }
 
     pub fn is_set_operator(&self) -> bool {
-        self.id == T_LAND || self.id == T_LOR || self.id == T_LUNLESS
+        self.0 == T_LAND || self.0 == T_LOR || self.0 == T_LUNLESS
     }
 
     pub fn is_operator(&self) -> bool {
-        self.id > T_OPERATORS_START && self.id < T_OPERATORS_END
+        self.0 > T_OPERATORS_START && self.0 < T_OPERATORS_END
     }
 }
 
@@ -350,64 +364,64 @@ mod tests {
 
     #[test]
     fn test_with_param() {
-        assert!(Token::new(T_TOPK, "top".into()).is_aggregator_with_param());
-        assert!(Token::new(T_BOTTOMK, "bottomk".into()).is_aggregator_with_param());
-        assert!(Token::new(T_COUNT_VALUES, "count_values".into()).is_aggregator_with_param());
-        assert!(Token::new(T_QUANTILE, "quantile".into()).is_aggregator_with_param());
+        assert!(TokenType(T_TOPK).is_aggregator_with_param());
+        assert!(TokenType(T_BOTTOMK).is_aggregator_with_param());
+        assert!(TokenType(T_COUNT_VALUES).is_aggregator_with_param());
+        assert!(TokenType(T_QUANTILE).is_aggregator_with_param());
 
-        assert!(!Token::new(T_MAX, "max".into()).is_aggregator_with_param());
-        assert!(!Token::new(T_MIN, "min".into()).is_aggregator_with_param());
-        assert!(!Token::new(T_AVG, "avg".into()).is_aggregator_with_param());
+        assert!(!TokenType(T_MAX).is_aggregator_with_param());
+        assert!(!TokenType(T_MIN).is_aggregator_with_param());
+        assert!(!TokenType(T_AVG).is_aggregator_with_param());
     }
 
     #[test]
     fn test_comparison_operator() {
-        assert!(Token::from(T_EQLC).is_comparison_operator());
-        assert!(Token::from(T_NEQ).is_comparison_operator());
-        assert!(Token::from(T_LTE).is_comparison_operator());
-        assert!(Token::from(T_LSS).is_comparison_operator());
-        assert!(Token::from(T_GTE).is_comparison_operator());
-        assert!(Token::from(T_GTR).is_comparison_operator());
+        assert!(TokenType(T_EQLC).is_comparison_operator());
+        assert!(TokenType(T_NEQ).is_comparison_operator());
+        assert!(TokenType(T_LTE).is_comparison_operator());
+        assert!(TokenType(T_LSS).is_comparison_operator());
+        assert!(TokenType(T_GTE).is_comparison_operator());
+        assert!(TokenType(T_GTR).is_comparison_operator());
 
-        assert!(!Token::from(T_ADD).is_comparison_operator());
-        assert!(!Token::from(T_LAND).is_comparison_operator());
+        assert!(!TokenType(T_ADD).is_comparison_operator());
+        assert!(!TokenType(T_LAND).is_comparison_operator());
     }
 
     #[test]
     fn test_is_set_operator() {
-        assert!(Token::from(T_LAND).is_set_operator());
-        assert!(Token::from(T_LOR).is_set_operator());
-        assert!(Token::from(T_LUNLESS).is_set_operator());
+        assert!(TokenType(T_LAND).is_set_operator());
+        assert!(TokenType(T_LOR).is_set_operator());
+        assert!(TokenType(T_LUNLESS).is_set_operator());
 
-        assert!(!Token::from(T_ADD).is_set_operator());
-        assert!(!Token::from(T_MAX).is_set_operator());
-        assert!(!Token::from(T_NEQ).is_set_operator());
+        assert!(!TokenType(T_ADD).is_set_operator());
+        assert!(!TokenType(T_MAX).is_set_operator());
+        assert!(!TokenType(T_NEQ).is_set_operator());
     }
 
     #[test]
     fn test_is_operator() {
-        assert!(Token::from(T_ADD).is_operator());
-        assert!(Token::from(T_DIV).is_operator());
-        assert!(Token::from(T_EQLC).is_operator());
-        assert!(Token::from(T_EQL_REGEX).is_operator());
-        assert!(Token::from(T_GTE).is_operator());
-        assert!(Token::from(T_GTR).is_operator());
-        assert!(Token::from(T_LAND).is_operator());
-        assert!(Token::from(T_LOR).is_operator());
-        assert!(Token::from(T_LSS).is_operator());
-        assert!(Token::from(T_LTE).is_operator());
-        assert!(Token::from(T_LUNLESS).is_operator());
-        assert!(Token::from(T_MOD).is_operator());
-        assert!(Token::from(T_MUL).is_operator());
-        assert!(Token::from(T_NEQ).is_operator());
-        assert!(Token::from(T_NEQ_REGEX).is_operator());
-        assert!(Token::from(T_POW).is_operator());
-        assert!(Token::from(T_SUB).is_operator());
-        assert!(Token::from(T_AT).is_operator());
-        assert!(Token::from(T_ATAN2).is_operator());
+        assert!(TokenType(T_ADD).is_operator());
+        assert!(TokenType(T_DIV).is_operator());
+        assert!(TokenType(T_EQLC).is_operator());
+        assert!(TokenType(T_EQL_REGEX).is_operator());
+        assert!(TokenType(T_GTE).is_operator());
+        assert!(TokenType(T_GTR).is_operator());
+        assert!(TokenType(T_LAND).is_operator());
+        assert!(TokenType(T_LOR).is_operator());
+        assert!(TokenType(T_LSS).is_operator());
+        assert!(TokenType(T_LTE).is_operator());
+        assert!(TokenType(T_LUNLESS).is_operator());
+        assert!(TokenType(T_MOD).is_operator());
+        assert!(TokenType(T_MUL).is_operator());
+        assert!(TokenType(T_NEQ).is_operator());
+        assert!(TokenType(T_NEQ_REGEX).is_operator());
+        assert!(TokenType(T_POW).is_operator());
+        assert!(TokenType(T_SUB).is_operator());
+        assert!(TokenType(T_AT).is_operator());
+        assert!(TokenType(T_ATAN2).is_operator());
 
-        assert!(!Token::from(T_SUM).is_operator());
-        assert!(!Token::from(T_OPERATORS_START).is_operator());
-        assert!(!Token::from(T_OPERATORS_END).is_operator());
+        assert!(!TokenType(T_SUM).is_operator());
+        assert!(!TokenType(T_OPERATORS_START).is_operator());
+        assert!(!TokenType(T_OPERATORS_END).is_operator());
     }
 }

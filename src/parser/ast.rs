@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::label::{Labels, Matcher, Matchers};
-use crate::parser::token::{self, T_END, T_START};
-use crate::parser::{Function, FunctionArgs, Token, TokenType, ValueType};
+use crate::parser::token::{self, token_display, T_END, T_START};
+use crate::parser::{Function, FunctionArgs, StorageType, Token, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -66,7 +66,9 @@ pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
     pub card: VectorMatchCardinality,
-    /// on/ignoring on labels
+
+    /// on/ignoring on labels.
+    /// like a + b, no match modifier is needed.
     pub matching: Option<VectorMatchModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
@@ -83,9 +85,6 @@ impl Default for BinModifier {
 }
 
 impl BinModifier {
-    pub fn default_modifier() -> Self {
-        Default::default()
-    }
     pub fn card(mut self, card: VectorMatchCardinality) -> Self {
         self.card = card;
         self
@@ -174,10 +173,10 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
-impl TryFrom<TokenType> for AtModifier {
+impl TryFrom<StorageType> for AtModifier {
     type Error = String;
 
-    fn try_from(id: TokenType) -> Result<Self, Self::Error> {
+    fn try_from(id: StorageType) -> Result<Self, Self::Error> {
         match id {
             T_START => Ok(AtModifier::Start),
             T_END => Ok(AtModifier::End),
@@ -193,7 +192,7 @@ impl TryFrom<Token> for AtModifier {
     type Error = String;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        AtModifier::try_from(token.id)
+        AtModifier::try_from(token.id())
     }
 }
 
@@ -267,7 +266,7 @@ pub struct EvalStmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     /// The used aggregation operation.
-    pub op: Token,
+    pub op: TokenType,
     /// The Vector expression over which is aggregated.
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
@@ -289,7 +288,7 @@ pub struct UnaryExpr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
     /// The operation of the expression.
-    pub op: Token,
+    pub op: TokenType,
     /// The operands on the left sides of the operator.
     pub lhs: Box<Expr>,
     /// The operands on the right sides of the operator.
@@ -601,13 +600,12 @@ impl Expr {
 
     pub fn new_binary_expr(
         lhs: Expr,
-        op: TokenType,
+        op: StorageType,
         modifier: Option<BinModifier>,
         rhs: Expr,
     ) -> Result<Expr, String> {
-        let op = Token::from(op);
         let ex = BinaryExpr {
-            op,
+            op: TokenType::new(op),
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
             modifier,
@@ -616,16 +614,14 @@ impl Expr {
     }
 
     pub fn new_aggregate_expr(
-        op: TokenType,
+        op: StorageType,
         modifier: AggModifier,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
+        let op = TokenType::new(op);
         if args.is_empty() {
             return Err("no arguments for aggregate expression provided".into());
         }
-
-        let op = Token::from(op);
-
         let mut desired_args_count = 1;
         let mut param = None;
         if op.is_aggregator_with_param() {
@@ -737,10 +733,11 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
 /// the original logic is redundant in prometheus, and the following coding blocks
 /// have been optimized for readability, but all logic SHOULD be covered.
 fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
+    let op_display = token_display(ex.op.id());
+
     if !ex.op.is_operator() {
-        let val = ex.op.val;
         return Err(format!(
-            "binary expression does not support operator '{val}'"
+            "binary expression does not support operator '{op_display}'"
         ));
     }
 
@@ -771,9 +768,8 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
 
     if ex.op.is_set_operator() {
         if ex.lhs.value_type() == ValueType::Scalar || ex.rhs.value_type() == ValueType::Scalar {
-            let val = ex.op.val;
             return Err(format!(
-                "set operator '{val}' not allowed in binary scalar expression"
+                "set operator '{op_display}' not allowed in binary scalar expression"
             ));
         }
 
@@ -782,8 +778,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
                 if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
                     || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
                 {
-                    let val = ex.op.val;
-                    return Err(format!("no grouping allowed for '{val}' operation"));
+                    return Err(format!("no grouping allowed for '{op_display}' operation"));
                 }
             };
         }
@@ -795,8 +790,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
                 }
             }
             None => {
-                ex.modifier =
-                    Some(BinModifier::default_modifier().card(VectorMatchCardinality::ManyToMany));
+                ex.modifier = Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany));
             }
         }
     }

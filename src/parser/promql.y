@@ -145,16 +145,16 @@ expr -> Result<Expr, String>:
 aggregate_expr -> Result<Expr, String>:
                 aggregate_op aggregate_modifier function_call_body
                 {
-                        Expr::new_aggregate_expr($1?.id, $2?, $3?)
+                        Expr::new_aggregate_expr($1?.id(), $2?, $3?)
                 }
                 | aggregate_op function_call_body aggregate_modifier
                 {
-                        Expr::new_aggregate_expr($1?.id, $3?, $2?)
+                        Expr::new_aggregate_expr($1?.id(), $3?, $2?)
                 }
                 | aggregate_op function_call_body
                 {
                         let modifier = AggModifier::By(HashSet::new());
-                        Expr::new_aggregate_expr($1?.id, modifier, $2?)
+                        Expr::new_aggregate_expr($1?.id(), modifier, $2?)
                 }
                 ;
 
@@ -196,7 +196,7 @@ bool_modifier -> Result<Option<BinModifier>, String>:
                 { Ok(None) }
                 | BOOL
                 {
-                        let modifier = BinModifier::default_modifier().return_bool(true);
+                        let modifier = BinModifier::default().return_bool(true);
                         Ok(Some(modifier))
                 }
                 ;
@@ -382,7 +382,7 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
                         let value = lexeme_to_string($lexer, &$3)?;
-                        Matcher::new_matcher($2?.id, name, value)
+                        Matcher::new_matcher($2?.id(), name, value)
                 }
                 ;
 

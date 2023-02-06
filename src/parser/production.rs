@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{LexemeType, Token, TokenType};
+use crate::parser::{LexemeType, StorageType, Token};
 use lrpar::{Lexeme, NonStreamingLexer, Span};
 
 /// caller MUST pay attention to the index out of bounds issue
-pub fn span_to_string(lexer: &dyn NonStreamingLexer<LexemeType, TokenType>, span: Span) -> String {
+pub fn span_to_string(
+    lexer: &dyn NonStreamingLexer<LexemeType, StorageType>,
+    span: Span,
+) -> String {
     lexer.span_str(span).to_string()
 }
 
 pub fn lexeme_to_string(
-    lexer: &dyn NonStreamingLexer<LexemeType, TokenType>,
+    lexer: &dyn NonStreamingLexer<LexemeType, StorageType>,
     lexeme: &Result<LexemeType, LexemeType>,
 ) -> Result<String, String> {
     lexeme
@@ -30,7 +33,7 @@ pub fn lexeme_to_string(
 }
 
 pub fn lexeme_to_token(
-    lexer: &dyn NonStreamingLexer<LexemeType, TokenType>,
+    lexer: &dyn NonStreamingLexer<LexemeType, StorageType>,
     lexeme: Result<LexemeType, LexemeType>,
 ) -> Result<Token, String> {
     lexeme
