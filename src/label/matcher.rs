@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use crate::label::METRIC_NAME;
-use crate::parser::token::{TokenType, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -84,7 +84,7 @@ impl Matcher {
         }
     }
 
-    pub fn new_matcher(id: TokenType, name: String, value: String) -> Result<Matcher, String> {
+    pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
         match id {
             T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
             T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
