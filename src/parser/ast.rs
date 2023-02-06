@@ -735,8 +735,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     // Every time series of the result vector must be uniquely identifiable.
     if ex.is_matching_on() && ex.is_labels_joint() {
         if let Some(labels) = ex.intersect_labels() {
-            if !labels.is_empty() {
-                let label = labels[0];
+            if let Some(label) = labels.first() {
                 return Err(format!(
                     "label '{label}' must not occur in ON and GROUP clause at once"
                 ));
@@ -761,8 +760,8 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
             };
         }
 
-        match ex.modifier {
-            Some(ref mut modifier) => {
+        match &mut ex.modifier {
+            Some(modifier) => {
                 if modifier.card == VectorMatchCardinality::OneToOne {
                     modifier.card = VectorMatchCardinality::ManyToMany;
                 }
