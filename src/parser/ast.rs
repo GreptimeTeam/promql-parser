@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
-use crate::label::{Labels, Matchers};
-use crate::parser::token::{self, T_END, T_START};
-use crate::parser::{Function, FunctionArgs, Token, TokenType};
+use crate::label::{Labels, Matcher, Matchers};
+use crate::parser::token::{self, token_display, T_END, T_START};
+use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -27,6 +26,19 @@ pub enum VectorMatchModifier {
     Ignoring(Labels),
 }
 
+impl VectorMatchModifier {
+    pub fn labels(&self) -> &Labels {
+        match self {
+            VectorMatchModifier::On(l) => l,
+            VectorMatchModifier::Ignoring(l) => l,
+        }
+    }
+
+    pub fn is_on(&self) -> bool {
+        matches!(*self, VectorMatchModifier::On(_))
+    }
+}
+
 /// The label list provided with the group_left or group_right modifier contains
 /// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,7 +46,18 @@ pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
     OneToMany(Labels),
-    // ManyToMany, // useless so far
+    ManyToMany, // logical/set binary operators
+}
+
+impl VectorMatchCardinality {
+    pub fn labels(&self) -> Option<&Labels> {
+        match self {
+            VectorMatchCardinality::ManyToOne(l) => Some(l),
+            VectorMatchCardinality::OneToMany(l) => Some(l),
+            VectorMatchCardinality::ManyToMany => None,
+            VectorMatchCardinality::OneToOne => None,
+        }
+    }
 }
 
 /// Binary Expr Modifier
@@ -43,10 +66,61 @@ pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
     pub card: VectorMatchCardinality,
-    /// on/ignoring on labels
-    pub matching: VectorMatchModifier,
+
+    /// on/ignoring on labels.
+    /// like a + b, no match modifier is needed.
+    pub matching: Option<VectorMatchModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
+}
+
+impl Default for BinModifier {
+    fn default() -> Self {
+        Self {
+            card: VectorMatchCardinality::OneToOne,
+            matching: None,
+            return_bool: false,
+        }
+    }
+}
+
+impl BinModifier {
+    pub fn with_card(mut self, card: VectorMatchCardinality) -> Self {
+        self.card = card;
+        self
+    }
+
+    pub fn with_matching(mut self, matching: Option<VectorMatchModifier>) -> Self {
+        self.matching = matching;
+        self
+    }
+
+    pub fn with_return_bool(mut self, return_bool: bool) -> Self {
+        self.return_bool = return_bool;
+        self
+    }
+
+    pub fn is_labels_joint(&self) -> bool {
+        matches!((self.card.labels(), &self.matching),
+                 (Some(labels), Some(matching)) if !matching.labels().is_disjoint(labels))
+    }
+
+    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+        if let Some(labels) = self.card.labels() {
+            if let Some(matching) = &self.matching {
+                return Some(matching.labels().intersection(labels).into_iter().collect());
+            }
+        };
+        None
+    }
+
+    pub fn is_matching_on(&self) -> bool {
+        matches!(&self.matching, Some(matching) if matching.is_on())
+    }
+
+    pub fn is_matching_labels_not_empty(&self) -> bool {
+        matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
+    }
 }
 
 /// Aggregation Modifier
@@ -77,10 +151,10 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
-impl TryFrom<TokenType> for AtModifier {
+impl TryFrom<TokenId> for AtModifier {
     type Error = String;
 
-    fn try_from(id: TokenType) -> Result<Self, Self::Error> {
+    fn try_from(id: TokenId) -> Result<Self, Self::Error> {
         match id {
             T_START => Ok(AtModifier::Start),
             T_END => Ok(AtModifier::End),
@@ -96,7 +170,7 @@ impl TryFrom<Token> for AtModifier {
     type Error = String;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        AtModifier::try_from(token.id)
+        AtModifier::try_from(token.id())
     }
 }
 
@@ -175,7 +249,7 @@ pub struct AggregateExpr {
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
-    pub grouping: AggModifier,
+    pub modifier: AggModifier,
 }
 
 /// UnaryExpr will negate the expr
@@ -198,7 +272,33 @@ pub struct BinaryExpr {
     /// The operands on the right sides of the operator.
     pub rhs: Box<Expr>,
 
-    pub matching: BinModifier,
+    pub modifier: Option<BinModifier>,
+}
+
+impl BinaryExpr {
+    pub fn is_matching_on(&self) -> bool {
+        matches!(&self.modifier, Some(modifier) if modifier.is_matching_on())
+    }
+
+    pub fn is_matching_labels_not_empty(&self) -> bool {
+        matches!(&self.modifier, Some(modifier) if modifier.is_matching_labels_not_empty())
+    }
+
+    pub fn return_bool(&self) -> bool {
+        matches!(&self.modifier, Some(modifier) if modifier.return_bool)
+    }
+
+    /// check if labels of card and matching are joint
+    pub fn is_labels_joint(&self) -> bool {
+        matches!(&self.modifier, Some(modifier) if modifier.is_labels_joint())
+    }
+
+    /// intersect labels of card and matching
+    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+        self.modifier
+            .as_ref()
+            .and_then(|modifier| modifier.intersect_labels())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -252,9 +352,46 @@ pub struct StringLiteral {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
     pub name: Option<String>,
-    pub label_matchers: Matchers,
+    pub matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+impl From<String> for VectorSelector {
+    fn from(name: String) -> Self {
+        let matcher = Matcher::new_eq_metric_matcher(name.clone());
+        VectorSelector {
+            name: Some(name),
+            offset: None,
+            at: None,
+            matchers: Matchers::one(matcher),
+        }
+    }
+}
+
+/// directly create an instant vector with only METRIC_NAME matcher.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use promql_parser::parser::{Expr, VectorSelector};
+/// use promql_parser::label::{MatchOp, Matcher, Matchers};
+///
+/// let matcher = Matcher::new_eq_metric_matcher(String::from("foo"));
+/// let vs = VectorSelector {
+///     name: Some(String::from("foo")),
+///     offset: None,
+///     at: None,
+///     matchers: Matchers::one(matcher),
+/// };
+///
+/// assert_eq!(VectorSelector::from("foo"), vs);
+impl From<&str> for VectorSelector {
+    fn from(name: &str) -> Self {
+        VectorSelector::from(name.to_string())
+    }
 }
 
 impl Neg for VectorSelector {
@@ -319,7 +456,7 @@ impl Expr {
             name,
             offset: None,
             at: None,
-            label_matchers: matchers,
+            matchers,
         };
         Ok(Self::VectorSelector(vs))
     }
@@ -441,31 +578,31 @@ impl Expr {
 
     pub fn new_binary_expr(
         lhs: Expr,
-        op: TokenType,
-        matching: BinModifier,
+        op: TokenId,
+        modifier: Option<BinModifier>,
         rhs: Expr,
     ) -> Result<Expr, String> {
         let ex = BinaryExpr {
-            op,
+            op: TokenType::new(op),
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            matching,
+            modifier,
         };
         Ok(Expr::Binary(ex))
     }
 
     pub fn new_aggregate_expr(
-        op: TokenType,
-        grouping: AggModifier,
+        op: TokenId,
+        modifier: AggModifier,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
+        let op = TokenType::new(op);
         if args.is_empty() {
             return Err("no arguments for aggregate expression provided".into());
         }
-
         let mut desired_args_count = 1;
         let mut param = None;
-        if token::is_aggregator_with_param(op) {
+        if op.is_aggregator_with_param() {
             desired_args_count = 2;
             param = Some(args.first());
         }
@@ -480,9 +617,32 @@ impl Expr {
             op,
             expr: args.last(),
             param,
-            grouping,
+            modifier,
         };
         Ok(Expr::Aggregate(ex))
+    }
+
+    pub fn value_type(&self) -> ValueType {
+        match self {
+            Expr::Aggregate(_) => ValueType::Vector,
+            Expr::Unary(ex) => ex.expr.value_type(),
+            Expr::Binary(ex) => {
+                if ex.lhs.value_type() == ValueType::Scalar
+                    && ex.rhs.value_type() == ValueType::Scalar
+                {
+                    ValueType::Scalar
+                } else {
+                    ValueType::Vector
+                }
+            }
+            Expr::Paren(ex) => ex.expr.value_type(),
+            Expr::Subquery(_) => ValueType::Matrix,
+            Expr::NumberLiteral(_) => ValueType::Scalar,
+            Expr::StringLiteral(_) => ValueType::String,
+            Expr::VectorSelector(_) => ValueType::Vector,
+            Expr::MatrixSelector(_) => ValueType::Matrix,
+            Expr::Call(ex) => ex.func.return_type,
+        }
     }
 }
 
@@ -504,6 +664,27 @@ impl From<f64> for Expr {
     }
 }
 
+/// directly create an Expr::VectorSelector from instant vector
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use promql_parser::parser::{Expr, VectorSelector};
+/// use promql_parser::label::{MatchOp, Matcher, Matchers};
+///
+/// let name = String::from("foo");
+/// let matcher = Matcher::new_eq_metric_matcher(name.clone());
+/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
+///
+/// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
+impl From<VectorSelector> for Expr {
+    fn from(vs: VectorSelector) -> Self {
+        Expr::VectorSelector(vs)
+    }
+}
+
 impl Neg for Expr {
     type Output = Self;
 
@@ -515,6 +696,97 @@ impl Neg for Expr {
             }),
         }
     }
+}
+
+/// check_ast checks the validity of the provided AST. This includes type checking.
+/// Recursively check correct typing for child nodes and raise errors in case of bad typing.
+pub fn check_ast(expr: Expr) -> Result<Expr, String> {
+    match expr {
+        Expr::Binary(ex) => check_ast_for_binary_expr(ex),
+        // TODO: check other exprs
+        _ => Ok(expr),
+    }
+}
+
+/// the original logic is redundant in prometheus, and the following coding blocks
+/// have been optimized for readability, but all logic SHOULD be covered.
+fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
+    let op_display = token_display(ex.op.id());
+
+    if !ex.op.is_operator() {
+        return Err(format!(
+            "binary expression does not support operator '{op_display}'"
+        ));
+    }
+
+    if ex.return_bool() && !ex.op.is_comparison_operator() {
+        return Err("bool modifier can only be used on comparison operators".into());
+    }
+
+    if ex.op.is_comparison_operator()
+        && ex.lhs.value_type() == ValueType::Scalar
+        && ex.rhs.value_type() == ValueType::Scalar
+        && !ex.return_bool()
+    {
+        return Err("comparisons between scalars must use BOOL modifier".into());
+    }
+
+    // For `on` matching, a label can only appear in one of the lists.
+    // Every time series of the result vector must be uniquely identifiable.
+    if ex.is_matching_on() && ex.is_labels_joint() {
+        if let Some(labels) = ex.intersect_labels() {
+            if let Some(label) = labels.first() {
+                return Err(format!(
+                    "label '{label}' must not occur in ON and GROUP clause at once"
+                ));
+            }
+        };
+    }
+
+    if ex.op.is_set_operator() {
+        if ex.lhs.value_type() == ValueType::Scalar || ex.rhs.value_type() == ValueType::Scalar {
+            return Err(format!(
+                "set operator '{op_display}' not allowed in binary scalar expression"
+            ));
+        }
+
+        if ex.lhs.value_type() == ValueType::Vector && ex.rhs.value_type() == ValueType::Vector {
+            if let Some(ref modifier) = ex.modifier {
+                if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
+                    || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
+                {
+                    return Err(format!("no grouping allowed for '{op_display}' operation"));
+                }
+            };
+        }
+
+        match &mut ex.modifier {
+            Some(modifier) => {
+                if modifier.card == VectorMatchCardinality::OneToOne {
+                    modifier.card = VectorMatchCardinality::ManyToMany;
+                }
+            }
+            None => {
+                ex.modifier =
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany));
+            }
+        }
+    }
+
+    if ex.lhs.value_type() != ValueType::Scalar && ex.lhs.value_type() != ValueType::Vector {
+        return Err("binary expression must contain only scalar and instant vector types".into());
+    }
+    if ex.rhs.value_type() != ValueType::Scalar && ex.rhs.value_type() != ValueType::Vector {
+        return Err("binary expression must contain only scalar and instant vector types".into());
+    }
+
+    if (ex.lhs.value_type() != ValueType::Vector || ex.rhs.value_type() != ValueType::Vector)
+        && ex.is_matching_labels_not_empty()
+    {
+        return Err("vector matching only allowed between instant vectors".into());
+    }
+
+    Ok(Expr::Binary(ex))
 }
 
 #[cfg(test)]

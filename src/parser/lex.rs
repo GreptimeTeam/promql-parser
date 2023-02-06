@@ -20,9 +20,9 @@ use std::fmt::Debug;
 const ESCAPE_SYMBOLS: &str = r#"abfnrtv\"#;
 const STRING_SYMBOLS: &str = r#"'"`"#;
 
-pub type LexemeType = DefaultLexeme<TokenType>;
+pub type LexemeType = DefaultLexeme<TokenId>;
 
-pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, String> {
+pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenId>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
@@ -39,7 +39,7 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenType>, Stri
 enum State {
     Start,
     End,
-    Lexeme(TokenType),
+    Lexeme(TokenId),
     Identifier,
     KeywordOrIdentifier,
     NumberOrDuration,
@@ -106,7 +106,7 @@ impl Context {
     }
 
     /// string lexeme SHOULD trim the surrounding string symbols, ' or " or `
-    fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
+    fn lexeme(&mut self, token_id: TokenId) -> LexemeType {
         let mut start = self.start;
         let mut len = self.pos - self.start;
         if token_id == T_STRING {
@@ -227,7 +227,7 @@ impl Lexer {
 
     /// lexeme() consumes the Span, which means consecutive lexeme() call
     /// will get wrong Span unless Lexer shifts its State.
-    fn lexeme(&mut self, token_id: TokenType) -> LexemeType {
+    fn lexeme(&mut self, token_id: TokenId) -> LexemeType {
         let lexeme = self.ctx.lexeme(token_id);
         self.ctx.ignore();
         lexeme
@@ -682,7 +682,7 @@ pub fn is_label(s: &str) -> bool {
 mod tests {
     use super::*;
 
-    type LexemeTuple = (TokenType, usize, usize);
+    type LexemeTuple = (TokenId, usize, usize);
     /// MatchTuple.0 is input
     /// MatchTuple.1 is the expected generated Lexemes
     /// MatchTuple.2 is the Err info if the input is invalid PromQL query

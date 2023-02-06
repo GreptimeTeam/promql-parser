@@ -124,18 +124,19 @@ START_METRIC_SELECTOR
 
 %%
 expr -> Result<Expr, String>:
-                aggregate_expr { $1 }
-                | at_expr { $1 }
-                /* | binary_expr { $1 } */
-                | function_call { $1 }
-                | matrix_selector { $1 }
-                | number_literal { $1 }
-                | offset_expr { $1 }
-                | paren_expr { $1 }
-                | string_literal { $1 }
-                | subquery_expr { $1 }
-                | unary_expr  { $1 }
-                | vector_selector  { $1 }
+/* check_ast from bottom to up for nested exprs */
+                aggregate_expr { check_ast($1?) }
+                | at_expr { check_ast($1?) }
+                | binary_expr { check_ast($1?) }
+                | function_call { check_ast($1?) }
+                | matrix_selector { check_ast($1?) }
+                | number_literal { check_ast($1?) }
+                | offset_expr { check_ast($1?) }
+                | paren_expr { check_ast($1?) }
+                | string_literal { check_ast($1?) }
+                | subquery_expr { check_ast($1?) }
+                | unary_expr  { check_ast($1?) }
+                | vector_selector  { check_ast($1?) }
                 ;
 
 /*
@@ -144,16 +145,16 @@ expr -> Result<Expr, String>:
 aggregate_expr -> Result<Expr, String>:
                 aggregate_op aggregate_modifier function_call_body
                 {
-                        Expr::new_aggregate_expr($1?.id, $2?, $3?)
+                        Expr::new_aggregate_expr($1?.id(), $2?, $3?)
                 }
                 | aggregate_op function_call_body aggregate_modifier
                 {
-                        Expr::new_aggregate_expr($1?.id, $3?, $2?)
+                        Expr::new_aggregate_expr($1?.id(), $3?, $2?)
                 }
                 | aggregate_op function_call_body
                 {
                         let modifier = AggModifier::By(HashSet::new());
-                        Expr::new_aggregate_expr($1?.id, modifier, $2?)
+                        Expr::new_aggregate_expr($1?.id(), modifier, $2?)
                 }
                 ;
 
@@ -187,55 +188,40 @@ binary_expr -> Result<Expr, String>:
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
 // reduces allocations
-bin_modifier -> Result<BinModifier, String>:
+bin_modifier -> Result<Option<BinModifier>, String>:
                 group_modifiers { $1 }
                 ;
 
-bool_modifier -> Result<BinModifier, String>:
-                {
-                        let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(HashSet::new());
-                        let return_bool = false;
-                        Ok(BinModifier {card, matching, return_bool})
-                }
+bool_modifier -> Result<Option<BinModifier>, String>:
+                { Ok(None) }
                 | BOOL
                 {
-                        let card = VectorMatchCardinality::OneToOne;
-                        let matching =  VectorMatchModifier::On(HashSet::new());
-                        let return_bool = true;
-                        Ok(BinModifier {card, matching, return_bool})
+                        let modifier = BinModifier::default().with_return_bool(true);
+                        Ok(Some(modifier))
                 }
                 ;
 
-on_or_ignoring -> Result<BinModifier, String>:
+on_or_ignoring -> Result<Option<BinModifier>, String>:
                 bool_modifier IGNORING grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.matching = VectorMatchModifier::Ignoring($3?);
-                        Ok(modifier)
+                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
                 }
                 | bool_modifier ON grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.matching = VectorMatchModifier::On($3?);
-                        Ok(modifier)
+                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::On($3?))))
                 }
                 ;
 
-group_modifiers -> Result<BinModifier, String>:
+group_modifiers -> Result<Option<BinModifier>, String>:
                 bool_modifier { $1 }
                 | on_or_ignoring { $1 }
-                | on_or_ignoring GROUP_LEFT maybe_grouping_labels
+                | on_or_ignoring GROUP_LEFT grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.card = VectorMatchCardinality::ManyToOne($3?);
-                        Ok(modifier)
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne($3?)))
                 }
-                | on_or_ignoring GROUP_RIGHT maybe_grouping_labels
+                | on_or_ignoring GROUP_RIGHT grouping_labels
                 {
-                        let mut modifier = $1?;
-                        modifier.card = VectorMatchCardinality::OneToMany($3?);
-                        Ok(modifier)
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
                 ;
 
@@ -355,8 +341,8 @@ subquery_expr -> Result<Expr, String>:
  * Unary expressions.
  */
 unary_expr -> Result<Expr, String>:
-                ADD expr { $2 }
-                | SUB expr { Expr::new_unary_expr($2?) }
+                ADD expr %prec MUL { $2 }
+                | SUB expr %prec MUL { Expr::new_unary_expr($2?) }
                 ;
 
 /*
@@ -396,7 +382,7 @@ label_matcher -> Result<Matcher, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
                         let value = lexeme_to_string($lexer, &$3)?;
-                        Matcher::new_matcher($2?.id, name, value)
+                        Matcher::new_matcher($2?.id(), name, value)
                 }
                 ;
 
@@ -521,11 +507,6 @@ maybe_duration -> Result<Option<Duration>, String>:
                 }
                 ;
 
-maybe_grouping_labels -> Result<Labels, String>:
-                { Ok(HashSet::new()) }
-                | grouping_labels { $1 }
-                ;
-
 %%
 
 use std::collections::HashSet;
@@ -534,6 +515,29 @@ use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::{
     AggModifier, AtModifier, BinModifier, Expr, FunctionArgs,
     Offset, Token, VectorMatchCardinality, VectorMatchModifier,
-    get_function, is_label, lexeme_to_string, lexeme_to_token, span_to_string,
+    check_ast, get_function, is_label,
+    lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::util::{parse_duration, parse_str_radix};
+
+fn update_optional_matching(
+    modifier: Option<BinModifier>,
+    matching: Option<VectorMatchModifier>,
+) -> Option<BinModifier> {
+    let modifier = match modifier {
+        Some(modifier) => modifier,
+        None => Default::default(),
+    };
+    Some(modifier.with_matching(matching))
+}
+
+fn update_optional_card(
+    modifier: Option<BinModifier>,
+    card: VectorMatchCardinality,
+) -> Option<BinModifier> {
+    let modifier = match modifier {
+        Some(modifier) => modifier,
+        None => Default::default(),
+    };
+    Some(modifier.with_card(card))
+}

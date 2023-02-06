@@ -20,5 +20,6 @@ comment:
 
 profiling:
   critical_files_paths:
+    - src/parser/ast.rs
     - src/parser/lex.rs
     - src/parser/parse.rs
