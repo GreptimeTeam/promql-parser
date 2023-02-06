@@ -126,7 +126,7 @@ impl BinModifier {
     pub fn is_labels_joint(&self) -> bool {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return matching.labels().is_disjoint(labels);
+                return !matching.labels().is_disjoint(labels);
             };
         };
         false
