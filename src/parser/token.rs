@@ -19,10 +19,10 @@ use std::fmt::{self, Display};
 lrlex::lrlex_mod!("token_map");
 pub use token_map::*;
 
-pub type StorageType = u8;
+pub type TokenId = u8;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct TokenType(StorageType);
+pub struct TokenType(TokenId);
 
 impl Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -31,7 +31,7 @@ impl Display for TokenType {
 }
 
 lazy_static! {
-    static ref KEYWORDS: HashMap<&'static str, StorageType> =
+    static ref KEYWORDS: HashMap<&'static str, TokenId> =
         [
             // Operators.
             ("and", T_LAND),
@@ -75,7 +75,7 @@ lazy_static! {
 
 /// this is for debug so far, maybe pretty feature in the future.
 #[allow(dead_code)]
-pub(crate) fn token_display(id: StorageType) -> &'static str {
+pub(crate) fn token_display(id: TokenId) -> &'static str {
     match id {
         // Token.
         T_EQL => "=",
@@ -172,7 +172,7 @@ pub(crate) fn token_display(id: StorageType) -> &'static str {
 /// When changing this list, make sure to also change
 /// the maybe_label grammar rule in the generated parser
 /// to avoid misinterpretation of labels as keywords.
-pub fn get_keyword_token(s: &str) -> Option<StorageType> {
+pub fn get_keyword_token(s: &str) -> Option<TokenId> {
     KEYWORDS.get(s).copied()
 }
 
@@ -189,40 +189,35 @@ impl Display for Token {
 }
 
 impl Token {
-    pub fn new(id: StorageType, val: String) -> Self {
+    pub fn new(id: TokenId, val: String) -> Self {
         Self {
             id: TokenType(id),
             val,
         }
     }
 
-    pub fn id(&self) -> StorageType {
+    pub fn id(&self) -> TokenId {
         self.id.id()
     }
 }
 
 impl TokenType {
-    pub fn new(id: StorageType) -> Self {
+    pub fn new(id: TokenId) -> Self {
         Self(id)
     }
-    pub fn id(&self) -> StorageType {
+    pub fn id(&self) -> TokenId {
         self.0
     }
     pub fn is_aggregator_with_param(&self) -> bool {
-        self.0 == T_TOPK || self.0 == T_BOTTOMK || self.0 == T_COUNT_VALUES || self.0 == T_QUANTILE
+        matches!(self.0, T_TOPK | T_BOTTOMK | T_COUNT_VALUES | T_QUANTILE)
     }
 
     pub fn is_comparison_operator(&self) -> bool {
-        self.0 == T_EQLC
-            || self.0 == T_NEQ
-            || self.0 == T_LTE
-            || self.0 == T_LSS
-            || self.0 == T_GTE
-            || self.0 == T_GTR
+        matches!(self.0, T_EQLC | T_NEQ | T_LTE | T_LSS | T_GTE | T_GTR)
     }
 
     pub fn is_set_operator(&self) -> bool {
-        self.0 == T_LAND || self.0 == T_LOR || self.0 == T_LUNLESS
+        matches!(self.0, T_LAND | T_LOR | T_LUNLESS)
     }
 
     pub fn is_operator(&self) -> bool {

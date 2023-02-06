@@ -14,7 +14,7 @@
 
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::token::{self, token_display, T_END, T_START};
-use crate::parser::{Function, FunctionArgs, StorageType, Token, TokenType, ValueType};
+use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
 
@@ -151,10 +151,10 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
-impl TryFrom<StorageType> for AtModifier {
+impl TryFrom<TokenId> for AtModifier {
     type Error = String;
 
-    fn try_from(id: StorageType) -> Result<Self, Self::Error> {
+    fn try_from(id: TokenId) -> Result<Self, Self::Error> {
         match id {
             T_START => Ok(AtModifier::Start),
             T_END => Ok(AtModifier::End),
@@ -578,7 +578,7 @@ impl Expr {
 
     pub fn new_binary_expr(
         lhs: Expr,
-        op: StorageType,
+        op: TokenId,
         modifier: Option<BinModifier>,
         rhs: Expr,
     ) -> Result<Expr, String> {
@@ -592,7 +592,7 @@ impl Expr {
     }
 
     pub fn new_aggregate_expr(
-        op: StorageType,
+        op: TokenId,
         modifier: AggModifier,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
