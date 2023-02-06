@@ -146,10 +146,10 @@ mod tests {
         assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
-            // "`\\``"
-            // `"\`
-            // `"\c"`
-            // `"\x."`
+            (r#"`\\``"#, "unterminated quoted string `"),
+            (r#""\"#, "escape sequence not terminated"),
+            // (r#""\c""#, ""),
+            // (r#""\x.""#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -637,79 +637,79 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // (
-            //     "foo and 1",
-            //     "set operator \"and\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 and foo",
-            //     "set operator \"and\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "foo or 1",
-            //     "set operator \"or\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 or foo",
-            //     "set operator \"or\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "foo unless 1",
-            //     "set operator \"unless\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 unless foo",
-            //     "set operator \"unless\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 or on(bar) foo",
-            //     "vector matching only allowed between instant vectors",
-            // ),
-            // (
-            //     "foo == on(bar) 10",
-            //     "vector matching only allowed between instant vectors",
-            // ),
+            (
+                "foo and 1",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "1 and foo",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "foo or 1",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "1 or foo",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "foo unless 1",
+                "set operator 'unless' not allowed in binary scalar expression",
+            ),
+            (
+                "1 unless foo",
+                "set operator 'unless' not allowed in binary scalar expression",
+            ),
+            (
+                "1 or on(bar) foo",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "foo == on(bar) 10",
+                "vector matching only allowed between instant vectors",
+            ),
             // ("foo + group_left(baz) bar", "unexpected <group_left>"),
-            // (
-            //     "foo and on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"and\" operation",
-            // ),
-            // (
-            //     "foo and on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"and\" operation",
-            // ),
-            // (
-            //     "foo or on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"or\" operation",
-            // ),
-            // (
-            //     "foo or on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"or\" operation",
-            // ),
-            // (
-            //     "foo unless on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"unless\" operation",
-            // ),
-            // (
-            //     "foo unless on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"unless\" operation",
-            // ),
+            (
+                "foo and on(bar) group_left(baz) bar",
+                "no grouping allowed for 'and' operation",
+            ),
+            (
+                "foo and on(bar) group_right(baz) bar",
+                "no grouping allowed for 'and' operation",
+            ),
+            (
+                "foo or on(bar) group_left(baz) bar",
+                "no grouping allowed for 'or' operation",
+            ),
+            (
+                "foo or on(bar) group_right(baz) bar",
+                "no grouping allowed for 'or' operation",
+            ),
+            (
+                "foo unless on(bar) group_left(baz) bar",
+                "no grouping allowed for 'unless' operation",
+            ),
+            (
+                "foo unless on(bar) group_right(baz) bar",
+                "no grouping allowed for 'unless' operation",
+            ),
             (
                 r#"http_requests{group="production"} + on(instance) group_left(job,instance) cpu_count{type="smp"}"#,
                 "label 'instance' must not occur in ON and GROUP clause at once",
             ),
-            // (
-            //     "foo + bool bar",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
-            // (
-            //     "foo + bool 10",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
-            // (
-            //     "foo and bool 10",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
+            (
+                "foo + bool bar",
+                "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "foo + bool 10",
+                "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "foo and bool 10",
+                "bool modifier can only be used on comparison operators",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -906,30 +906,30 @@ mod tests {
             //     r#"unexpected "}" in label matching, expected label matching operator"#,
             // ),
             ("foo{1}", "unexpected character inside braces: '1'"),
-            // (
-            //     "{}",
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x=""}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x=~".*"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x!~".+"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x!="a"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"foo{__name__="bar"}"#,
-            //     r#"metric name must not be set twice: "foo" or "bar""#,
-            // ),
+            (
+                "{}",
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x=""}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x=~".*"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x!~".+"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x!="a"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"foo{__name__="bar"}"#,
+                "metric name must not be set twice: 'bar' or 'foo'",
+            ),
             // (
             //     "foo{__name__= =}",
             //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
@@ -1058,7 +1058,7 @@ mod tests {
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
             ),
-            // ("some_metric[5m] OFFSET", ""),
+            ("some_metric[5m] OFFSET", "empty duration string"),
             (
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
@@ -1069,7 +1069,10 @@ mod tests {
                 "some_metric @ 1234 [5m]",
                 "no @ modifiers allowed before range",
             ),
-            // ("(foo + bar)[5m]", ""),
+            (
+                "(foo + bar)[5m]",
+                "ranges only allowed for vector selectors",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
