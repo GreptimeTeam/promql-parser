@@ -1612,10 +1612,22 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("test[5d] OFFSET 10s [10m:5s]", ""),
-            // (r#"(foo + bar{nm="val"})[5m:][10m:5s]"#, ""),
-            // ("rate(food[1m])[1h] offset 1h", ""),
-            // ("rate(food[1m])[1h] @ 100", ""),
+            (
+                "test[5d] OFFSET 10s [10m:5s]",
+                "subquery is only allowed on instant vector, got range vector instead",
+            ),
+            (
+                r#"(foo + bar{nm="val"})[5m:][10m:5s]"#,
+                "subquery is only allowed on instant vector, got range vector instead",
+            ),
+            (
+                "rate(food[1m])[1h] offset 1h",
+                "ranges only allowed for vector selectors",
+            ),
+            (
+                "rate(food[1m])[1h] @ 100",
+                "ranges only allowed for vector selectors",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
