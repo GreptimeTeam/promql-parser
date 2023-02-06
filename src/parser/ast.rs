@@ -145,11 +145,8 @@ impl BinModifier {
         matches!(&self.matching, Some(matching) if matching.is_on())
     }
 
-    pub fn is_matching_empty_labels(&self) -> bool {
-        match self.matching {
-            Some(ref matching) => matching.labels().is_empty(),
-            None => true,
-        }
+    pub fn is_matching_labels_not_empty(&self) -> bool {
+        matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
     }
 }
 
@@ -310,26 +307,17 @@ impl BinaryExpr {
         matches!(&self.modifier, Some(modifier) if modifier.is_matching_on())
     }
 
-    pub fn is_matching_empty_labels(&self) -> bool {
-        match self.modifier {
-            Some(ref modifier) => modifier.is_matching_empty_labels(),
-            None => true,
-        }
+    pub fn is_matching_labels_not_empty(&self) -> bool {
+        matches!(&self.modifier, Some(modifier) if modifier.is_matching_labels_not_empty())
     }
 
     pub fn return_bool(&self) -> bool {
-        match &self.modifier {
-            Some(modifier) => modifier.return_bool,
-            None => false,
-        }
+        matches!(&self.modifier, Some(modifier) if modifier.return_bool)
     }
 
     /// check if labels of card and matching are joint
     pub fn is_labels_joint(&self) -> bool {
-        match &self.modifier {
-            Some(modifier) => modifier.is_labels_joint(),
-            None => false,
-        }
+        matches!(&self.modifier, Some(modifier) if modifier.is_labels_joint())
     }
 
     /// intersect labels of card and matching
@@ -825,7 +813,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     }
 
     if (ex.lhs.value_type() != ValueType::Vector || ex.rhs.value_type() != ValueType::Vector)
-        && !ex.is_matching_empty_labels()
+        && ex.is_matching_labels_not_empty()
     {
         return Err("vector matching only allowed between instant vectors".into());
     }
