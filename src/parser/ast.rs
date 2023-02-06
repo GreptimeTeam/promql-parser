@@ -85,39 +85,17 @@ impl Default for BinModifier {
 }
 
 impl BinModifier {
-    pub fn card(mut self, card: VectorMatchCardinality) -> Self {
+    pub fn with_card(mut self, card: VectorMatchCardinality) -> Self {
         self.card = card;
         self
     }
 
-    pub fn matching(mut self, matching: Option<VectorMatchModifier>) -> Self {
+    pub fn with_matching(mut self, matching: Option<VectorMatchModifier>) -> Self {
         self.matching = matching;
         self
     }
 
-    pub fn update_matching(
-        modifier: Option<BinModifier>,
-        matching: Option<VectorMatchModifier>,
-    ) -> Option<BinModifier> {
-        let modifier = match modifier {
-            Some(modifier) => modifier,
-            None => Default::default(),
-        };
-        Some(modifier.matching(matching))
-    }
-
-    pub fn update_card(
-        modifier: Option<BinModifier>,
-        card: VectorMatchCardinality,
-    ) -> Option<BinModifier> {
-        let modifier = match modifier {
-            Some(modifier) => modifier,
-            None => Default::default(),
-        };
-        Some(modifier.card(card))
-    }
-
-    pub fn return_bool(mut self, return_bool: bool) -> Self {
+    pub fn with_return_bool(mut self, return_bool: bool) -> Self {
         self.return_bool = return_bool;
         self
     }
@@ -790,7 +768,8 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
                 }
             }
             None => {
-                ex.modifier = Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany));
+                ex.modifier =
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany));
             }
         }
     }

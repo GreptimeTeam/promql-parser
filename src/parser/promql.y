@@ -196,7 +196,7 @@ bool_modifier -> Result<Option<BinModifier>, String>:
                 { Ok(None) }
                 | BOOL
                 {
-                        let modifier = BinModifier::default().return_bool(true);
+                        let modifier = BinModifier::default().with_return_bool(true);
                         Ok(Some(modifier))
                 }
                 ;
@@ -204,11 +204,11 @@ bool_modifier -> Result<Option<BinModifier>, String>:
 on_or_ignoring -> Result<Option<BinModifier>, String>:
                 bool_modifier IGNORING grouping_labels
                 {
-                        Ok(BinModifier::update_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
+                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
                 }
                 | bool_modifier ON grouping_labels
                 {
-                        Ok(BinModifier::update_matching($1?, Some(VectorMatchModifier::On($3?))))
+                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::On($3?))))
                 }
                 ;
 
@@ -217,11 +217,11 @@ group_modifiers -> Result<Option<BinModifier>, String>:
                 | on_or_ignoring { $1 }
                 | on_or_ignoring GROUP_LEFT grouping_labels
                 {
-                        Ok(BinModifier::update_card($1?, VectorMatchCardinality::ManyToOne($3?)))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne($3?)))
                 }
                 | on_or_ignoring GROUP_RIGHT grouping_labels
                 {
-                        Ok(BinModifier::update_card($1?, VectorMatchCardinality::OneToMany($3?)))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
                 ;
 
@@ -519,3 +519,25 @@ use crate::parser::{
     lexeme_to_string, lexeme_to_token, span_to_string,
 };
 use crate::util::{parse_duration, parse_str_radix};
+
+fn update_optional_matching(
+    modifier: Option<BinModifier>,
+    matching: Option<VectorMatchModifier>,
+) -> Option<BinModifier> {
+    let modifier = match modifier {
+        Some(modifier) => modifier,
+        None => Default::default(),
+    };
+    Some(modifier.with_matching(matching))
+}
+
+fn update_optional_card(
+    modifier: Option<BinModifier>,
+    card: VectorMatchCardinality,
+) -> Option<BinModifier> {
+    let modifier = match modifier {
+        Some(modifier) => modifier,
+        None => Default::default(),
+    };
+    Some(modifier.with_card(card))
+}

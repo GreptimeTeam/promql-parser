@@ -182,7 +182,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_EQLC,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -191,7 +191,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_NEQ,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -200,7 +200,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_GTR,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -209,7 +209,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_GTE,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -218,7 +218,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_LSS,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -227,7 +227,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(1.0),
                     token::T_LTE,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -269,7 +269,7 @@ mod tests {
                         Expr::new_binary_expr(
                             Expr::from(1.0),
                             token::T_LSS,
-                            Some(BinModifier::default().return_bool(true)),
+                            Some(BinModifier::default().with_return_bool(true)),
                             ex,
                         )
                     }),
@@ -306,7 +306,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_EQLC,
-                    Some(BinModifier::default().return_bool(true)),
+                    Some(BinModifier::default().with_return_bool(true)),
                     Expr::from(1.0),
                 ),
             ),
@@ -324,7 +324,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                     Expr::from(VectorSelector::from("bar")),
                 ),
             ),
@@ -333,7 +333,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LOR,
-                    Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                     Expr::from(VectorSelector::from("bar")),
                 ),
             ),
@@ -342,7 +342,7 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LUNLESS,
-                    Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                     Expr::from(VectorSelector::from("bar")),
                 ),
             ),
@@ -359,13 +359,13 @@ mod tests {
                     let rhs = Expr::new_binary_expr(
                         Expr::from(VectorSelector::from("bla")),
                         token::T_LAND,
-                        Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                        Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         Expr::from(VectorSelector::from("blub")),
                     );
                     Expr::new_binary_expr(
                         lhs.unwrap(),
                         token::T_LOR,
-                        Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                        Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         rhs.unwrap(),
                     )
                 },
@@ -376,14 +376,14 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                    Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                     Expr::from(VectorSelector::from("bar")),
                 )
                 .and_then(|ex| {
                     Expr::new_binary_expr(
                         Expr::from(ex),
                         token::T_LUNLESS,
-                        Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                        Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         Expr::from(VectorSelector::from("baz")),
                     )
                 })
@@ -391,7 +391,7 @@ mod tests {
                     Expr::new_binary_expr(
                         Expr::from(ex),
                         token::T_LOR,
-                        Some(BinModifier::default().card(VectorMatchCardinality::ManyToMany)),
+                        Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         Expr::from(VectorSelector::from("qux")),
                     )
                 }),
@@ -404,10 +404,10 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
                                 String::from("test"),
                             ])))
-                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                                 String::from("baz"),
                                 String::from("buz"),
                             ])))),
@@ -419,7 +419,7 @@ mod tests {
                         Expr::from(VectorSelector::from("bar")),
                         token::T_ADD,
                         Some(
-                            BinModifier::default().matching(Some(VectorMatchModifier::On(
+                            BinModifier::default().with_matching(Some(VectorMatchModifier::On(
                                 HashSet::from([String::from("foo")]),
                             ))),
                         ),
@@ -433,7 +433,7 @@ mod tests {
                     Expr::from(VectorSelector::from("foo")),
                     token::T_MUL,
                     Some(
-                        BinModifier::default().matching(Some(VectorMatchModifier::On(
+                        BinModifier::default().with_matching(Some(VectorMatchModifier::On(
                             HashSet::from([String::from("test"), String::from("blub")]),
                         ))),
                     ),
@@ -447,11 +447,11 @@ mod tests {
                     token::T_MUL,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::ManyToOne(HashSet::new())),
+                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::new())),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -465,7 +465,11 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().matching(Some(matching)).card(card)),
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(matching))
+                            .with_card(card),
+                    ),
                     Expr::from(VectorSelector::from("bar")),
                 )
             }),
@@ -475,7 +479,11 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().matching(Some(matching)).card(card)),
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(matching))
+                            .with_card(card),
+                    ),
                     Expr::from(VectorSelector::from("bar")),
                 )
             }),
@@ -488,7 +496,11 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().matching(Some(matching)).card(card)),
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(matching))
+                            .with_card(card),
+                    ),
                     Expr::from(VectorSelector::from("bar")),
                 )
             }),
@@ -498,7 +510,11 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LAND,
-                    Some(BinModifier::default().matching(Some(matching)).card(card)),
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(matching))
+                            .with_card(card),
+                    ),
                     Expr::from(VectorSelector::from("bar")),
                 )
             }),
@@ -508,7 +524,11 @@ mod tests {
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LUNLESS,
-                    Some(BinModifier::default().matching(Some(matching)).card(card)),
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(matching))
+                            .with_card(card),
+                    ),
                     Expr::from(VectorSelector::from("baz")),
                 )
             }),
@@ -519,11 +539,11 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
                                 String::from("bar"),
                             ]))),
                     ),
@@ -537,11 +557,11 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
                                 String::from("blub"),
                             ]))),
                     ),
@@ -555,11 +575,11 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::ManyToOne(HashSet::from([
+                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
                                 String::from("bar"),
                             ]))),
                     ),
@@ -573,11 +593,11 @@ mod tests {
                     token::T_SUB,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::On(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
                                 String::from("bar"),
                                 String::from("foo"),
                             ]))),
@@ -592,11 +612,11 @@ mod tests {
                     token::T_SUB,
                     Some(
                         BinModifier::default()
-                            .matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                            .with_matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
                                 String::from("test"),
                                 String::from("blub"),
                             ]))))
-                            .card(VectorMatchCardinality::OneToMany(HashSet::from([
+                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
                                 String::from("bar"),
                                 String::from("foo"),
                             ]))),
@@ -1612,10 +1632,10 @@ mod tests {
             }),
             ("foo unless on(start) bar", {
                 let modifier = BinModifier::default()
-                    .matching(Some(VectorMatchModifier::On(HashSet::from([
+                    .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                         String::from("start"),
                     ]))))
-                    .card(VectorMatchCardinality::ManyToMany);
+                    .with_card(VectorMatchCardinality::ManyToMany);
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LUNLESS,
@@ -1625,10 +1645,10 @@ mod tests {
             }),
             ("foo unless on(end) bar", {
                 let modifier = BinModifier::default()
-                    .matching(Some(VectorMatchModifier::On(HashSet::from([
+                    .with_matching(Some(VectorMatchModifier::On(HashSet::from([
                         String::from("end"),
                     ]))))
-                    .card(VectorMatchCardinality::ManyToMany);
+                    .with_card(VectorMatchCardinality::ManyToMany);
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_LUNLESS,
