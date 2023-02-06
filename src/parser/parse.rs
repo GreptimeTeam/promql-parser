@@ -94,6 +94,7 @@ mod tests {
     fn test_number_literal() {
         let cases = vec![
             ("1", Expr::from(1.0)),
+            ("Inf", Expr::from(f64::INFINITY)),
             ("+Inf", Expr::from(f64::INFINITY)),
             ("-Inf", Expr::from(f64::NEG_INFINITY)),
             (".5", Expr::from(0.5)),
@@ -105,7 +106,13 @@ mod tests {
             ("0755", Expr::from(493.0)),
             ("+5.5e-3", Expr::from(0.0055)),
             ("-0755", Expr::from(-493.0)),
+
+            // for abnormal input
             ("NaN", Expr::from(f64::NAN)),
+            (
+                "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+                Expr::from(f64::INFINITY)
+            ),
         ];
         assert_cases(Case::new_expr_cases(cases));
     }
@@ -709,6 +716,22 @@ mod tests {
             (
                 "foo and bool 10",
                 "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "1 and 1",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "1 == 1",
+                "comparisons between scalars must use BOOL modifier",
+            ),
+            (
+                "1 or 1",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "1 unless 1",
+                "set operator 'unless' not allowed in binary scalar expression",
             ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -1717,8 +1740,8 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let cases = vec![
-            // start()
-            // end()
+            // ("start()", ""),
+            // ("end()", ""),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1738,22 +1761,20 @@ mod tests {
             ("0deadbeef", "bad number or duration syntax: 0de"),
             // ("1 /", "unexpected end of input"),
             // ("*1", "unexpected <op:*>"),
-            // ("(1))", "unexpected right parenthesis ')'"),
-            // ("((1)", "unclosed left parenthesis"),
-            // ("999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "out of range"),
-            // ("(", "unclosed left parenthesis"),
-            // ("1 and 1", "set operator \"and\" not allowed in binary scalar expression"),
-            // ("1 == 1", "1:3: parse error: comparisons between scalars must use BOOL modifier"),
-            // ("1 or 1", "set operator \"or\" not allowed in binary scalar expression"),
-            // ("1 unless 1", "set operator \"unless\" not allowed in binary scalar expression"),
-            // ("1 !~ 1", `unexpected character after '!': '~'`),
-            // ("1 =~ 1", `unexpected character after '=': '~'`),
+            ("(1))", "unexpected right parenthesis ')'"),
+            ("((1)", "unclosed left parenthesis"),
+            ("(", "unclosed left parenthesis"),
+            ("1 !~ 1", "unexpected character after '!': '~'"),
+            ("1 =~ 1", "unexpected character after '=': '~'"),
             // ("*test", "unexpected <op:*>"),
-            // ("1 offset 1d", "1:1: parse error: offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"),
-            // (
-            //     "foo offset 1s offset 2s",
-            //     "offset may not be set multiple times",
-            // ),
+            (
+                "1 offset 1d",
+                "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+            ),
+            (
+                "foo offset 1s offset 2s",
+                "offset may not be set multiple times"
+            ),
             // (
             //     "a - on(b) ignoring(c) d",
             //     "1:11: parse error: unexpected <ignoring>",
@@ -1763,8 +1784,11 @@ mod tests {
             // ("-=", r#"unexpected "=""#),
             // ("++-++-+-+-<", "unexpected <op:<>"),
             // ("e-+=/(0)", r#"unexpected "=""#),
-            // ("a>b()", "unknown function"),
-            // ("rate(avg)", "expected type range vector"),
+            ("a>b()", "unknown function with name 'b'"),
+            (
+                "rate(avg)",
+                "expected type range vector in call to function 'rate', got instant vector"
+            ),
 
             // "(" + strings.Repeat("-{}-1", 10000) + ")" + strings.Repeat("[1m:]", 1000)
         ];

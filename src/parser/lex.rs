@@ -20,9 +20,9 @@ use std::fmt::Debug;
 const ESCAPE_SYMBOLS: &str = r#"abfnrtv\"#;
 const STRING_SYMBOLS: &str = r#"'"`"#;
 
-pub type LexemeType = DefaultLexeme<StorageType>;
+pub type LexemeType = DefaultLexeme<TokenId>;
 
-pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, StorageType>, String> {
+pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenId>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
@@ -39,7 +39,7 @@ pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, StorageType>, St
 enum State {
     Start,
     End,
-    Lexeme(StorageType),
+    Lexeme(TokenId),
     Identifier,
     KeywordOrIdentifier,
     NumberOrDuration,
@@ -106,7 +106,7 @@ impl Context {
     }
 
     /// string lexeme SHOULD trim the surrounding string symbols, ' or " or `
-    fn lexeme(&mut self, token_id: StorageType) -> LexemeType {
+    fn lexeme(&mut self, token_id: TokenId) -> LexemeType {
         let mut start = self.start;
         let mut len = self.pos - self.start;
         if token_id == T_STRING {
@@ -227,7 +227,7 @@ impl Lexer {
 
     /// lexeme() consumes the Span, which means consecutive lexeme() call
     /// will get wrong Span unless Lexer shifts its State.
-    fn lexeme(&mut self, token_id: StorageType) -> LexemeType {
+    fn lexeme(&mut self, token_id: TokenId) -> LexemeType {
         let lexeme = self.ctx.lexeme(token_id);
         self.ctx.ignore();
         lexeme
@@ -276,7 +276,7 @@ impl Lexer {
         let c = match self.pop() {
             None => {
                 if !self.is_paren_balanced() {
-                    return State::Err("unbalanced parenthesis".into());
+                    return State::Err("unclosed left parenthesis".into());
                 }
                 return State::End;
             }
@@ -301,12 +301,12 @@ impl Lexer {
                     State::Lexeme(T_EQLC)
                 }
                 // =~ (label matcher) MUST be in brace
-                Some('~') => State::Err("unexpected character after '=': ~".into()),
+                Some('~') => State::Err("unexpected character after '=': '~'".into()),
                 _ => State::Lexeme(T_EQL),
             },
             '!' => match self.pop() {
                 Some('=') => State::Lexeme(T_NEQ),
-                Some(ch) => State::Err(format!("unexpected character after '!': {ch}")),
+                Some(ch) => State::Err(format!("unexpected character after '!': '{ch}'")),
                 None => State::Err("'!' can not be at the end".into()),
             },
             '<' => match self.peek() {
@@ -327,7 +327,7 @@ impl Lexer {
             ch if ch.is_ascii_digit() => State::NumberOrDuration,
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
-                Some(ch) => State::Err(format!("unexpected character after '.' {ch}")),
+                Some(ch) => State::Err(format!("unexpected character after '.': '{ch}'")),
                 None => State::Err("unexpected character: '.'".into()),
             },
             ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
@@ -682,7 +682,7 @@ pub fn is_label(s: &str) -> bool {
 mod tests {
     use super::*;
 
-    type LexemeTuple = (StorageType, usize, usize);
+    type LexemeTuple = (TokenId, usize, usize);
     /// MatchTuple.0 is input
     /// MatchTuple.1 is the expected generated Lexemes
     /// MatchTuple.2 is the Err info if the input is invalid PromQL query
@@ -1020,9 +1020,9 @@ mod tests {
     #[test]
     fn test_common_errors() {
         let cases = vec![
-            ("=~", vec![], Some("unexpected character after '=': ~")),
-            ("!~", vec![], Some("unexpected character after '!': ~")),
-            ("!(", vec![], Some("unexpected character after '!': (")),
+            ("=~", vec![], Some("unexpected character after '=': '~'")),
+            ("!~", vec![], Some("unexpected character after '!': '~'")),
+            ("!(", vec![], Some("unexpected character after '!': '('")),
             ("1a", vec![], Some("bad number or duration syntax: 1a")),
         ];
         assert_matches(cases);
@@ -1034,7 +1034,7 @@ mod tests {
             (
                 "(",
                 vec![(T_LEFT_PAREN, 0, 1)],
-                Some("unbalanced parenthesis"),
+                Some("unclosed left parenthesis"),
             ),
             (")", vec![], Some("unexpected right parenthesis ')'")),
             (
@@ -1049,7 +1049,7 @@ mod tests {
                     (T_LEFT_PAREN, 1, 1),
                     (T_RIGHT_PAREN, 2, 1),
                 ],
-                Some("unbalanced parenthesis"),
+                Some("unclosed left parenthesis"),
             ),
             (
                 "{",
