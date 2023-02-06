@@ -1720,6 +1720,12 @@ mod tests {
             // ("rate(avg)", "expected type range vector"),
 
             // "(" + strings.Repeat("-{}-1", 10000) + ")" + strings.Repeat("[1m:]", 1000)
+
+            // the following cases are not from prometheus source codes
+            (
+                "bar + on(test) group_right(test) blub",
+                "label 'test' must not occur in ON and GROUP clause at once",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
