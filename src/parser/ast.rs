@@ -868,25 +868,25 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
         let expected_args_len_without_default = expected_args_len - 1;
         if expected_args_len_without_default > actual_args_len {
             return Err(format!(
-                "expected at least {expected_args_len_without_default} argument(s) in call to {name}, got {actual_args_len}"
+                "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
             ));
         }
 
         // label_join do not have a maximum threshold
         if actual_args_len > expected_args_len && name.ne("label_join") {
             return Err(format!(
-                "expected at most {expected_args_len} argument(s) in call to {name}, got {actual_args_len}"
+                "expected at most {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
             ));
         }
     }
 
     if !ex.func.variadic && expected_args_len != actual_args_len {
         return Err(format!(
-            "expected {expected_args_len} argument(s) in call to {name}, got {actual_args_len}"
+            "expected {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
         ));
     }
 
-    for (idx, actual_arg) in ex.args.args.iter().enumerate() {
+    for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
         // the actual args len bigger than the expected args
         if idx > ex.func.arg_types.len() {
             // this is for label_join function
@@ -895,13 +895,13 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
                 // type of the extra arguments.
                 break;
             }
-            let idx = ex.func.arg_types.len() - 1;
-            expect_type(
-                Some(actual_arg.value_type()),
-                ex.func.arg_types[idx],
-                &format!("call to function {name}"),
-            )?;
+            idx = ex.func.arg_types.len() - 1;
         }
+        expect_type(
+            Some(actual_arg.value_type()),
+            ex.func.arg_types[idx],
+            &format!("call to function '{name}'"),
+        )?;
     }
 
     Ok(Expr::Call(ex))

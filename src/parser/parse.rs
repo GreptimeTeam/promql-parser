@@ -1172,16 +1172,34 @@ mod tests {
             // ("sum without(foo,,)(some_metric)", ""),
             // ("sum some_metric by (test)", ""),
             // ("sum (some_metric) by test", ""),
-            // ("sum () by (test)", ""),
+            (
+                "sum () by (test)",
+                "no arguments for aggregate expression provided",
+            ),
             // ("MIN keep_common (some_metric)", ""),
             // ("MIN (some_metric) keep_common", ""),
             // ("sum (some_metric) without (test) by (test)", ""),
             // ("sum without (test) (some_metric) by (test)", ""),
-            // ("topk(some_metric)", ""),
-            // ("topk(some_metric,)", ""),
-            // ("topk(some_metric, other_metric)", ""),
-            // ("count_values(5, other_metric)", ""),
-            // ("rate(some_metric[5m]) @ 1234", ""),
+            (
+                "topk(some_metric)",
+                "wrong number of arguments for aggregate expression provided, expected 2, got 1",
+            ),
+            (
+                "topk(some_metric,)",
+                "trailing commas not allowed in function call args",
+            ),
+            (
+                "topk(some_metric, other_metric)",
+                "expected type scalar in aggregation expression, got instant vector",
+            ),
+            (
+                "count_values(5, other_metric)",
+                "expected type string in aggregation expression, got scalar",
+            ),
+            (
+                "rate(some_metric[5m]) @ 1234",
+                "@ modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -1227,14 +1245,38 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("floor()", ""),
-            // ("floor(some_metric, other_metric)", ""),
-            // ("floor(some_metric, 1)", ""),
-            // ("floor(1)", ""),
-            // ("hour(some_metric, some_metric, some_metric)", ""),
-            // ("time(some_metric)", ""),
-            // ("non_existent_function_far_bar()", ""),
-            // ("rate(some_metric)", ""),
+            (
+                "floor()",
+                "expected 1 argument(s) in call to 'floor', got 0",
+            ),
+            (
+                "floor(some_metric, other_metric)",
+                "expected 1 argument(s) in call to 'floor', got 2",
+            ),
+            (
+                "floor(some_metric, 1)",
+                "expected 1 argument(s) in call to 'floor', got 2",
+            ),
+            (
+                "floor(1)",
+                "expected type instant vector in call to function 'floor', got scalar",
+            ),
+            (
+                "hour(some_metric, some_metric, some_metric)",
+                "expected at most 1 argument(s) in call to 'hour', got 3",
+            ),
+            (
+                "time(some_metric)",
+                "expected 0 argument(s) in call to 'time', got 1",
+            ),
+            (
+                "non_existent_function_far_bar()",
+                "unknown function with name 'non_existent_function_far_bar'",
+            ),
+            (
+                "rate(some_metric)",
+                "expected type range vector in call to function 'rate', got instant vector",
+            ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
