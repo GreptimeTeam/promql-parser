@@ -126,6 +126,24 @@ impl Matchers {
         self.matchers.insert(matcher);
         self
     }
+
+    /// Vector selectors must either specify a name or at least one label
+    /// matcher that does not match the empty string.
+    ///
+    /// The following expression is illegal:
+    /// {job=~".*"} # Bad!
+    pub fn is_empty_matchers(&self) -> bool {
+        self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
+    }
+
+    /// check if the specified name exists more than once in matchers.
+    pub fn duplicated_matchers(&self, name: &str) -> Vec<&String> {
+        self.matchers
+            .iter()
+            .filter(|m| m.name.eq_ignore_ascii_case(name))
+            .map(|m| &m.value)
+            .collect()
+    }
 }
 
 #[cfg(test)]

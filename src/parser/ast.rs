@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::label::{Labels, Matcher, Matchers};
-use crate::parser::token::{self, token_display, T_END, T_START};
+use crate::label::{Labels, Matcher, Matchers, METRIC_NAME};
+use crate::parser::token::{
+    self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
+};
 use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
 use std::ops::Neg;
 use std::time::{Duration, SystemTime};
@@ -703,8 +705,34 @@ impl Neg for Expr {
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
         Expr::Binary(ex) => check_ast_for_binary_expr(ex),
-        // TODO: check other exprs
-        _ => Ok(expr),
+        Expr::Aggregate(ex) => check_ast_for_aggregate_expr(ex),
+        Expr::Call(ex) => check_ast_for_call(ex),
+        Expr::Unary(ex) => check_ast_for_unary(ex),
+        Expr::Subquery(ex) => check_ast_for_subquery(ex),
+        Expr::VectorSelector(ex) => check_ast_for_vector_selector(ex),
+        Expr::Paren(_) => Ok(expr),
+        Expr::NumberLiteral(_) => Ok(expr),
+        Expr::StringLiteral(_) => Ok(expr),
+        Expr::MatrixSelector(_) => Ok(expr),
+    }
+}
+
+fn expect_type(
+    actual: Option<ValueType>,
+    expected: ValueType,
+    context: &str,
+) -> Result<bool, String> {
+    match actual {
+        Some(actual) => {
+            if actual == expected {
+                Ok(true)
+            } else {
+                Err(format!(
+                    "expected type {expected} in {context}, got {actual}"
+                ))
+            }
+        }
+        None => Err(format!("expected type {expected} in {context}, got None")),
     }
 }
 
@@ -787,6 +815,138 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     }
 
     Ok(Expr::Binary(ex))
+}
+
+fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
+    if !ex.op.is_aggregator() {
+        let op_display = token_display(ex.op.id());
+        return Err(format!(
+            "aggregation operator expected in aggregation expression but got '{op_display}'"
+        ));
+    }
+
+    expect_type(
+        Some(ex.expr.value_type()),
+        ValueType::Vector,
+        "aggregation expression",
+    )?;
+
+    let expect_param_type =
+        |actual: Option<&Expr>, expected: ValueType, context: &str| -> Result<bool, String> {
+            match actual {
+                Some(expr) => expect_type(Some(expr.value_type()), expected, context),
+                None => expect_type(None, expected, context),
+            }
+        };
+
+    if ex.op.id() == T_TOPK || ex.op.id() == T_BOTTOMK || ex.op.id() == T_QUANTILE {
+        expect_param_type(
+            ex.param.as_deref(),
+            ValueType::Scalar,
+            "aggregation expression",
+        )?;
+    }
+
+    if ex.op.id() == T_COUNT_VALUES {
+        expect_param_type(
+            ex.param.as_deref(),
+            ValueType::String,
+            "aggregation expression",
+        )?;
+    }
+
+    Ok(Expr::Aggregate(ex))
+}
+
+fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
+    let expected_args_len = ex.func.arg_types.len();
+    let name = ex.func.name;
+    let actual_args_len = ex.args.len();
+
+    // NOTE: check label_join function
+    if ex.func.variadic {
+        let expected_args_len_without_default = expected_args_len - 1;
+        if expected_args_len_without_default > actual_args_len {
+            return Err(format!(
+                "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
+            ));
+        }
+
+        // label_join do not have a maximum threshold
+        if actual_args_len > expected_args_len && name.ne("label_join") {
+            return Err(format!(
+                "expected at most {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
+            ));
+        }
+    }
+
+    if !ex.func.variadic && expected_args_len != actual_args_len {
+        return Err(format!(
+            "expected {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
+        ));
+    }
+
+    for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
+        // the actual args len bigger than the expected args
+        if idx > ex.func.arg_types.len() {
+            // this is for label_join function
+            if !ex.func.variadic {
+                // This is not a vararg function so we should not check the
+                // type of the extra arguments.
+                break;
+            }
+            idx = ex.func.arg_types.len() - 1;
+        }
+        expect_type(
+            Some(actual_arg.value_type()),
+            ex.func.arg_types[idx],
+            &format!("call to function '{name}'"),
+        )?;
+    }
+
+    Ok(Expr::Call(ex))
+}
+
+fn check_ast_for_unary(ex: UnaryExpr) -> Result<Expr, String> {
+    let value_type = ex.expr.value_type();
+    if value_type != ValueType::Scalar && value_type != ValueType::Vector {
+        return Err(format!(
+            "unary expression only allowed on expressions of type scalar or instant vector, got {value_type}"
+        ));
+    }
+
+    Ok(Expr::Unary(ex))
+}
+
+fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
+    let value_type = ex.expr.value_type();
+    if value_type != ValueType::Vector {
+        return Err(format!(
+            "subquery is only allowed on instant vector, got {value_type} instead"
+        ));
+    }
+
+    Ok(Expr::Subquery(ex))
+}
+
+fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
+    // A Vector selector must contain at least one non-empty matcher to prevent
+    // implicit selection of all metrics (e.g. by a typo).
+    if ex.matchers.is_empty_matchers() {
+        return Err("vector selector must contain at least one non-empty matcher".into());
+    }
+
+    let mut du = ex.matchers.duplicated_matchers(METRIC_NAME);
+    du.sort();
+    if du.len() >= 2 {
+        let du1 = du[0];
+        let du2 = du[1];
+        return Err(format!(
+            "metric name must not be set twice: '{du1}' or '{du2}'"
+        ));
+    }
+
+    Ok(Expr::VectorSelector(ex))
 }
 
 #[cfg(test)]
