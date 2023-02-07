@@ -718,8 +718,8 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
 }
 
 fn expect_type(
-    actual: Option<ValueType>,
     expected: ValueType,
+    actual: Option<ValueType>,
     context: &str,
 ) -> Result<bool, String> {
     match actual {
@@ -826,31 +826,23 @@ fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
     }
 
     expect_type(
-        Some(ex.expr.value_type()),
         ValueType::Vector,
+        Some(ex.expr.value_type()),
         "aggregation expression",
     )?;
 
-    let expect_param_type =
-        |actual: Option<&Expr>, expected: ValueType, context: &str| -> Result<bool, String> {
-            match &actual {
-                Some(expr) => expect_type(Some(expr.value_type()), expected, context),
-                None => expect_type(None, expected, context),
-            }
-        };
-
     if matches!(ex.op.id(), T_TOPK | T_BOTTOMK | T_QUANTILE) {
-        expect_param_type(
-            ex.param.as_deref(),
+        expect_type(
             ValueType::Scalar,
+            ex.param.as_ref().map(|ex| ex.value_type()),
             "aggregation expression",
         )?;
     }
 
     if ex.op.id() == T_COUNT_VALUES {
-        expect_param_type(
-            ex.param.as_deref(),
+        expect_type(
             ValueType::String,
+            ex.param.as_ref().map(|ex| ex.value_type()),
             "aggregation expression",
         )?;
     }
@@ -892,8 +884,8 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
             idx = ex.func.arg_types.len() - 1;
         }
         expect_type(
-            Some(actual_arg.value_type()),
             ex.func.arg_types[idx],
+            Some(actual_arg.value_type()),
             &format!("call to function '{name}'"),
         )?;
     }
