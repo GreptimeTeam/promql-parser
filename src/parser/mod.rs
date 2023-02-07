@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! The parser implementation.
+//!
+//! [`parse()`] parses the given query to [`Expr`], which is the abstract syntax tree (AST) struct
+//! in this crate. And [`Expr`] is componsed by servaral structs exposed in this module.
+//!
+//! Notes that in PromQL the parsed [`Expr`] is only a part of an query. It would also needs other
+//! parameters like "start"/"end" time or "step" time etc, which is included in [`EvalStmt`].
+
 mod ast;
 mod function;
 pub mod lex;

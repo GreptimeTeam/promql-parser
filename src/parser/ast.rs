@@ -123,11 +123,11 @@ impl BinModifier {
     }
 }
 
-/// Aggregation Modifier
+/// Aggregation Modifier.
 ///
-/// `without` removes the listed labels from the result vector,
+/// - `without` removes the listed labels from the result vector,
 /// while all other labels are preserved in the output.
-/// `by` does the opposite and drops labels that are not listed in the by clause,
+/// - `by` does the opposite and drops labels that are not listed in the by clause,
 /// even if their label values are identical between all elements of the vector.
 ///
 /// if empty listed labels, meaning no grouping
@@ -222,6 +222,7 @@ impl TryFrom<f64> for AtModifier {
 
 /// EvalStmt holds an expression and information on the range it should
 /// be evaluated on.
+#[allow(rustdoc::broken_intra_doc_links)]
 #[derive(Debug, Clone)]
 pub struct EvalStmt {
     /// Expression to be evaluated.
@@ -237,10 +238,13 @@ pub struct EvalStmt {
     pub lookback_delta: Duration,
 }
 
+/// Grammar:
+/// ``` norust
 /// <aggr-op> [without|by (<label list>)] ([parameter,] <vector expression>)
 /// <aggr-op>([parameter,] <vector expression>) [without|by (<label list>)]
+/// ```
 ///
-/// parameter is only required for count_values, quantile, topk and bottomk.
+/// parameter is only required for `count_values`, `quantile`, `topk` and `bottomk`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateExpr {
     /// The used aggregation operation.
@@ -258,11 +262,13 @@ pub struct UnaryExpr {
     pub expr: Box<Expr>,
 }
 
+/// Grammar:
+/// ``` norust
 /// <vector expr> <bin-op> ignoring(<label list>) group_left(<label list>) <vector expr>
 /// <vector expr> <bin-op> ignoring(<label list>) group_right(<label list>) <vector expr>
 /// <vector expr> <bin-op> on(<label list>) group_left(<label list>) <vector expr>
 /// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
-///
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryExpr {
     /// The operation of the expression.
@@ -306,7 +312,10 @@ pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
 
+/// Grammar:
+/// ```norust
 /// <instant_query> '[' <range> ':' [<resolution>] ']' [ @ <float_literal> ] [ offset <duration> ]
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
@@ -375,7 +384,7 @@ impl From<String> for VectorSelector {
 ///
 /// Basic usage:
 ///
-/// ```
+/// ``` rust
 /// use promql_parser::parser::{Expr, VectorSelector};
 /// use promql_parser::label::{MatchOp, Matcher, Matchers};
 ///
@@ -388,6 +397,7 @@ impl From<String> for VectorSelector {
 /// };
 ///
 /// assert_eq!(VectorSelector::from("foo"), vs);
+/// ```
 impl From<&str> for VectorSelector {
     fn from(name: &str) -> Self {
         VectorSelector::from(name.to_string())
@@ -670,7 +680,7 @@ impl From<f64> for Expr {
 ///
 /// Basic usage:
 ///
-/// ```
+/// ``` rust
 /// use promql_parser::parser::{Expr, VectorSelector};
 /// use promql_parser::label::{MatchOp, Matcher, Matchers};
 ///
@@ -679,6 +689,7 @@ impl From<f64> for Expr {
 /// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
 ///
 /// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
+/// ```
 impl From<VectorSelector> for Expr {
     fn from(vs: VectorSelector) -> Self {
         Expr::VectorSelector(vs)

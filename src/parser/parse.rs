@@ -14,6 +14,7 @@
 
 use crate::parser::{lex, Expr};
 
+/// Parse the given query literal to an AST (which is [`Expr`] in this crate).
 pub fn parse(input: &str) -> Result<Expr, String> {
     match lex::lexer(input) {
         Err(e) => Err(e),
