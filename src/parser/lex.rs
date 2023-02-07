@@ -683,9 +683,9 @@ mod tests {
     use super::*;
 
     type LexemeTuple = (TokenId, usize, usize);
-    /// MatchTuple.0 is input
-    /// MatchTuple.1 is the expected generated Lexemes
-    /// MatchTuple.2 is the Err info if the input is invalid PromQL query
+    /// - MatchTuple.0 is input
+    /// - MatchTuple.1 is the expected generated Lexemes
+    /// - MatchTuple.2 is the Err info if the input is invalid PromQL query
     type MatchTuple = (&'static str, Vec<LexemeTuple>, Option<&'static str>);
 
     fn assert_matches(v: Vec<MatchTuple>) {

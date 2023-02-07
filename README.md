@@ -9,7 +9,7 @@ parsing PromQL that conforms with [Prometheus Query][querying-prometheus].
 
 TODO: update example after publish to crates.io
 
-```
+``` rust
 use promql_parser::parser;
 
 let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
@@ -22,7 +22,7 @@ match parser::parse(promql) {
 
 or you can directly run examples in this repo:
 
-```
+``` shell
 cargo run --example parser
 ```
 

@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Label matchers and Well-known label names used by Prometheus components.
+
 mod matcher;
 
 pub use matcher::{MatchOp, Matcher, Matchers};
 use std::collections::HashSet;
 
-// Well-known label names used by Prometheus components.
+/// "__name__"
 pub const METRIC_NAME: &str = "__name__";
+/// "alertname"
 pub const ALERT_NAME: &str = "alertname";
+/// "le"
 pub const BUCKET_LABEL: &str = "le";
+/// "instance"
 pub const INSTANCE_NAME: &str = "instance";
 
 pub type Label = String;
+/// Unordered set for a group of labels.
 pub type Labels = HashSet<Label>;
