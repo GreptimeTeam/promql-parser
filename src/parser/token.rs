@@ -210,8 +210,6 @@ impl TokenType {
         self.0
     }
 
-    // IsAggregator returns true if the Item belongs to the aggregator functions.
-    // Returns false otherwise
     pub fn is_aggregator(&self) -> bool {
         self.0 > T_AGGREGATORS_START && self.0 < T_AGGREGATORS_END
     }

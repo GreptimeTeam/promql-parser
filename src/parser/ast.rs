@@ -863,7 +863,6 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     let name = ex.func.name;
     let actual_args_len = ex.args.len();
 
-    // NOTE: check label_join function
     if ex.func.variadic {
         let expected_args_len_without_default = expected_args_len - 1;
         if expected_args_len_without_default > actual_args_len {
@@ -872,7 +871,8 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
             ));
         }
 
-        // label_join do not have a maximum threshold
+        // `label_join` do not have a maximum arguments threshold.
+        // this hard code SHOULD be careful if new functions are supported by Prometheus.
         if actual_args_len > expected_args_len && name.ne("label_join") {
             return Err(format!(
                 "expected at most {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
@@ -887,14 +887,8 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     }
 
     for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
-        // the actual args len bigger than the expected args
-        if idx > ex.func.arg_types.len() {
-            // this is for label_join function
-            if !ex.func.variadic {
-                // This is not a vararg function so we should not check the
-                // type of the extra arguments.
-                break;
-            }
+        // this only happens when function args are variadic
+        if idx >= ex.func.arg_types.len() {
             idx = ex.func.arg_types.len() - 1;
         }
         expect_type(
