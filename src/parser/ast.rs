@@ -833,13 +833,13 @@ fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
 
     let expect_param_type =
         |actual: Option<&Expr>, expected: ValueType, context: &str| -> Result<bool, String> {
-            match actual {
+            match &actual {
                 Some(expr) => expect_type(Some(expr.value_type()), expected, context),
                 None => expect_type(None, expected, context),
             }
         };
 
-    if ex.op.id() == T_TOPK || ex.op.id() == T_BOTTOMK || ex.op.id() == T_QUANTILE {
+    if matches!(ex.op.id(), T_TOPK | T_BOTTOMK | T_QUANTILE) {
         expect_param_type(
             ex.param.as_deref(),
             ValueType::Scalar,
@@ -930,13 +930,13 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
         return Err("vector selector must contain at least one non-empty matcher".into());
     }
 
-    let mut du = ex.matchers.duplicated_matchers(METRIC_NAME);
-    du.sort();
+    let mut du = ex.matchers.find_matchers(METRIC_NAME);
     if du.len() >= 2 {
-        let du1 = du[0];
-        let du2 = du[1];
+        // this is to ensure that the err information can be predicted with fixed order
+        du.sort();
         return Err(format!(
-            "metric name must not be set twice: '{du1}' or '{du2}'"
+            "metric name must not be set twice: '{}' or '{}'",
+            du[0], du[1]
         ));
     }
 

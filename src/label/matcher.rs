@@ -74,7 +74,7 @@ impl Matcher {
         }
     }
 
-    // matches returns whether the matcher matches the given string value.
+    /// matches returns whether the matcher matches the given string value.
     pub fn is_match(&self, s: &str) -> bool {
         match &self.op {
             MatchOp::Equal => self.value.eq(s),
@@ -136,8 +136,8 @@ impl Matchers {
         self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
     }
 
-    /// check if the specified name exists more than once in matchers.
-    pub fn duplicated_matchers(&self, name: &str) -> Vec<&String> {
+    /// find all the matchers whose name equals the specified name.
+    pub fn find_matchers(&self, name: &str) -> Vec<&String> {
         self.matchers
             .iter()
             .filter(|m| m.name.eq_ignore_ascii_case(name))
