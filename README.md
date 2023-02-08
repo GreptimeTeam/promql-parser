@@ -1,3 +1,5 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/GreptimeTeam/promql-parser/blob/main/LICENSE)
+[![Build Status](https://github.com/greptimeteam/promql-parser/actions/workflows/develop.yml/badge.svg)](https://github.com/GreptimeTeam/promql-parser/blob/develop/.github/workflows/develop.yml)
 [![codecov](https://codecov.io/gh/GreptimeTeam/promql-parser/branch/develop/graph/badge.svg?token=4GEPVMJYNG)](https://app.codecov.io/gh/GreptimeTeam/promql-parser/tree/develop)
 
 # PromQL Lexer and Parser
@@ -7,12 +9,12 @@ parsing PromQL that conforms with [Prometheus Query][querying-prometheus].
 
 ## Example
 
-TODO: update example after publish to crates.io
+To parse a simple instant vector selector expression:
 
 ``` rust
 use promql_parser::parser;
 
-let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
 
 match parser::parse(promql) {
     Ok(ast) => println!("AST: {:?}", ast),
@@ -20,10 +22,16 @@ match parser::parse(promql) {
 }
 ```
 
-or you can directly run examples in this repo:
+or you can directly run examples under this repo:
 
 ``` shell
 cargo run --example parser
+```
+
+This outputs:
+
+```rust
+AST: VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: {Matcher { op: NotEqual, name: "method", value: "GET" }, Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: Equal, name: "__name__", value: "http_requests_total" }} }, offset: Some(Pos(300s)), at: Some(At(SystemTime { tv_sec: 1609746000, tv_nsec: 0 })) })
 ```
 
 ## PromQL compliance
@@ -31,6 +39,12 @@ cargo run --example parser
 This crate declares compatible with [prometheus 0372e25][prom-0372e25], which is
 prometheus release 2.40 at Nov 29, 2022. Any revision on PromQL after this
 commit is not guaranteed.
+
+## Users
+
+This parser is currently being used by the [GreptimeDB][greptimedb].
+
+If your project is using promql-parser feel free to make a PR to add it to this list.
 
 ## Contributing
 
@@ -49,3 +63,4 @@ licensed as above, without any additional terms or conditions.
 
 [prom-0372e25]: https://github.com/prometheus/prometheus/tree/0372e259baf014bbade3134fd79bcdfd8cbdef2c
 [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/
+[greptimedb]: https://github.com/GreptimeTeam/greptimedb

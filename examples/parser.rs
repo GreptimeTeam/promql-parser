@@ -15,7 +15,7 @@
 use promql_parser::parser;
 
 fn main() {
-    let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+    let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
 
     match parser::parse(promql) {
         Ok(ast) => println!("AST: {:?}", ast),

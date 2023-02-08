@@ -26,7 +26,7 @@
 //! ``` rust
 //! use promql_parser::parser;
 //!
-//! let promql = r#"prometheus_http_requests_total{code="200", job="prometheus"}"#;
+//! let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
 //!
 //! match parser::parse(promql) {
 //!     Ok(ast) => println!("AST: {:?}", ast),
@@ -34,12 +34,17 @@
 //! }
 //! ```
 //!
-//! or you can directly run examples in this repo:
+//! or you can directly run examples under this repo:
 //!
 //! ``` shell
 //! cargo run --example parser
 //! ```
 //!
+//! This outputs:
+//!
+//! ```rust, ignore
+//! AST: VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: {Matcher { op: NotEqual, name: "method", value: "GET" }, Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: Equal, name: "__name__", value: "http_requests_total" }} }, offset: Some(Pos(300s)), at: Some(At(SystemTime { tv_sec: 1609746000, tv_nsec: 0 })) })
+//! ```
 //! ## PromQL compliance
 //!
 //! This crate declares compatible with [prometheus 0372e25][prom-0372e25], which is
