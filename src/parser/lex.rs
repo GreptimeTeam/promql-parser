@@ -518,7 +518,7 @@ impl Lexer {
 
     /// scans a string escape sequence. The initial escaping character (\)
     /// has already been consumed.
-    // TODO: checking if code point is valid is NOT supported yet.
+    // TODO: checking the validity of code point is NOT supported yet.
     fn accept_escape(&mut self, symbol: char) -> State {
         match self.pop() {
             Some(ch) if ch == symbol || ESCAPE_SYMBOLS.contains(ch) => State::String(symbol),
