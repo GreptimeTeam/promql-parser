@@ -26,7 +26,13 @@ pub fn lexeme_to_string(
 ) -> Result<String, String> {
     lexeme
         .map(|l| span_to_string(lexer, l.span()))
-        .map_err(|e| format!("ParseStringError {e:?}"))
+        .map_err(|e| {
+            format!(
+                "ParseError: invalid input at [{}:{}]",
+                e.span().start(),
+                e.span().end(),
+            )
+        })
 }
 
 pub fn lexeme_to_token(
@@ -35,7 +41,13 @@ pub fn lexeme_to_token(
 ) -> Result<Token, String> {
     lexeme
         .map(|l| Token::new(l.tok_id(), span_to_string(lexer, l.span())))
-        .map_err(|e| format!("ParseTokenError {e:?}"))
+        .map_err(|e| {
+            format!(
+                "ParseError: invalid input at [{}:{}]",
+                e.span().start(),
+                e.span().end(),
+            )
+        })
 }
 
 // TODO: more test cases
