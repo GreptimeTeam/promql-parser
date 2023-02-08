@@ -42,7 +42,7 @@ commit is not guaranteed.
 
 ## Users
 
-This parser is currently being used by the [GreptimeDB][greptimedb].
+This parser is currently being used by the [GreptimeDB][greptimedb] and [py-promql-parser](https://github.com/messense/py-promql-parser).
 
 If your project is using promql-parser feel free to make a PR to add it to this list.
 
