@@ -276,7 +276,7 @@ impl Lexer {
         let c = match self.pop() {
             None => {
                 if !self.is_paren_balanced() {
-                    return State::Err("unbalanced parenthesis".into());
+                    return State::Err("unclosed left parenthesis".into());
                 }
                 return State::End;
             }
@@ -301,12 +301,12 @@ impl Lexer {
                     State::Lexeme(T_EQLC)
                 }
                 // =~ (label matcher) MUST be in brace
-                Some('~') => State::Err("unexpected character after '=': ~".into()),
+                Some('~') => State::Err("unexpected character after '=': '~'".into()),
                 _ => State::Lexeme(T_EQL),
             },
             '!' => match self.pop() {
                 Some('=') => State::Lexeme(T_NEQ),
-                Some(ch) => State::Err(format!("unexpected character after '!': {ch}")),
+                Some(ch) => State::Err(format!("unexpected character after '!': '{ch}'")),
                 None => State::Err("'!' can not be at the end".into()),
             },
             '<' => match self.peek() {
@@ -327,7 +327,7 @@ impl Lexer {
             ch if ch.is_ascii_digit() => State::NumberOrDuration,
             '.' => match self.peek() {
                 Some(ch) if ch.is_ascii_digit() => State::NumberOrDuration,
-                Some(ch) => State::Err(format!("unexpected character after '.' {ch}")),
+                Some(ch) => State::Err(format!("unexpected character after '.': '{ch}'")),
                 None => State::Err("unexpected character: '.'".into()),
             },
             ch if is_alpha(ch) || ch == ':' => State::KeywordOrIdentifier,
@@ -1020,9 +1020,9 @@ mod tests {
     #[test]
     fn test_common_errors() {
         let cases = vec![
-            ("=~", vec![], Some("unexpected character after '=': ~")),
-            ("!~", vec![], Some("unexpected character after '!': ~")),
-            ("!(", vec![], Some("unexpected character after '!': (")),
+            ("=~", vec![], Some("unexpected character after '=': '~'")),
+            ("!~", vec![], Some("unexpected character after '!': '~'")),
+            ("!(", vec![], Some("unexpected character after '!': '('")),
             ("1a", vec![], Some("bad number or duration syntax: 1a")),
         ];
         assert_matches(cases);
@@ -1034,7 +1034,7 @@ mod tests {
             (
                 "(",
                 vec![(T_LEFT_PAREN, 0, 1)],
-                Some("unbalanced parenthesis"),
+                Some("unclosed left parenthesis"),
             ),
             (")", vec![], Some("unexpected right parenthesis ')'")),
             (
@@ -1049,7 +1049,7 @@ mod tests {
                     (T_LEFT_PAREN, 1, 1),
                     (T_RIGHT_PAREN, 2, 1),
                 ],
-                Some("unbalanced parenthesis"),
+                Some("unclosed left parenthesis"),
             ),
             (
                 "{",

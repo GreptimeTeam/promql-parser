@@ -95,6 +95,7 @@ mod tests {
     fn test_number_literal() {
         let cases = vec![
             ("1", Expr::from(1.0)),
+            ("Inf", Expr::from(f64::INFINITY)),
             ("+Inf", Expr::from(f64::INFINITY)),
             ("-Inf", Expr::from(f64::NEG_INFINITY)),
             (".5", Expr::from(0.5)),
@@ -106,7 +107,13 @@ mod tests {
             ("0755", Expr::from(493.0)),
             ("+5.5e-3", Expr::from(0.0055)),
             ("-0755", Expr::from(-493.0)),
+
+            // for abnormal input
             ("NaN", Expr::from(f64::NAN)),
+            (
+                "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+                Expr::from(f64::INFINITY)
+            ),
         ];
         assert_cases(Case::new_expr_cases(cases));
     }
@@ -147,10 +154,10 @@ mod tests {
         assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
-            // "`\\``"
-            // `"\`
-            // `"\c"`
-            // `"\x."`
+            (r#"`\\``"#, "unterminated quoted string `"),
+            (r#""\"#, "escape sequence not terminated"),
+            // (r#""\c""#, ""),
+            // (r#""\x.""#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -638,79 +645,95 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // (
-            //     "foo and 1",
-            //     "set operator \"and\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 and foo",
-            //     "set operator \"and\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "foo or 1",
-            //     "set operator \"or\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 or foo",
-            //     "set operator \"or\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "foo unless 1",
-            //     "set operator \"unless\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 unless foo",
-            //     "set operator \"unless\" not allowed in binary scalar expression",
-            // ),
-            // (
-            //     "1 or on(bar) foo",
-            //     "vector matching only allowed between instant vectors",
-            // ),
-            // (
-            //     "foo == on(bar) 10",
-            //     "vector matching only allowed between instant vectors",
-            // ),
+            (
+                "foo and 1",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "1 and foo",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "foo or 1",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "1 or foo",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "foo unless 1",
+                "set operator 'unless' not allowed in binary scalar expression",
+            ),
+            (
+                "1 unless foo",
+                "set operator 'unless' not allowed in binary scalar expression",
+            ),
+            (
+                "1 or on(bar) foo",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "foo == on(bar) 10",
+                "vector matching only allowed between instant vectors",
+            ),
             // ("foo + group_left(baz) bar", "unexpected <group_left>"),
-            // (
-            //     "foo and on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"and\" operation",
-            // ),
-            // (
-            //     "foo and on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"and\" operation",
-            // ),
-            // (
-            //     "foo or on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"or\" operation",
-            // ),
-            // (
-            //     "foo or on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"or\" operation",
-            // ),
-            // (
-            //     "foo unless on(bar) group_left(baz) bar",
-            //     "no grouping allowed for \"unless\" operation",
-            // ),
-            // (
-            //     "foo unless on(bar) group_right(baz) bar",
-            //     "no grouping allowed for \"unless\" operation",
-            // ),
+            (
+                "foo and on(bar) group_left(baz) bar",
+                "no grouping allowed for 'and' operation",
+            ),
+            (
+                "foo and on(bar) group_right(baz) bar",
+                "no grouping allowed for 'and' operation",
+            ),
+            (
+                "foo or on(bar) group_left(baz) bar",
+                "no grouping allowed for 'or' operation",
+            ),
+            (
+                "foo or on(bar) group_right(baz) bar",
+                "no grouping allowed for 'or' operation",
+            ),
+            (
+                "foo unless on(bar) group_left(baz) bar",
+                "no grouping allowed for 'unless' operation",
+            ),
+            (
+                "foo unless on(bar) group_right(baz) bar",
+                "no grouping allowed for 'unless' operation",
+            ),
             (
                 r#"http_requests{group="production"} + on(instance) group_left(job,instance) cpu_count{type="smp"}"#,
                 "label 'instance' must not occur in ON and GROUP clause at once",
             ),
-            // (
-            //     "foo + bool bar",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
-            // (
-            //     "foo + bool 10",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
-            // (
-            //     "foo and bool 10",
-            //     "bool modifier can only be used on comparison operators",
-            // ),
+            (
+                "foo + bool bar",
+                "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "foo + bool 10",
+                "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "foo and bool 10",
+                "bool modifier can only be used on comparison operators",
+            ),
+            (
+                "1 and 1",
+                "set operator 'and' not allowed in binary scalar expression",
+            ),
+            (
+                "1 == 1",
+                "comparisons between scalars must use BOOL modifier",
+            ),
+            (
+                "1 or 1",
+                "set operator 'or' not allowed in binary scalar expression",
+            ),
+            (
+                "1 unless 1",
+                "set operator 'unless' not allowed in binary scalar expression",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -907,30 +930,30 @@ mod tests {
             //     r#"unexpected "}" in label matching, expected label matching operator"#,
             // ),
             ("foo{1}", "unexpected character inside braces: '1'"),
-            // (
-            //     "{}",
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x=""}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x=~".*"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x!~".+"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"{x!="a"}"#,
-            //     "vector selector must contain at least one non-empty matcher",
-            // ),
-            // (
-            //     r#"foo{__name__="bar"}"#,
-            //     r#"metric name must not be set twice: "foo" or "bar""#,
-            // ),
+            (
+                "{}",
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x=""}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x=~".*"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x!~".+"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"{x!="a"}"#,
+                "vector selector must contain at least one non-empty matcher",
+            ),
+            (
+                r#"foo{__name__="bar"}"#,
+                "metric name must not be set twice: 'bar' or 'foo'",
+            ),
             // (
             //     "foo{__name__= =}",
             //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
@@ -1059,7 +1082,7 @@ mod tests {
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
             ),
-            // ("some_metric[5m] OFFSET", ""),
+            ("some_metric[5m] OFFSET", "empty duration string"),
             (
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
@@ -1070,7 +1093,10 @@ mod tests {
                 "some_metric @ 1234 [5m]",
                 "no @ modifiers allowed before range",
             ),
-            // ("(foo + bar)[5m]", ""),
+            (
+                "(foo + bar)[5m]",
+                "ranges only allowed for vector selectors",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -1170,16 +1196,34 @@ mod tests {
             // ("sum without(foo,,)(some_metric)", ""),
             // ("sum some_metric by (test)", ""),
             // ("sum (some_metric) by test", ""),
-            // ("sum () by (test)", ""),
+            (
+                "sum () by (test)",
+                "no arguments for aggregate expression provided",
+            ),
             // ("MIN keep_common (some_metric)", ""),
             // ("MIN (some_metric) keep_common", ""),
             // ("sum (some_metric) without (test) by (test)", ""),
             // ("sum without (test) (some_metric) by (test)", ""),
-            // ("topk(some_metric)", ""),
-            // ("topk(some_metric,)", ""),
-            // ("topk(some_metric, other_metric)", ""),
-            // ("count_values(5, other_metric)", ""),
-            // ("rate(some_metric[5m]) @ 1234", ""),
+            (
+                "topk(some_metric)",
+                "wrong number of arguments for aggregate expression provided, expected 2, got 1",
+            ),
+            (
+                "topk(some_metric,)",
+                "trailing commas not allowed in function call args",
+            ),
+            (
+                "topk(some_metric, other_metric)",
+                "expected type scalar in aggregation expression, got instant vector",
+            ),
+            (
+                "count_values(5, other_metric)",
+                "expected type string in aggregation expression, got scalar",
+            ),
+            (
+                "rate(some_metric[5m]) @ 1234",
+                "@ modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -1225,14 +1269,38 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("floor()", ""),
-            // ("floor(some_metric, other_metric)", ""),
-            // ("floor(some_metric, 1)", ""),
-            // ("floor(1)", ""),
-            // ("hour(some_metric, some_metric, some_metric)", ""),
-            // ("time(some_metric)", ""),
-            // ("non_existent_function_far_bar()", ""),
-            // ("rate(some_metric)", ""),
+            (
+                "floor()",
+                "expected 1 argument(s) in call to 'floor', got 0",
+            ),
+            (
+                "floor(some_metric, other_metric)",
+                "expected 1 argument(s) in call to 'floor', got 2",
+            ),
+            (
+                "floor(some_metric, 1)",
+                "expected 1 argument(s) in call to 'floor', got 2",
+            ),
+            (
+                "floor(1)",
+                "expected type instant vector in call to function 'floor', got scalar",
+            ),
+            (
+                "hour(some_metric, some_metric, some_metric)",
+                "expected at most 1 argument(s) in call to 'hour', got 3",
+            ),
+            (
+                "time(some_metric)",
+                "expected 0 argument(s) in call to 'time', got 1",
+            ),
+            (
+                "non_existent_function_far_bar()",
+                "unknown function with name 'non_existent_function_far_bar'",
+            ),
+            (
+                "rate(some_metric)",
+                "expected type range vector in call to function 'rate', got instant vector",
+            ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -1568,10 +1636,22 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("test[5d] OFFSET 10s [10m:5s]", ""),
-            // (r#"(foo + bar{nm="val"})[5m:][10m:5s]"#, ""),
-            // ("rate(food[1m])[1h] offset 1h", ""),
-            // ("rate(food[1m])[1h] @ 100", ""),
+            (
+                "test[5d] OFFSET 10s [10m:5s]",
+                "subquery is only allowed on instant vector, got range vector instead",
+            ),
+            (
+                r#"(foo + bar{nm="val"})[5m:][10m:5s]"#,
+                "subquery is only allowed on instant vector, got range vector instead",
+            ),
+            (
+                "rate(food[1m])[1h] offset 1h",
+                "ranges only allowed for vector selectors",
+            ),
+            (
+                "rate(food[1m])[1h] @ 100",
+                "ranges only allowed for vector selectors",
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
@@ -1661,8 +1741,8 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let cases = vec![
-            // start()
-            // end()
+            // ("start()", ""),
+            // ("end()", ""),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1682,22 +1762,20 @@ mod tests {
             ("0deadbeef", "bad number or duration syntax: 0de"),
             // ("1 /", "unexpected end of input"),
             // ("*1", "unexpected <op:*>"),
-            // ("(1))", "unexpected right parenthesis ')'"),
-            // ("((1)", "unclosed left parenthesis"),
-            // ("999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "out of range"),
-            // ("(", "unclosed left parenthesis"),
-            // ("1 and 1", "set operator \"and\" not allowed in binary scalar expression"),
-            // ("1 == 1", "1:3: parse error: comparisons between scalars must use BOOL modifier"),
-            // ("1 or 1", "set operator \"or\" not allowed in binary scalar expression"),
-            // ("1 unless 1", "set operator \"unless\" not allowed in binary scalar expression"),
-            // ("1 !~ 1", `unexpected character after '!': '~'`),
-            // ("1 =~ 1", `unexpected character after '=': '~'`),
+            ("(1))", "unexpected right parenthesis ')'"),
+            ("((1)", "unclosed left parenthesis"),
+            ("(", "unclosed left parenthesis"),
+            ("1 !~ 1", "unexpected character after '!': '~'"),
+            ("1 =~ 1", "unexpected character after '=': '~'"),
             // ("*test", "unexpected <op:*>"),
-            // ("1 offset 1d", "1:1: parse error: offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"),
-            // (
-            //     "foo offset 1s offset 2s",
-            //     "offset may not be set multiple times",
-            // ),
+            (
+                "1 offset 1d",
+                "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+            ),
+            (
+                "foo offset 1s offset 2s",
+                "offset may not be set multiple times"
+            ),
             // (
             //     "a - on(b) ignoring(c) d",
             //     "1:11: parse error: unexpected <ignoring>",
@@ -1707,8 +1785,11 @@ mod tests {
             // ("-=", r#"unexpected "=""#),
             // ("++-++-+-+-<", "unexpected <op:<>"),
             // ("e-+=/(0)", r#"unexpected "=""#),
-            // ("a>b()", "unknown function"),
-            // ("rate(avg)", "expected type range vector"),
+            ("a>b()", "unknown function with name 'b'"),
+            (
+                "rate(avg)",
+                "expected type range vector in call to function 'rate', got instant vector"
+            ),
 
             // "(" + strings.Repeat("-{}-1", 10000) + ")" + strings.Repeat("[1m:]", 1000)
         ];

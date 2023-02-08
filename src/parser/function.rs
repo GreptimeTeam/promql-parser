@@ -85,6 +85,7 @@ impl Function {
 }
 
 macro_rules! map {
+    // if variadic args, then the last is the variadic one
     ($(($name:literal, $arg:expr, $ret:expr)),*) => (
         {
             let mut m: HashMap<&'static str, Function> = HashMap::new();

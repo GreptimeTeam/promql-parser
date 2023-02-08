@@ -74,7 +74,7 @@ impl Matcher {
         }
     }
 
-    // matches returns whether the matcher matches the given string value.
+    /// matches returns whether the matcher matches the given string value.
     pub fn is_match(&self, s: &str) -> bool {
         match &self.op {
             MatchOp::Equal => self.value.eq(s),
@@ -125,6 +125,24 @@ impl Matchers {
     pub fn append(mut self, matcher: Matcher) -> Self {
         self.matchers.insert(matcher);
         self
+    }
+
+    /// Vector selectors must either specify a name or at least one label
+    /// matcher that does not match the empty string.
+    ///
+    /// The following expression is illegal:
+    /// {job=~".*"} # Bad!
+    pub fn is_empty_matchers(&self) -> bool {
+        self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
+    }
+
+    /// find all the matchers whose name equals the specified name.
+    pub fn find_matchers(&self, name: &str) -> Vec<&String> {
+        self.matchers
+            .iter()
+            .filter(|m| m.name.eq_ignore_ascii_case(name))
+            .map(|m| &m.value)
+            .collect()
     }
 }
 
