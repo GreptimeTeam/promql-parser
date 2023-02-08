@@ -262,7 +262,7 @@ function_call -> Result<Expr, String>:
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
                         match get_function(&name) {
-                            None => Err(format!("unknown function with name {name}")),
+                            None => Err(format!("unknown function with name '{name}'")),
                             Some(func) => Expr::new_call(func, $2?)
                         }
                 }
