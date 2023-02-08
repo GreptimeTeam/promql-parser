@@ -17,7 +17,7 @@ use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
 use std::fmt::Debug;
 
-const ESCAPE_SYMBOLS: &str = r#"abfnrtv\"#;
+const ESCAPE_SYMBOLS: &str = r#"abfnrtv\01234567xuU"#;
 const STRING_SYMBOLS: &str = r#"'"`"#;
 
 pub type LexemeType = DefaultLexeme<TokenId>;
@@ -518,12 +518,11 @@ impl Lexer {
 
     /// scans a string escape sequence. The initial escaping character (\)
     /// has already been consumed.
-    // FIXME: more escape logic happens here, mostly to check if number is valid.
-    // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex.go#L552
+    // checking if code point is valid is NOT supported yet.
     fn accept_escape(&mut self, symbol: char) -> State {
         match self.pop() {
             Some(ch) if ch == symbol || ESCAPE_SYMBOLS.contains(ch) => State::String(symbol),
-            Some(_) => State::String(symbol),
+            Some(ch) => State::Err(format!("unknown escape sequence '{ch}'")),
             None => State::Err("escape sequence not terminated".into()),
         }
     }
@@ -813,9 +812,20 @@ mod tests {
         let cases = vec![
             ("\"test\\tsequence\"", vec![(T_STRING, 1, 14)], None),
             ("\"test\\\\.expression\"", vec![(T_STRING, 1, 17)], None),
-            // FIXME: "\"test\\.expression\""
-            ("`test\\.expression`", vec![(T_STRING, 1, 16)], None),
-            // FIXME: ".٩" https://github.com/prometheus/prometheus/issues/939
+            (
+                "\"test\\.expression\"",
+                vec![],
+                Some("unknown escape sequence '.'"),
+            ),
+            (
+                "`test\\.expression`",
+                vec![],
+                Some("unknown escape sequence '.'"),
+            ),
+            (".٩", vec![], Some("unexpected character after '.': '٩'")),
+            // TODO: accept_escape SHOULD support invalid escape character
+            // "\xff"
+            // `\xff`
         ];
         assert_matches(cases);
     }
@@ -1011,12 +1021,6 @@ mod tests {
         assert_matches(cases);
     }
 
-    // TODO: this is not supported yet.
-    // https://github.com/prometheus/prometheus/blob/0372e259baf014bbade3134fd79bcdfd8cbdef2c/promql/parser/lex_test.go#L498
-    #[test]
-    #[ignore]
-    fn test_series_descriptions() {}
-
     #[test]
     fn test_common_errors() {
         let cases = vec![
@@ -1090,13 +1094,6 @@ mod tests {
             ("]", vec![], Some("unexpected right bracket ']'")),
         ];
         assert_matches(cases);
-    }
-
-    #[ignore]
-    #[test]
-    fn test_encoding_issues() {
-        // FIXME: ("\"\xff\"", ""),
-        // FIXME: ("`\xff`", ""),
     }
 
     #[test]
