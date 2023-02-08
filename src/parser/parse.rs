@@ -1195,16 +1195,16 @@ mod tests {
             // ("sum without(==)(some_metric)", ""),
             // ("sum without(,)(some_metric)", ""),
             // ("sum without(foo,,)(some_metric)", ""),
-            // ("sum some_metric by (test)", ""),
+            ("sum some_metric by (test)", "no arguments for aggregate expression 'sum' provided"),
             // ("sum (some_metric) by test", ""),
             (
                 "sum () by (test)",
-                "no arguments for aggregate expression provided",
+                "no arguments for aggregate expression 'sum' provided",
             ),
             // ("MIN keep_common (some_metric)", ""),
             // ("MIN (some_metric) keep_common", ""),
-            // ("sum (some_metric) without (test) by (test)", ""),
-            // ("sum without (test) (some_metric) by (test)", ""),
+            ("sum (some_metric) without (test) by (test)", "ParseError: invalid input at [33:34]"),
+            ("sum without (test) (some_metric) by (test)", "ParseError: invalid input at [33:34]"),
             (
                 "topk(some_metric)",
                 "wrong number of arguments for aggregate expression provided, expected 2, got 1",
@@ -1756,19 +1756,19 @@ mod tests {
                 "# just a comment\n\n",
                 "no expression found in input: '# just a comment\n\n'",
             ),
-            // ("1+", "unexpected end of input"),
+            // ("1+", ""),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
             ("100..4", "bad number or duration syntax: 100.."),
             ("0deadbeef", "bad number or duration syntax: 0de"),
-            // ("1 /", "unexpected end of input"),
-            // ("*1", "unexpected <op:*>"),
+            // ("1 /", ""),
+            // ("*1", ""),
             ("(1))", "unexpected right parenthesis ')'"),
             ("((1)", "unclosed left parenthesis"),
             ("(", "unclosed left parenthesis"),
             ("1 !~ 1", "unexpected character after '!': '~'"),
             ("1 =~ 1", "unexpected character after '=': '~'"),
-            // ("*test", "unexpected <op:*>"),
+            // ("*test", ""),
             (
                 "1 offset 1d",
                 "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
@@ -1777,10 +1777,7 @@ mod tests {
                 "foo offset 1s offset 2s",
                 "offset may not be set multiple times"
             ),
-            // (
-            //     "a - on(b) ignoring(c) d",
-            //     "1:11: parse error: unexpected <ignoring>",
-            // ),
+            // ("a - on(b) ignoring(c) d", ""),
 
             // Fuzzing regression tests.
             // ("-=", r#"unexpected "=""#),
