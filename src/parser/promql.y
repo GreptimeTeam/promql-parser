@@ -168,22 +168,22 @@ aggregate_modifier -> Result<AggModifier, String>:
  */
 // Operator precedence only works if each of those is listed separately.
 binary_expr -> Result<Expr, String>:
-                expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
-                | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, $2.unwrap().tok_id(), $3?, $4?) }
+                expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
                 ;
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
@@ -223,6 +223,10 @@ group_modifiers -> Result<Option<BinModifier>, String>:
                 {
                         Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
+                | GROUP_LEFT grouping_labels
+                { Err("unexpected <group_left>".into()) }
+                | GROUP_RIGHT grouping_labels
+                { Err("unexpected <group_right>".into()) }
                 ;
 
 grouping_labels -> Result<Labels, String>:
@@ -370,6 +374,8 @@ label_matchers -> Result<Matchers, String>:
                 LEFT_BRACE label_match_list RIGHT_BRACE { $2 }
                 | LEFT_BRACE label_match_list COMMA RIGHT_BRACE { $2 }
                 | LEFT_BRACE RIGHT_BRACE { Ok(Matchers::empty()) }
+                | LEFT_BRACE COMMA RIGHT_BRACE
+                { Err("unexpected ',' in label matching, expected identifier or right_brace".into()) }
                 ;
 
 label_match_list -> Result<Matchers, String>:
@@ -383,6 +389,22 @@ label_matcher -> Result<Matcher, String>:
                         let name = lexeme_to_string($lexer, &$1)?;
                         let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2?.id(), name, value)
+                }
+                | IDENTIFIER match_op match_op
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+                | IDENTIFIER match_op IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$3)?;
+                        Err(format!("unexpected identifier '{id}' in label matching, expected string"))
+                }
+                | IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$1)?;
+                        Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
                 }
                 ;
 
@@ -487,18 +509,17 @@ number_literal -> Result<Expr, String>:
                 }
                 ;
 
-duration -> Result<Duration, String>:
-                DURATION { parse_duration($lexer.span_str($span)) }
-                ;
-
 string_literal -> Result<Expr, String>:
                 STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
+                ;
+
+duration -> Result<Duration, String>:
+                DURATION { parse_duration($lexer.span_str($span)) }
                 ;
 
 /*
  * Wrappers for optional arguments.
  */
-
 maybe_duration -> Result<Option<Duration>, String>:
                 { Ok(None) }
                 | duration
