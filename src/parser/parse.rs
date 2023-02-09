@@ -23,7 +23,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
             let (res, _errs) = crate::promql_y::parse(&lexer);
             match res {
                 Some(r) => r,
-                None => Err("empty AST".into()),
+                None => Err("Parse Error".into()),
             }
         }
     }
@@ -1075,15 +1075,21 @@ mod tests {
             ("foo[5m1h]", "not a valid duration string: 5m1h"),
             ("foo[5m1m]", "not a valid duration string: 5m1m"),
             ("foo[0m]", "duration must be greater than 0"),
-            (r#"foo["5m"]"#, r#"unexpected character inside brackets: ""#),
-            (r#"foo[]"#, r#"empty duration string"#),
+            (
+                r#"foo["5m"]"#,
+                r#"unexpected character inside brackets: '"'"#,
+            ),
+            (r#"foo[]"#, "missing unit character in duration"),
             (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
             // ("some_metric[5m] OFFSET 1", ""),
             (
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
             ),
-            ("some_metric[5m] OFFSET", "empty duration string"),
+            (
+                "some_metric[5m] OFFSET",
+                "unexpected end of input in offset, expected duration",
+            ),
             (
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",

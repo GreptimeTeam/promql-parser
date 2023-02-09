@@ -297,6 +297,10 @@ offset_expr -> Result<Expr, String>:
                 expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
                 | expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
                 | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
+                | expr OFFSET
+                {
+                        Err("unexpected end of input in offset, expected duration".into())
+                }
                 ;
 
 /*
@@ -331,6 +335,10 @@ matrix_selector -> Result<Expr, String>:
                 expr LEFT_BRACKET duration RIGHT_BRACKET
                 {
                         Expr::new_matrix_selector($1?, $3?)
+                }
+                | expr LEFT_BRACKET RIGHT_BRACKET
+                {
+                        Err("missing unit character in duration".into())
                 }
                 ;
 

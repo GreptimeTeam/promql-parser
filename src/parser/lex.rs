@@ -622,7 +622,7 @@ impl Lexer {
                 State::Lexeme(T_RIGHT_BRACKET)
             }
             Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
-            Some(ch) => State::Err(format!("unexpected character inside brackets: {ch}")),
+            Some(ch) => State::Err(format!("unexpected character inside brackets: '{ch}'")),
             None => State::Err("unexpected end of input inside brackets".into()),
         }
     }
