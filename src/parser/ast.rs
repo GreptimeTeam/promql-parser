@@ -255,7 +255,8 @@ pub struct AggregateExpr {
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
-    pub modifier: AggModifier,
+    /// modifier is optional for some aggregation operators, like sum.
+    pub modifier: Option<AggModifier>,
 }
 
 /// UnaryExpr will negate the expr
@@ -605,7 +606,7 @@ impl Expr {
 
     pub fn new_aggregate_expr(
         op: TokenId,
-        modifier: AggModifier,
+        modifier: Option<AggModifier>,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
@@ -657,6 +658,14 @@ impl Expr {
             Expr::VectorSelector(_) => ValueType::Vector,
             Expr::MatrixSelector(_) => ValueType::Matrix,
             Expr::Call(ex) => ex.func.return_type,
+        }
+    }
+
+    /// only exists if expr is NumberLiteral
+    pub fn scalar_value(&self) -> Option<f64> {
+        match self {
+            Expr::NumberLiteral(nl) => Some(nl.val),
+            _ => None,
         }
     }
 }
@@ -892,11 +901,34 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
         ));
     }
 
+    if name.eq_ignore_ascii_case("exp") && !ex.args.is_empty() {
+        if let Some(val) = ex.args.first().scalar_value() {
+            // `exp()` pecial cases are:
+            // exp(+Inf) = +Inf
+            // exp(NaN) = NaN
+            if val.is_nan() || val.is_infinite() {
+                return Ok(Expr::Call(ex));
+            }
+        }
+    } else if name.eq_ignore_ascii_case("ln") && !ex.args.is_empty() {
+        if let Some(val) = ex.args.first().scalar_value() {
+            // `ln()` special cases are:
+            // ln(+Inf) = +Inf
+            // ln(0) = -Inf
+            // ln(x < 0) = NaN
+            // ln(NaN) = NaN
+            if val.is_nan() || val.is_infinite() || val <= 0.0 {
+                return Ok(Expr::Call(ex));
+            }
+        }
+    }
+
     for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
         // this only happens when function args are variadic
         if idx >= ex.func.arg_types.len() {
             idx = ex.func.arg_types.len() - 1;
         }
+
         expect_type(
             ex.func.arg_types[idx],
             Some(actual_arg.value_type()),

@@ -155,16 +155,15 @@ expr -> Result<Expr, String>:
 aggregate_expr -> Result<Expr, String>:
                 aggregate_op aggregate_modifier function_call_body
                 {
-                        Expr::new_aggregate_expr($1?.id(), $2?, $3?)
+                        Expr::new_aggregate_expr($1?.id(), Some($2?), $3?)
                 }
         |       aggregate_op function_call_body aggregate_modifier
                 {
-                        Expr::new_aggregate_expr($1?.id(), $3?, $2?)
+                        Expr::new_aggregate_expr($1?.id(), Some($3?), $2?)
                 }
         |       aggregate_op function_call_body
                 {
-                        let modifier = AggModifier::By(HashSet::new());
-                        Expr::new_aggregate_expr($1?.id(), modifier, $2?)
+                        Expr::new_aggregate_expr($1?.id(), None, $2?)
                 }
 ;
 
