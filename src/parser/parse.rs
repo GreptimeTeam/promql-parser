@@ -962,13 +962,13 @@ mod tests {
             ),
             (
                 r#"foo{__name__ == "bar"}"#,
-                // "unexpected '=' in label matching, expected string",
+                "unexpected '=' in label matching, expected string",
+            ),
+            (
+                r#"foo{__name__="bar" lol}"#,
+                // "invalid label matcher, expected label matching operator after 'lol'",
                 "Parse Error",
             ),
-            // (
-            //     r#"foo{__name__="bar" lol}"#,
-            //     "invalid label matcher, expected label matching operator after 'lol'",
-            // ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
 
@@ -1079,7 +1079,7 @@ mod tests {
             ),
             (r#"foo[]"#, "missing unit character in duration"),
             (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
-            // ("some_metric[5m] OFFSET 1", ""),
+            // FIXME: ("some_metric[5m] OFFSET 1", ""),
             (
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
@@ -1092,8 +1092,8 @@ mod tests {
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
             ),
-            // ("some_metric[5m] @ 1m", ""),
-            // ("some_metric[5m] @", ""),
+            // FIXME: ("some_metric[5m] @ 1m", ""),
+            // FIXME: ("some_metric[5m] @", ""),
             (
                 "some_metric @ 1234 [5m]",
                 "no @ modifiers allowed before range",
@@ -1196,17 +1196,17 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("sum without(==)(some_metric)", ""),
-            // ("sum without(,)(some_metric)", ""),
-            // ("sum without(foo,,)(some_metric)", ""),
+            // FIXME: ("sum without(==)(some_metric)", ""),
+            // FIXME: ("sum without(,)(some_metric)", ""),
+            // FIXME: ("sum without(foo,,)(some_metric)", ""),
             ("sum some_metric by (test)", "Parse Error"),
-            // ("sum (some_metric) by test", ""),
+            // FIXME: ("sum (some_metric) by test", ""),
             (
                 "sum () by (test)",
                 "no arguments for aggregate expression 'sum' provided",
             ),
-            // ("MIN keep_common (some_metric)", ""),
-            // ("MIN (some_metric) keep_common", ""),
+            // FIXME: ("MIN keep_common (some_metric)", ""),
+            // FIXME: ("MIN (some_metric) keep_common", ""),
             ("sum (some_metric) without (test) by (test)", "Parse Error"),
             ("sum without (test) (some_metric) by (test)", "Parse Error"),
             (
@@ -1746,8 +1746,8 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let cases = vec![
-            // ("start()", ""),
-            // ("end()", ""),
+            // FIXME: ("start()", ""),
+            // FIXME: ("end()", ""),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }

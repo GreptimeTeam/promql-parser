@@ -417,6 +417,18 @@ label_matcher -> Result<Matcher, String>:
                         Err(format!("unexpected '{op}' in label matching, expected string"))
 
                 }
+                | IDENTIFIER match_op match_op STRING
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+                | IDENTIFIER match_op match_op IDENTIFIER
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
                 | IDENTIFIER match_op IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$3)?;
