@@ -1,0 +1,19 @@
+name: Release
+run-name: publish packages by @${{ github.actor }}
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v2
+      - name: Publish
+        shell: bash
+        run: |
+          cargo publish --token ${{ secrets.CRATES_TOKEN }}
