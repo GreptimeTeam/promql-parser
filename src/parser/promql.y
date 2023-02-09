@@ -105,7 +105,7 @@ START_EXPRESSION
 START_METRIC_SELECTOR
 %token STARTSYMBOLS_END
 
-%start expr
+%start start
 
 // Operators are listed with increasing precedence.
 %left LOR
@@ -123,6 +123,12 @@ START_METRIC_SELECTOR
 %right LEFT_BRACKET
 
 %%
+start -> Result<Expr, String>:
+                expr { $1 }
+                | expr EOF { $1 }
+                | EOF { Err("no expression found in input".into()) }
+                ;
+
 expr -> Result<Expr, String>:
 /* check_ast from bottom to up for nested exprs */
                 aggregate_expr { check_ast($1?) }
@@ -297,10 +303,7 @@ offset_expr -> Result<Expr, String>:
                 expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
                 | expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
                 | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
-                | expr OFFSET
-                {
-                        Err("unexpected end of input in offset, expected duration".into())
-                }
+                | expr OFFSET EOF { Err("unexpected end of input in offset, expected duration".into()) }
                 ;
 
 /*
