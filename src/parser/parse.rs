@@ -156,7 +156,7 @@ mod tests {
         let fail_cases = vec![
             (r#"`\\``"#, "unterminated quoted string `"),
             (r#""\"#, "escape sequence not terminated"),
-            // (r#""\c""#, ""),
+            (r#""\c""#, "unknown escape sequence 'c'"),
             // (r#""\x.""#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -677,7 +677,8 @@ mod tests {
                 "foo == on(bar) 10",
                 "vector matching only allowed between instant vectors",
             ),
-            // ("foo + group_left(baz) bar", "unexpected <group_left>"),
+            // NOTE: group modifier CAN NOT be used without on/ignoring modifier
+            ("foo + group_left(baz) bar", "unexpected <group_left>"),
             (
                 "foo and on(bar) group_left(baz) bar",
                 "no grouping allowed for 'and' operation",
@@ -911,10 +912,10 @@ mod tests {
             ("}", "unexpected right brace '}'"),
             ("some{", "unexpected end of input inside braces"),
             ("some}", "unexpected right brace '}'"),
-            // (
-            //     "some_metric{a=b}",
-            //     "unexpected identifier \"b\" in label matching, expected string",
-            // ),
+            (
+                "some_metric{a=b}",
+                "unexpected identifier 'b' in label matching, expected string",
+            ),
             (
                 r#"some_metric{a:b="b"}"#,
                 "unexpected character inside braces: ':'",
@@ -925,10 +926,10 @@ mod tests {
             //     r#"some_metric{a="\xff"}"#,
             //     "1:15: parse error: invalid UTF-8 rune",
             // ),
-            // (
-            //     "foo{gibberish}",
-            //     r#"unexpected "}" in label matching, expected label matching operator"#,
-            // ),
+            (
+                "foo{gibberish}",
+                "invalid label matcher, expected label matching operator after 'gibberish'",
+            ),
             ("foo{1}", "unexpected character inside braces: '1'"),
             (
                 "{}",
@@ -954,21 +955,21 @@ mod tests {
                 r#"foo{__name__="bar"}"#,
                 "metric name must not be set twice: 'bar' or 'foo'",
             ),
-            // (
-            //     "foo{__name__= =}",
-            //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
-            // ),
-            // (
-            //     "foo{,}",
-            //     r#"unexpected "," in label matching, expected identifier or "}""#,
-            // ),
-            // (
-            //     r#"foo{__name__ == "bar"}"#,
-            //     r#"1:15: parse error: unexpected "=" in label matching, expected string"#,
-            // ),
+            (
+                "foo{__name__= =}",
+                "unexpected '=' in label matching, expected string",
+            ),
+            (
+                "foo{,}",
+                r#"unexpected ',' in label matching, expected identifier or right_brace"#,
+            ),
+            (
+                r#"foo{__name__ == "bar"}"#,
+                "unexpected '=' in label matching, expected string",
+            ),
             // (
             //     r#"foo{__name__="bar" lol}"#,
-            //     r#"unexpected identifier "lol" in label matching, expected "," or "}""#,
+            //     "invalid label matcher, expected label matching operator after 'lol'",
             // ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -1194,16 +1195,16 @@ mod tests {
             // ("sum without(==)(some_metric)", ""),
             // ("sum without(,)(some_metric)", ""),
             // ("sum without(foo,,)(some_metric)", ""),
-            // ("sum some_metric by (test)", ""),
+            ("sum some_metric by (test)", "no arguments for aggregate expression 'sum' provided"),
             // ("sum (some_metric) by test", ""),
             (
                 "sum () by (test)",
-                "no arguments for aggregate expression provided",
+                "no arguments for aggregate expression 'sum' provided",
             ),
             // ("MIN keep_common (some_metric)", ""),
             // ("MIN (some_metric) keep_common", ""),
-            // ("sum (some_metric) without (test) by (test)", ""),
-            // ("sum without (test) (some_metric) by (test)", ""),
+            ("sum (some_metric) without (test) by (test)", "ParseError: invalid input at [33:34]"),
+            ("sum without (test) (some_metric) by (test)", "ParseError: invalid input at [33:34]"),
             (
                 "topk(some_metric)",
                 "wrong number of arguments for aggregate expression provided, expected 2, got 1",
@@ -1755,19 +1756,19 @@ mod tests {
                 "# just a comment\n\n",
                 "no expression found in input: '# just a comment\n\n'",
             ),
-            // ("1+", "unexpected end of input"),
+            // ("1+", ""),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
             ("100..4", "bad number or duration syntax: 100.."),
             ("0deadbeef", "bad number or duration syntax: 0de"),
-            // ("1 /", "unexpected end of input"),
-            // ("*1", "unexpected <op:*>"),
+            // ("1 /", ""),
+            // ("*1", ""),
             ("(1))", "unexpected right parenthesis ')'"),
             ("((1)", "unclosed left parenthesis"),
             ("(", "unclosed left parenthesis"),
             ("1 !~ 1", "unexpected character after '!': '~'"),
             ("1 =~ 1", "unexpected character after '=': '~'"),
-            // ("*test", "unexpected <op:*>"),
+            // ("*test", ""),
             (
                 "1 offset 1d",
                 "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
@@ -1776,10 +1777,7 @@ mod tests {
                 "foo offset 1s offset 2s",
                 "offset may not be set multiple times"
             ),
-            // (
-            //     "a - on(b) ignoring(c) d",
-            //     "1:11: parse error: unexpected <ignoring>",
-            // ),
+            // ("a - on(b) ignoring(c) d", ""),
 
             // Fuzzing regression tests.
             // ("-=", r#"unexpected "=""#),

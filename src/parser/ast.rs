@@ -610,7 +610,10 @@ impl Expr {
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
         if args.is_empty() {
-            return Err("no arguments for aggregate expression provided".into());
+            let op_display = token_display(op.id());
+            return Err(format!(
+                "no arguments for aggregate expression '{op_display}' provided"
+            ));
         }
         let mut desired_args_count = 1;
         let mut param = None;
