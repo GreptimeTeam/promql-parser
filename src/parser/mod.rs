@@ -40,3 +40,5 @@ pub use parse::parse;
 pub use production::{lexeme_to_string, lexeme_to_token, span_to_string};
 pub use token::{Token, TokenId, TokenType};
 pub use value::{Value, ValueType};
+
+pub const INVALID_QUERY_INFO: &str = "invalid promql query";

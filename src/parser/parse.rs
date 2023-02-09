@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{lex, Expr};
+use crate::parser::{lex, Expr, INVALID_QUERY_INFO};
 
 /// Parse the given query literal to an AST (which is [`Expr`] in this crate).
 pub fn parse(input: &str) -> Result<Expr, String> {
@@ -21,7 +21,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         Ok(lexer) => {
             // NOTE: the errs is ignored so far.
             let (res, _errs) = crate::promql_y::parse(&lexer);
-            res.ok_or_else(|| String::from("Parse Error"))?
+            res.ok_or_else(|| String::from(INVALID_QUERY_INFO))?
         }
     }
 }
@@ -37,7 +37,7 @@ mod tests {
     use crate::label::{MatchOp, Matcher, Matchers};
     use crate::parser::{
         get_function, token, AggModifier, AtModifier as At, BinModifier, Expr, FunctionArgs,
-        Offset, VectorMatchCardinality, VectorMatchModifier, VectorSelector,
+        Offset, VectorMatchCardinality, VectorMatchModifier, VectorSelector, INVALID_QUERY_INFO,
     };
     use crate::util::duration;
     use std::collections::HashSet;
@@ -80,10 +80,16 @@ mod tests {
 
     fn assert_cases(cases: Vec<Case>) {
         for Case { input, expected } in cases {
+            let at_most_len = 50;
+            let info = if input.len() >= at_most_len {
+                &input[..at_most_len]
+            } else {
+                &input
+            };
             assert_eq!(
                 crate::parser::parse(&input),
                 expected,
-                "\n<parse> <{input:?}> does not match"
+                "\n<parse> <{info}> does not match"
             );
         }
     }
@@ -967,7 +973,7 @@ mod tests {
             (
                 r#"foo{__name__="bar" lol}"#,
                 // "invalid label matcher, expected label matching operator after 'lol'",
-                "Parse Error",
+                INVALID_QUERY_INFO,
             ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -1079,7 +1085,10 @@ mod tests {
             ),
             (r#"foo[]"#, "missing unit character in duration"),
             (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
-            // FIXME: ("some_metric[5m] OFFSET 1", ""),
+            (
+                "some_metric[5m] OFFSET 1",
+                "unexpected number '1' in offset, expected duration",
+            ),
             (
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
@@ -1092,8 +1101,14 @@ mod tests {
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
             ),
-            // FIXME: ("some_metric[5m] @ 1m", ""),
-            // FIXME: ("some_metric[5m] @", ""),
+            (
+                "some_metric[5m] @ 1m",
+                "unexpected duration '1m' in @, expected timestamp",
+            ),
+            (
+                "some_metric[5m] @",
+                "unexpected end of input in @, expected timestamp",
+            ),
             (
                 "some_metric @ 1234 [5m]",
                 "no @ modifiers allowed before range",
@@ -1196,19 +1211,19 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // FIXME: ("sum without(==)(some_metric)", ""),
-            // FIXME: ("sum without(,)(some_metric)", ""),
-            // FIXME: ("sum without(foo,,)(some_metric)", ""),
-            ("sum some_metric by (test)", "Parse Error"),
-            // FIXME: ("sum (some_metric) by test", ""),
+            ("sum without(==)(some_metric)", INVALID_QUERY_INFO),
+            ("sum without(,)(some_metric)", INVALID_QUERY_INFO),
+            ("sum without(foo,,)(some_metric)", INVALID_QUERY_INFO),
+            ("sum some_metric by (test)", INVALID_QUERY_INFO),
+            ("sum (some_metric) by test", INVALID_QUERY_INFO),
             (
                 "sum () by (test)",
                 "no arguments for aggregate expression 'sum' provided",
             ),
-            // FIXME: ("MIN keep_common (some_metric)", ""),
-            // FIXME: ("MIN (some_metric) keep_common", ""),
-            ("sum (some_metric) without (test) by (test)", "Parse Error"),
-            ("sum without (test) (some_metric) by (test)", "Parse Error"),
+            ("MIN keep_common (some_metric)", INVALID_QUERY_INFO),
+            ("MIN (some_metric) keep_common", INVALID_QUERY_INFO),
+            ("sum (some_metric) without (test) by (test)", INVALID_QUERY_INFO),
+            ("sum without (test) (some_metric) by (test)", INVALID_QUERY_INFO),
             (
                 "topk(some_metric)",
                 "wrong number of arguments for aggregate expression provided, expected 2, got 1",
@@ -1746,8 +1761,8 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let cases = vec![
-            // FIXME: ("start()", ""),
-            // FIXME: ("end()", ""),
+            ("start()", INVALID_QUERY_INFO),
+            ("end()", INVALID_QUERY_INFO),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1760,19 +1775,19 @@ mod tests {
                 "# just a comment\n\n",
                 "no expression found in input",
             ),
-            // ("1+", ""),
+            ("1+", INVALID_QUERY_INFO),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
             ("100..4", "bad number or duration syntax: 100.."),
             ("0deadbeef", "bad number or duration syntax: 0de"),
-            // ("1 /", ""),
-            // ("*1", ""),
+            ("1 /", INVALID_QUERY_INFO),
+            ("*1", INVALID_QUERY_INFO),
             ("(1))", "unexpected right parenthesis ')'"),
             ("((1)", "unclosed left parenthesis"),
             ("(", "unclosed left parenthesis"),
             ("1 !~ 1", "unexpected character after '!': '~'"),
             ("1 =~ 1", "unexpected character after '=': '~'"),
-            // ("*test", ""),
+            ("*test", INVALID_QUERY_INFO),
             (
                 "1 offset 1d",
                 "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
@@ -1781,20 +1796,31 @@ mod tests {
                 "foo offset 1s offset 2s",
                 "offset may not be set multiple times"
             ),
-            // ("a - on(b) ignoring(c) d", ""),
+            ("a - on(b) ignoring(c) d", INVALID_QUERY_INFO),
 
             // Fuzzing regression tests.
-            // ("-=", r#"unexpected "=""#),
-            // ("++-++-+-+-<", "unexpected <op:<>"),
-            // ("e-+=/(0)", r#"unexpected "=""#),
+            ("-=", INVALID_QUERY_INFO),
+            ("++-++-+-+-<", INVALID_QUERY_INFO),
+            ("e-+=/(0)", INVALID_QUERY_INFO),
             ("a>b()", "unknown function with name 'b'"),
             (
                 "rate(avg)",
                 "expected type range vector in call to function 'rate', got instant vector"
             ),
 
-            // "(" + strings.Repeat("-{}-1", 10000) + ")" + strings.Repeat("[1m:]", 1000)
+
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
+
+        let fail_cases = vec![
+            // This is testing that we are not re-rendering the expression string for each error, which would timeout.
+            {
+                let input = "(".to_string() + &"-{}-1".repeat(10_000) + ")" + &"[1m:]".repeat(1000);
+                let expected =
+                    Err("vector selector must contain at least one non-empty matcher".into());
+                Case { input, expected }
+            },
+        ];
+        assert_cases(fail_cases);
     }
 }
