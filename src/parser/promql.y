@@ -121,6 +121,10 @@ START_METRIC_SELECTOR
 // This ensures that it is always attempted to parse range or subquery selectors when a left
 // bracket is encountered.
 %right LEFT_BRACKET
+%nonassoc GROUP_LEFT GROUP_RIGHT
+// left_paren has higher precedence, which means when group_left/group_rigth
+// followed by left_paren, the parser it will shift instead of reduce
+%right LEFT_PAREN
 
 %%
 start -> Result<Expr, String>:
@@ -229,10 +233,16 @@ group_modifiers -> Result<Option<BinModifier>, String>:
                 {
                         Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
-                | GROUP_LEFT grouping_labels
-                { Err("unexpected <group_left>".into()) }
-                | GROUP_RIGHT grouping_labels
-                { Err("unexpected <group_right>".into()) }
+                | on_or_ignoring GROUP_LEFT
+                {
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(HashSet::new())))
+                }
+                | on_or_ignoring GROUP_RIGHT
+                {
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(HashSet::new())))
+                }
+                | GROUP_LEFT grouping_labels { Err("unexpected <group_left>".into()) }
+                | GROUP_RIGHT grouping_labels { Err("unexpected <group_right>".into()) }
                 ;
 
 grouping_labels -> Result<Labels, String>:
