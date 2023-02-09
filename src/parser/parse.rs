@@ -800,7 +800,8 @@ mod tests {
 
         let cases = vec![
             (r#"-"string""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
-            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector")
+            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector"),
+            (r#"-"foo""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1711,6 +1712,20 @@ mod tests {
             (
                 "rate(some_metric)",
                 "expected type range vector in call to function 'rate', got instant vector",
+            ),
+            (
+                "ln(1)",
+                "expected type instant vector in call to function 'ln', got scalar",
+            ),
+            ("ln()", "expected 1 argument(s) in call to 'ln', got 0"),
+            (
+                "exp(1)",
+                "expected type instant vector in call to function 'exp', got scalar",
+            ),
+            ("exp()", "expected 1 argument(s) in call to 'exp', got 0"),
+            (
+                "label_join()",
+                "expected at least 3 argument(s) in call to 'label_join', got 0",
             ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];

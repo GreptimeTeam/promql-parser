@@ -199,10 +199,10 @@ impl TryFrom<f64> for AtModifier {
     type Error = String;
 
     fn try_from(secs: f64) -> Result<Self, Self::Error> {
-        let err = Err(format!("timestamp out of bounds for @ modifier: {secs}"));
+        let err_info = format!("timestamp out of bounds for @ modifier: {secs}");
 
         if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
-            return err;
+            return Err(err_info);
         }
         let milli = (secs * 1000f64).round().abs() as u64;
 
@@ -215,10 +215,7 @@ impl TryFrom<f64> for AtModifier {
             st = SystemTime::UNIX_EPOCH.checked_sub(duration);
         }
 
-        match st {
-            Some(st) => Ok(Self::At(st)),
-            None => err,
-        }
+        st.map(Self::At).ok_or(err_info)
     }
 }
 
@@ -983,6 +980,8 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -1021,6 +1020,11 @@ mod tests {
                 _ => panic!(),
             }
         }
+
+        assert_eq!(
+            AtModifier::try_from(Expr::from(1.0)),
+            AtModifier::try_from(1.0),
+        );
     }
 
     #[test]
@@ -1036,5 +1040,153 @@ mod tests {
         for secs in cases {
             assert!(AtModifier::try_from(secs).is_err())
         }
+
+        assert_eq!(
+            AtModifier::try_from(token::T_ADD),
+            Err("invalid @ modifier preprocessor '+', START or END is valid.".into())
+        );
+
+        assert_eq!(
+            AtModifier::try_from(Expr::from("string literal")),
+            Err("invalid float value after @ modifier".into())
+        );
+    }
+
+    #[test]
+    fn test_binary_labels() {
+        assert_eq!(
+            VectorMatchModifier::On(HashSet::from([String::from("foo"), String::from("bar")]))
+                .labels(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchModifier::Ignoring(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchCardinality::OneToMany(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels()
+            .unwrap(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchCardinality::ManyToOne(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels()
+            .unwrap(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(VectorMatchCardinality::OneToOne.labels(), None);
+        assert_eq!(VectorMatchCardinality::ManyToMany.labels(), None);
+    }
+
+    #[test]
+    fn test_neg() {
+        assert_eq!(
+            -VectorSelector::from("foo"),
+            UnaryExpr {
+                expr: Box::new(Expr::from(VectorSelector::from("foo")))
+            }
+        )
+    }
+
+    #[test]
+    fn test_scalar_value() {
+        assert_eq!(Some(1.0), Expr::from(1.0).scalar_value());
+        assert_eq!(None, Expr::from("1.0").scalar_value());
+    }
+
+    #[test]
+    fn test_at_expr() {
+        let vs =
+            Expr::from(VectorSelector::from("foo")).at_expr(AtModifier::try_from(1.0).unwrap());
+        assert!(vs.is_ok());
+
+        assert_eq!(
+            Err("@ <timestamp> may not be set multiple times".into()),
+            vs.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
+        );
+
+        let ms = Expr::new_matrix_selector(
+            Expr::from(VectorSelector::from("foo")),
+            Duration::from_secs(1),
+        )
+        .unwrap()
+        .at_expr(AtModifier::try_from(1.0).unwrap());
+        assert!(ms.is_ok());
+
+        assert_eq!(
+            Err("@ <timestamp> may not be set multiple times".into()),
+            ms.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
+        );
+
+        let sq = Expr::new_subquery_expr(
+            Expr::from(VectorSelector::from("foo")),
+            Duration::from_secs(1),
+            None,
+        )
+        .unwrap()
+        .at_expr(AtModifier::try_from(1.0).unwrap());
+        assert!(sq.is_ok());
+
+        assert_eq!(
+            Err("@ <timestamp> may not be set multiple times".into()),
+            sq.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
+        );
+    }
+
+    #[test]
+    fn test_offset_expr() {
+        let vs = Expr::from(VectorSelector::from("foo"))
+            .offset_expr(Offset::Pos(Duration::from_secs(1000)));
+        assert!(vs.is_ok());
+
+        assert_eq!(
+            Err("offset may not be set multiple times".into()),
+            vs.unwrap()
+                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+        );
+
+        let ms = Expr::new_matrix_selector(
+            Expr::from(VectorSelector::from("foo")),
+            Duration::from_secs(1),
+        )
+        .unwrap()
+        .offset_expr(Offset::Pos(Duration::from_secs(1000)));
+        assert!(ms.is_ok());
+
+        assert_eq!(
+            Err("offset may not be set multiple times".into()),
+            ms.unwrap()
+                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+        );
+
+        let sq = Expr::new_subquery_expr(
+            Expr::from(VectorSelector::from("foo")),
+            Duration::from_secs(1),
+            None,
+        )
+        .unwrap()
+        .offset_expr(Offset::Pos(Duration::from_secs(1000)));
+        assert!(sq.is_ok());
+
+        assert_eq!(
+            Err("offset may not be set multiple times".into()),
+            sq.unwrap()
+                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+        );
     }
 }
