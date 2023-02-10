@@ -1417,20 +1417,6 @@ mod tests {
                     })
             }),
             (
-                r#"exp(+Inf)"#,
-                Expr::new_call(
-                    get_function("exp").unwrap(),
-                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
-                ),
-            ),
-            (
-                r#"exp(NaN)"#,
-                Expr::new_call(
-                    get_function("exp").unwrap(),
-                    FunctionArgs::new_args(Expr::from(f64::NAN)),
-                ),
-            ),
-            (
                 r#"histogram_count(rate(http_request_duration_seconds[10m]))"#,
                 Expr::new_matrix_selector(
                     Expr::from(VectorSelector::from("http_request_duration_seconds")),
@@ -1618,6 +1604,21 @@ mod tests {
                     })
                 },
             ),
+            // special cases
+            (
+                r#"exp(+Inf)"#,
+                Expr::new_call(
+                    get_function("exp").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"exp(NaN)"#,
+                Expr::new_call(
+                    get_function("exp").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
             (
                 r#"ln(+Inf)"#,
                 Expr::new_call(
@@ -1643,6 +1644,62 @@ mod tests {
                 r#"ln(-1)"#,
                 Expr::new_call(
                     get_function("ln").unwrap(),
+                    FunctionArgs::new_args(Expr::from(-1.0)),
+                ),
+            ),
+            (
+                r#"log2(+Inf)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"log2(NaN)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"log2(0)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(0.0)),
+                ),
+            ),
+            (
+                r#"log2(-1)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(-1.0)),
+                ),
+            ),
+            (
+                r#"log10(+Inf)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"log10(NaN)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"log10(0)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(0.0)),
+                ),
+            ),
+            (
+                r#"log10(-1)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
                     FunctionArgs::new_args(Expr::from(-1.0)),
                 ),
             ),

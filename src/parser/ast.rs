@@ -443,7 +443,21 @@ pub struct MatrixSelector {
 /// ln(x < 0) = NaN
 /// ln(NaN) = NaN
 /// ```
+///
 /// TODO: support more special cases of function call
+///
+///  - acos()
+///  - acosh()
+///  - asin()
+///  - asinh()
+///  - atan()
+///  - atanh()
+///  - cos()
+///  - cosh()
+///  - sin()
+///  - sinh()
+///  - tan()
+///  - tanh()
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     pub func: Function,
@@ -923,22 +937,19 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
         ));
     }
 
+    // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
     if name.eq_ignore_ascii_case("exp") && !ex.args.is_empty() {
         if let Some(val) = ex.args.first().scalar_value() {
-            // `exp()` pecial cases are:
-            // exp(+Inf) = +Inf
-            // exp(NaN) = NaN
             if val.is_nan() || val.is_infinite() {
                 return Ok(Expr::Call(ex));
             }
         }
-    } else if name.eq_ignore_ascii_case("ln") && !ex.args.is_empty() {
+    } else if (name.eq_ignore_ascii_case("ln")
+        || name.eq_ignore_ascii_case("log2")
+        || name.eq_ignore_ascii_case("log10"))
+        && !ex.args.is_empty()
+    {
         if let Some(val) = ex.args.first().scalar_value() {
-            // `ln()` special cases are:
-            // ln(+Inf) = +Inf
-            // ln(0) = -Inf
-            // ln(x < 0) = NaN
-            // ln(NaN) = NaN
             if val.is_nan() || val.is_infinite() || val <= 0.0 {
                 return Ok(Expr::Call(ex));
             }
