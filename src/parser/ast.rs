@@ -419,6 +419,31 @@ pub struct MatrixSelector {
     pub range: Duration,
 }
 
+/// Call represents Prometheus Function.
+/// Some functions have special cases:
+///
+/// ## exp
+///
+/// exp(v instant-vector) calculates the exponential function for all elements in v.
+/// Special cases are:
+///
+/// ```promql
+/// Exp(+Inf) = +Inf
+/// Exp(NaN) = NaN
+/// ```
+///
+/// ## ln
+///
+/// ln(v instant-vector) calculates the natural logarithm for all elements in v.
+/// Special cases are:
+///
+/// ```promql
+/// ln(+Inf) = +Inf
+/// ln(0) = -Inf
+/// ln(x < 0) = NaN
+/// ln(NaN) = NaN
+/// ```
+/// TODO: support more special cases of function call
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     pub func: Function,
@@ -658,7 +683,7 @@ impl Expr {
         }
     }
 
-    /// only exists if expr is NumberLiteral
+    /// only Some if expr is NumberLiteral
     pub fn scalar_value(&self) -> Option<f64> {
         match self {
             Expr::NumberLiteral(nl) => Some(nl.val),

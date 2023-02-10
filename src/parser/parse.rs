@@ -21,7 +21,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         Ok(lexer) => {
             // NOTE: the errs is ignored so far.
             let (res, _errs) = crate::promql_y::parse(&lexer);
-            res.ok_or_else(|| String::from(INVALID_QUERY_INFO))?
+            res.ok_or(String::from(INVALID_QUERY_INFO))?
         }
     }
 }
@@ -1432,43 +1432,31 @@ mod tests {
             ),
             (
                 r#"histogram_count(rate(http_request_duration_seconds[10m]))"#,
-                {
-                    let name = String::from("http_request_duration_seconds");
-                    let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
-                    Expr::new_vector_selector(Some(name), matchers)
-                        .and_then(|ex| {
-                            Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 10)
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("rate").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("histogram_count").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                },
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_count").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
+                }),
             ),
             (
                 r#"histogram_sum(rate(http_request_duration_seconds[10m])) / histogram_count(rate(http_request_duration_seconds[10m]))"#,
                 {
-                    let name = String::from("http_request_duration_seconds");
-                    let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
-                    let rate = Expr::new_vector_selector(Some(name), matchers)
-                        .and_then(|ex| {
-                            Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 10)
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("rate").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .unwrap();
+                    let rate = Expr::new_matrix_selector(
+                        Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                        duration::MINUTE_DURATION * 10,
+                    )
+                    .and_then(|ex| {
+                        Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                    })
+                    .unwrap();
                     let lhs = Expr::new_call(
                         get_function("histogram_sum").unwrap(),
                         FunctionArgs::new_args(rate.clone()),
@@ -1484,81 +1472,63 @@ mod tests {
             ),
             (
                 r#"histogram_fraction(0, 0.2, rate(http_request_duration_seconds[1h]))"#,
-                {
-                    let name = String::from("http_request_duration_seconds");
-                    let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
-                    let rate = Expr::new_vector_selector(Some(name), matchers)
-                        .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("rate").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .unwrap();
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::HOUR_DURATION,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
                     Expr::new_call(
                         get_function("histogram_fraction").unwrap(),
                         FunctionArgs::new_args(Expr::from(0.0_f64))
                             .append_args(Expr::from(0.2))
-                            .append_args(rate),
+                            .append_args(ex),
                     )
-                },
+                }),
             ),
             (
                 r#"histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))"#,
-                {
-                    let name = String::from("http_request_duration_seconds_bucket");
-                    let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
-                    Expr::new_vector_selector(Some(name), matchers)
-                        .and_then(|ex| {
-                            Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 10)
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("rate").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("histogram_quantile").unwrap(),
-                                FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
-                            )
-                        })
-                },
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds_bucket")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_quantile").unwrap(),
+                        FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
+                    )
+                }),
             ),
             (
                 r#"histogram_quantile(0.9, sum by (job, le) (rate(http_request_duration_seconds_bucket[10m])))"#,
-                {
-                    let name = String::from("http_request_duration_seconds_bucket");
-                    let matchers = Matchers::one(Matcher::new_eq_metric_matcher(name.clone()));
-                    Expr::new_vector_selector(Some(name), matchers)
-                        .and_then(|ex| {
-                            Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 10)
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("rate").unwrap(),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .and_then(|ex| {
-                            Expr::new_aggregate_expr(
-                                token::T_SUM,
-                                Some(AggModifier::By(HashSet::from([
-                                    String::from("job"),
-                                    String::from("le"),
-                                ]))),
-                                FunctionArgs::new_args(ex),
-                            )
-                        })
-                        .and_then(|ex| {
-                            Expr::new_call(
-                                get_function("histogram_quantile").unwrap(),
-                                FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
-                            )
-                        })
-                },
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds_bucket")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_aggregate_expr(
+                        token::T_SUM,
+                        Some(AggModifier::By(HashSet::from([
+                            String::from("job"),
+                            String::from("le"),
+                        ]))),
+                        FunctionArgs::new_args(ex),
+                    )
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_quantile").unwrap(),
+                        FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
+                    )
+                }),
             ),
             (r#"increase(http_requests_total{job="api-server"}[5m])"#, {
                 let name = String::from("http_requests_total");
