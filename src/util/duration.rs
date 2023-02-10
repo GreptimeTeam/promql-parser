@@ -91,7 +91,7 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
         .fold(Ok(Duration::ZERO), |acc, x| {
             acc.and_then(|d| {
                 d.checked_add(x.unwrap_or(Duration::ZERO))
-                    .ok_or("duration overflowed".into())
+                    .ok_or_else(|| "duration overflowed".into())
             })
         });
 

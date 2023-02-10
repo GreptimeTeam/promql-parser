@@ -656,7 +656,7 @@ impl Expr {
         let mut param = None;
         if op.is_aggregator_with_param() {
             desired_args_count = 2;
-            param = Some(args.first());
+            param = args.first();
         }
         if args.len() != desired_args_count {
             return Err(format!(
@@ -665,13 +665,19 @@ impl Expr {
                 args.len()
             ));
         }
-        let ex = AggregateExpr {
-            op,
-            expr: args.last(),
-            param,
-            modifier,
-        };
-        Ok(Expr::Aggregate(ex))
+
+        match args.last() {
+            Some(expr) => Ok(Expr::Aggregate(AggregateExpr {
+                op,
+                expr,
+                param,
+                modifier,
+            })),
+            None => Err(
+                "aggregate operation needs a single instant vector parameter, but found none"
+                    .into(),
+            ),
+        }
     }
 
     pub fn value_type(&self) -> ValueType {
@@ -938,18 +944,17 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     }
 
     // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
-    if name.eq_ignore_ascii_case("exp") && !ex.args.is_empty() {
-        if let Some(val) = ex.args.first().scalar_value() {
+    if name.eq_ignore_ascii_case("exp") {
+        if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
             if val.is_nan() || val.is_infinite() {
                 return Ok(Expr::Call(ex));
             }
         }
-    } else if (name.eq_ignore_ascii_case("ln")
+    } else if name.eq_ignore_ascii_case("ln")
         || name.eq_ignore_ascii_case("log2")
-        || name.eq_ignore_ascii_case("log10"))
-        && !ex.args.is_empty()
+        || name.eq_ignore_ascii_case("log10")
     {
-        if let Some(val) = ex.args.first().scalar_value() {
+        if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
             if val.is_nan() || val.is_infinite() || val <= 0.0 {
                 return Ok(Expr::Call(ex));
             }

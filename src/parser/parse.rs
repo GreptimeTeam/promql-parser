@@ -21,7 +21,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         Ok(lexer) => {
             // NOTE: the errs is ignored so far.
             let (res, _errs) = crate::promql_y::parse(&lexer);
-            res.ok_or(String::from(INVALID_QUERY_INFO))?
+            res.ok_or_else(|| String::from(INVALID_QUERY_INFO))?
         }
     }
 }

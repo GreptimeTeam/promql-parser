@@ -48,14 +48,12 @@ impl FunctionArgs {
         self.args.len()
     }
 
-    /// caller SHOULD take care of the boundary
-    pub fn first(&self) -> Box<Expr> {
-        self.args[0].clone()
+    pub fn first(&self) -> Option<Box<Expr>> {
+        self.args.first().cloned()
     }
 
-    /// caller SHOULD take care of the boundary
-    pub fn last(&self) -> Box<Expr> {
-        self.args[self.len() - 1].clone()
+    pub fn last(&self) -> Option<Box<Expr>> {
+        self.args.last().cloned()
     }
 }
 
