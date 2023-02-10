@@ -82,16 +82,10 @@ mod tests {
 
     fn assert_cases(cases: Vec<Case>) {
         for Case { input, expected } in cases {
-            let at_most_len = 50;
-            let info = if input.len() >= at_most_len {
-                &input[..at_most_len]
-            } else {
-                &input
-            };
             assert_eq!(
                 crate::parser::parse(&input),
                 expected,
-                "\n<parse> <{info}> does not match"
+                "\n<parse> <{input}> does not match"
             );
         }
     }

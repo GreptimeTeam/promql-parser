@@ -703,7 +703,7 @@ impl Expr {
         }
     }
 
-    /// only Some if expr is NumberLiteral
+    /// only Some if expr is [Expr::NumberLiteral]
     pub fn scalar_value(&self) -> Option<f64> {
         match self {
             Expr::NumberLiteral(nl) => Some(nl.val),
@@ -1152,82 +1152,69 @@ mod tests {
 
     #[test]
     fn test_at_expr() {
-        let vs =
-            Expr::from(VectorSelector::from("foo")).at_expr(AtModifier::try_from(1.0).unwrap());
-        assert!(vs.is_ok());
-
         assert_eq!(
-            Err("@ <timestamp> may not be set multiple times".into()),
-            vs.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
+            "@ <timestamp> may not be set multiple times",
+            Expr::from(VectorSelector::from("foo"))
+                .at_expr(AtModifier::try_from(1.0).unwrap())
+                .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+                .unwrap_err()
         );
 
-        let ms = Expr::new_matrix_selector(
-            Expr::from(VectorSelector::from("foo")),
-            Duration::from_secs(1),
+        assert_eq!(
+            "@ <timestamp> may not be set multiple times",
+            Expr::new_matrix_selector(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+            )
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .unwrap_err()
+        );
+
+        assert_eq!(
+            "@ <timestamp> may not be set multiple times",
+            Expr::new_subquery_expr(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+                None,
+            )
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .unwrap_err()
         )
-        .unwrap()
-        .at_expr(AtModifier::try_from(1.0).unwrap());
-        assert!(ms.is_ok());
-
-        assert_eq!(
-            Err("@ <timestamp> may not be set multiple times".into()),
-            ms.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
-        );
-
-        let sq = Expr::new_subquery_expr(
-            Expr::from(VectorSelector::from("foo")),
-            Duration::from_secs(1),
-            None,
-        )
-        .unwrap()
-        .at_expr(AtModifier::try_from(1.0).unwrap());
-        assert!(sq.is_ok());
-
-        assert_eq!(
-            Err("@ <timestamp> may not be set multiple times".into()),
-            sq.unwrap().at_expr(AtModifier::try_from(1.0).unwrap()),
-        );
     }
 
     #[test]
     fn test_offset_expr() {
-        let vs = Expr::from(VectorSelector::from("foo"))
-            .offset_expr(Offset::Pos(Duration::from_secs(1000)));
-        assert!(vs.is_ok());
-
         assert_eq!(
-            Err("offset may not be set multiple times".into()),
-            vs.unwrap()
+            "offset may not be set multiple times",
+            Expr::from(VectorSelector::from("foo"))
                 .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+                .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+                .unwrap_err()
         );
 
-        let ms = Expr::new_matrix_selector(
-            Expr::from(VectorSelector::from("foo")),
-            Duration::from_secs(1),
-        )
-        .unwrap()
-        .offset_expr(Offset::Pos(Duration::from_secs(1000)));
-        assert!(ms.is_ok());
-
         assert_eq!(
-            Err("offset may not be set multiple times".into()),
-            ms.unwrap()
-                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+            "offset may not be set multiple times",
+            Expr::new_matrix_selector(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+            )
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .unwrap_err()
         );
 
-        let sq = Expr::new_subquery_expr(
-            Expr::from(VectorSelector::from("foo")),
-            Duration::from_secs(1),
-            None,
-        )
-        .unwrap()
-        .offset_expr(Offset::Pos(Duration::from_secs(1000)));
-        assert!(sq.is_ok());
-
         assert_eq!(
-            Err("offset may not be set multiple times".into()),
-            sq.unwrap()
-                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+            "offset may not be set multiple times",
+            Expr::new_subquery_expr(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+                None,
+            )
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .unwrap_err()
         );
     }
 }
