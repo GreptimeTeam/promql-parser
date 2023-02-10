@@ -149,6 +149,7 @@ impl Matchers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::token;
     use std::collections::hash_map::DefaultHasher;
 
     fn hash<H>(op: H) -> u64
@@ -158,6 +159,14 @@ mod tests {
         let mut hasher = DefaultHasher::new();
         op.hash(&mut hasher);
         hasher.finish()
+    }
+
+    #[test]
+    fn test_new_matcher() {
+        assert_eq!(
+            Matcher::new_matcher(token::T_ADD, "".into(), "".into()),
+            Err(format!("invalid match op {}", token::T_ADD))
+        )
     }
 
     #[test]
