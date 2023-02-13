@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/GreptimeTeam/promql-parser/blob/main/LICENSE)
-[![Build Status](https://github.com/greptimeteam/promql-parser/actions/workflows/develop.yml/badge.svg)](https://github.com/GreptimeTeam/promql-parser/blob/develop/.github/workflows/develop.yml)
-[![codecov](https://codecov.io/gh/GreptimeTeam/promql-parser/branch/develop/graph/badge.svg?token=4GEPVMJYNG)](https://app.codecov.io/gh/GreptimeTeam/promql-parser/tree/develop)
+[![Build Status](https://github.com/greptimeteam/promql-parser/actions/workflows/ci.yml/badge.svg)](https://github.com/GreptimeTeam/promql-parser/blob/main/.github/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/GreptimeTeam/promql-parser/branch/main/graph/badge.svg?token=4GEPVMJYNG)](https://app.codecov.io/gh/GreptimeTeam/promql-parser/tree/main)
 
 # PromQL Lexer and Parser
 
