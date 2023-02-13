@@ -64,6 +64,7 @@ struct Context {
     brace_open: bool,   // Whether a { is opened.
     bracket_open: bool, // Whether a [ is opened.
     got_colon: bool,    // Whether we got a ':' after [ was opened.
+    eof: bool,          // Whether we got end of file
 }
 
 impl Context {
@@ -78,6 +79,7 @@ impl Context {
             brace_open: false,
             bracket_open: false,
             got_colon: false,
+            eof: false,
         }
     }
 
@@ -240,6 +242,14 @@ impl Lexer {
     fn ignore(&mut self) {
         self.ctx.ignore();
     }
+
+    fn is_eof(&self) -> bool {
+        self.ctx.eof
+    }
+
+    fn set_eof(&mut self) {
+        self.ctx.eof = true;
+    }
 }
 
 /// block for state operations.
@@ -278,6 +288,12 @@ impl Lexer {
                 if !self.is_paren_balanced() {
                     return State::Err("unclosed left parenthesis".into());
                 }
+
+                if !self.is_eof() {
+                    self.set_eof();
+                    return State::Lexeme(T_EOF);
+                }
+
                 return State::End;
             }
             Some(ch) => ch,
@@ -622,7 +638,7 @@ impl Lexer {
                 State::Lexeme(T_RIGHT_BRACKET)
             }
             Some('[') => State::Err("unexpected left brace '[' inside brackets".into()),
-            Some(ch) => State::Err(format!("unexpected character inside brackets: {ch}")),
+            Some(ch) => State::Err(format!("unexpected character inside brackets: '{ch}'")),
             None => State::Err("unexpected end of input inside brackets".into()),
         }
     }
@@ -704,8 +720,11 @@ mod tests {
                     expected.push(Err(err.unwrap().to_string()));
                 }
 
-                let actual: Vec<Result<LexemeType, String>> =
-                    Lexer::new(input).into_iter().collect();
+                let actual: Vec<Result<LexemeType, String>> = Lexer::new(input)
+                    .into_iter()
+                    // in lex test cases, we don't compare the EOF token
+                    .filter(|r| !matches!(r, Ok(l) if l.tok_id() == T_EOF))
+                    .collect();
                 (input, expected, actual)
             })
             .collect();

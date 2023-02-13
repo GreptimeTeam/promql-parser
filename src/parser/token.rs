@@ -14,7 +14,6 @@
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::fmt::{self, Display};
 
 lrlex::lrlex_mod!("token_map");
 pub use token_map::*;
@@ -23,12 +22,6 @@ pub type TokenId = u8;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TokenType(TokenId);
-
-impl Display for TokenType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "id: {}", self.0)
-    }
-}
 
 lazy_static! {
     static ref KEYWORDS: HashMap<&'static str, TokenId> =
@@ -180,12 +173,6 @@ pub fn get_keyword_token(s: &str) -> Option<TokenId> {
 pub struct Token {
     pub id: TokenType,
     pub val: String,
-}
-
-impl Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "lexer token. id: {}, val: {}", self.id, self.val)
-    }
 }
 
 impl Token {

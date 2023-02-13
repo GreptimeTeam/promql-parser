@@ -199,10 +199,10 @@ impl TryFrom<f64> for AtModifier {
     type Error = String;
 
     fn try_from(secs: f64) -> Result<Self, Self::Error> {
-        let err = Err(format!("timestamp out of bounds for @ modifier: {secs}"));
+        let err_info = format!("timestamp out of bounds for @ modifier: {secs}");
 
         if secs.is_nan() || secs.is_infinite() || secs >= f64::MAX || secs <= f64::MIN {
-            return err;
+            return Err(err_info);
         }
         let milli = (secs * 1000f64).round().abs() as u64;
 
@@ -215,10 +215,7 @@ impl TryFrom<f64> for AtModifier {
             st = SystemTime::UNIX_EPOCH.checked_sub(duration);
         }
 
-        match st {
-            Some(st) => Ok(Self::At(st)),
-            None => err,
-        }
+        st.map(Self::At).ok_or(err_info)
     }
 }
 
@@ -255,7 +252,8 @@ pub struct AggregateExpr {
     pub expr: Box<Expr>,
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
-    pub modifier: AggModifier,
+    /// modifier is optional for some aggregation operators, like sum.
+    pub modifier: Option<AggModifier>,
 }
 
 /// UnaryExpr will negate the expr
@@ -421,6 +419,45 @@ pub struct MatrixSelector {
     pub range: Duration,
 }
 
+/// Call represents Prometheus Function.
+/// Some functions have special cases:
+///
+/// ## exp
+///
+/// exp(v instant-vector) calculates the exponential function for all elements in v.
+/// Special cases are:
+///
+/// ```promql
+/// Exp(+Inf) = +Inf
+/// Exp(NaN) = NaN
+/// ```
+///
+/// ## ln
+///
+/// ln(v instant-vector) calculates the natural logarithm for all elements in v.
+/// Special cases are:
+///
+/// ```promql
+/// ln(+Inf) = +Inf
+/// ln(0) = -Inf
+/// ln(x < 0) = NaN
+/// ln(NaN) = NaN
+/// ```
+///
+/// TODO: support more special cases of function call
+///
+///  - acos()
+///  - acosh()
+///  - asin()
+///  - asinh()
+///  - atan()
+///  - atanh()
+///  - cos()
+///  - cosh()
+///  - sin()
+///  - sinh()
+///  - tan()
+///  - tanh()
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     pub func: Function,
@@ -605,7 +642,7 @@ impl Expr {
 
     pub fn new_aggregate_expr(
         op: TokenId,
-        modifier: AggModifier,
+        modifier: Option<AggModifier>,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
@@ -619,7 +656,7 @@ impl Expr {
         let mut param = None;
         if op.is_aggregator_with_param() {
             desired_args_count = 2;
-            param = Some(args.first());
+            param = args.first();
         }
         if args.len() != desired_args_count {
             return Err(format!(
@@ -628,13 +665,19 @@ impl Expr {
                 args.len()
             ));
         }
-        let ex = AggregateExpr {
-            op,
-            expr: args.last(),
-            param,
-            modifier,
-        };
-        Ok(Expr::Aggregate(ex))
+
+        match args.last() {
+            Some(expr) => Ok(Expr::Aggregate(AggregateExpr {
+                op,
+                expr,
+                param,
+                modifier,
+            })),
+            None => Err(
+                "aggregate operation needs a single instant vector parameter, but found none"
+                    .into(),
+            ),
+        }
     }
 
     pub fn value_type(&self) -> ValueType {
@@ -657,6 +700,14 @@ impl Expr {
             Expr::VectorSelector(_) => ValueType::Vector,
             Expr::MatrixSelector(_) => ValueType::Matrix,
             Expr::Call(ex) => ex.func.return_type,
+        }
+    }
+
+    /// only Some if expr is [Expr::NumberLiteral]
+    pub fn scalar_value(&self) -> Option<f64> {
+        match self {
+            Expr::NumberLiteral(nl) => Some(nl.val),
+            _ => None,
         }
     }
 }
@@ -892,11 +943,30 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
         ));
     }
 
+    // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
+    if name.eq_ignore_ascii_case("exp") {
+        if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
+            if val.is_nan() || val.is_infinite() {
+                return Ok(Expr::Call(ex));
+            }
+        }
+    } else if name.eq_ignore_ascii_case("ln")
+        || name.eq_ignore_ascii_case("log2")
+        || name.eq_ignore_ascii_case("log10")
+    {
+        if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
+            if val.is_nan() || val.is_infinite() || val <= 0.0 {
+                return Ok(Expr::Call(ex));
+            }
+        }
+    }
+
     for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
         // this only happens when function args are variadic
         if idx >= ex.func.arg_types.len() {
             idx = ex.func.arg_types.len() - 1;
         }
+
         expect_type(
             ex.func.arg_types[idx],
             Some(actual_arg.value_type()),
@@ -951,6 +1021,8 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -989,6 +1061,11 @@ mod tests {
                 _ => panic!(),
             }
         }
+
+        assert_eq!(
+            AtModifier::try_from(Expr::from(1.0)),
+            AtModifier::try_from(1.0),
+        );
     }
 
     #[test]
@@ -1004,5 +1081,140 @@ mod tests {
         for secs in cases {
             assert!(AtModifier::try_from(secs).is_err())
         }
+
+        assert_eq!(
+            AtModifier::try_from(token::T_ADD),
+            Err("invalid @ modifier preprocessor '+', START or END is valid.".into())
+        );
+
+        assert_eq!(
+            AtModifier::try_from(Expr::from("string literal")),
+            Err("invalid float value after @ modifier".into())
+        );
+    }
+
+    #[test]
+    fn test_binary_labels() {
+        assert_eq!(
+            VectorMatchModifier::On(HashSet::from([String::from("foo"), String::from("bar")]))
+                .labels(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchModifier::Ignoring(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchCardinality::OneToMany(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels()
+            .unwrap(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(
+            VectorMatchCardinality::ManyToOne(HashSet::from([
+                String::from("foo"),
+                String::from("bar")
+            ]))
+            .labels()
+            .unwrap(),
+            &HashSet::from([String::from("foo"), String::from("bar")])
+        );
+
+        assert_eq!(VectorMatchCardinality::OneToOne.labels(), None);
+        assert_eq!(VectorMatchCardinality::ManyToMany.labels(), None);
+    }
+
+    #[test]
+    fn test_neg() {
+        assert_eq!(
+            -VectorSelector::from("foo"),
+            UnaryExpr {
+                expr: Box::new(Expr::from(VectorSelector::from("foo")))
+            }
+        )
+    }
+
+    #[test]
+    fn test_scalar_value() {
+        assert_eq!(Some(1.0), Expr::from(1.0).scalar_value());
+        assert_eq!(None, Expr::from("1.0").scalar_value());
+    }
+
+    #[test]
+    fn test_at_expr() {
+        assert_eq!(
+            "@ <timestamp> may not be set multiple times",
+            Expr::from(VectorSelector::from("foo"))
+                .at_expr(AtModifier::try_from(1.0).unwrap())
+                .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+                .unwrap_err()
+        );
+
+        assert_eq!(
+            "@ <timestamp> may not be set multiple times",
+            Expr::new_matrix_selector(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+            )
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .unwrap_err()
+        );
+
+        assert_eq!(
+            "@ <timestamp> may not be set multiple times",
+            Expr::new_subquery_expr(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+                None,
+            )
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .and_then(|ex| ex.at_expr(AtModifier::try_from(1.0).unwrap()))
+            .unwrap_err()
+        )
+    }
+
+    #[test]
+    fn test_offset_expr() {
+        assert_eq!(
+            "offset may not be set multiple times",
+            Expr::from(VectorSelector::from("foo"))
+                .offset_expr(Offset::Pos(Duration::from_secs(1000)))
+                .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+                .unwrap_err()
+        );
+
+        assert_eq!(
+            "offset may not be set multiple times",
+            Expr::new_matrix_selector(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+            )
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .unwrap_err()
+        );
+
+        assert_eq!(
+            "offset may not be set multiple times",
+            Expr::new_subquery_expr(
+                Expr::from(VectorSelector::from("foo")),
+                Duration::from_secs(1),
+                None,
+            )
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
+            .unwrap_err()
+        );
     }
 }
