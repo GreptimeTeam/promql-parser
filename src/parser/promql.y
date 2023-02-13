@@ -105,7 +105,7 @@ START_EXPRESSION
 START_METRIC_SELECTOR
 %token STARTSYMBOLS_END
 
-%start expr
+%start start
 
 // Operators are listed with increasing precedence.
 %left LOR
@@ -116,28 +116,38 @@ START_METRIC_SELECTOR
 %right POW
 
 // Offset and At modifiers do not have associativity.
-%nonassoc OFFSET AT
+%nonassoc OFFSET AT GROUP_LEFT GROUP_RIGHT
 
 // This ensures that it is always attempted to parse range or subquery selectors when a left
 // bracket is encountered.
 %right LEFT_BRACKET
 
+// left_paren has higher precedence than group_left/group_right, to fix the reduce/shift conflict.
+// if group_left/group_right is followed by left_paren, the parser will shift instead of reduce
+%right LEFT_PAREN
+
 %%
+start -> Result<Expr, String>:
+                expr { $1 }
+        |       expr EOF { $1 }
+        |       EOF { Err("no expression found in input".into()) }
+;
+
 expr -> Result<Expr, String>:
 /* check_ast from bottom to up for nested exprs */
                 aggregate_expr { check_ast($1?) }
-                | at_expr { check_ast($1?) }
-                | binary_expr { check_ast($1?) }
-                | function_call { check_ast($1?) }
-                | matrix_selector { check_ast($1?) }
-                | number_literal { check_ast($1?) }
-                | offset_expr { check_ast($1?) }
-                | paren_expr { check_ast($1?) }
-                | string_literal { check_ast($1?) }
-                | subquery_expr { check_ast($1?) }
-                | unary_expr  { check_ast($1?) }
-                | vector_selector  { check_ast($1?) }
-                ;
+        |       at_expr { check_ast($1?) }
+        |       binary_expr { check_ast($1?) }
+        |       function_call { check_ast($1?) }
+        |       matrix_selector { check_ast($1?) }
+        |       number_literal { check_ast($1?) }
+        |       offset_expr { check_ast($1?) }
+        |       paren_expr { check_ast($1?) }
+        |       string_literal { check_ast($1?) }
+        |       subquery_expr { check_ast($1?) }
+        |       unary_expr  { check_ast($1?) }
+        |       vector_selector  { check_ast($1?) }
+;
 
 /*
  * Aggregations.
@@ -145,23 +155,22 @@ expr -> Result<Expr, String>:
 aggregate_expr -> Result<Expr, String>:
                 aggregate_op aggregate_modifier function_call_body
                 {
-                        Expr::new_aggregate_expr($1?.id(), $2?, $3?)
+                        Expr::new_aggregate_expr($1?.id(), Some($2?), $3?)
                 }
-                | aggregate_op function_call_body aggregate_modifier
+        |       aggregate_op function_call_body aggregate_modifier
                 {
-                        Expr::new_aggregate_expr($1?.id(), $3?, $2?)
+                        Expr::new_aggregate_expr($1?.id(), Some($3?), $2?)
                 }
-                | aggregate_op function_call_body
+        |       aggregate_op function_call_body
                 {
-                        let modifier = AggModifier::By(HashSet::new());
-                        Expr::new_aggregate_expr($1?.id(), modifier, $2?)
+                        Expr::new_aggregate_expr($1?.id(), None, $2?)
                 }
-                ;
+;
 
 aggregate_modifier -> Result<AggModifier, String>:
                 BY grouping_labels { Ok(AggModifier::By($2?)) }
-                | WITHOUT grouping_labels { Ok(AggModifier::Without($2?)) }
-                ;
+        |       WITHOUT grouping_labels { Ok(AggModifier::Without($2?)) }
+;
 
 /*
  * Binary expressions.
@@ -169,71 +178,77 @@ aggregate_modifier -> Result<AggModifier, String>:
 // Operator precedence only works if each of those is listed separately.
 binary_expr -> Result<Expr, String>:
                 expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr POW     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                | expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
-                ;
+        |       expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr GTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr GTR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr LAND    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr LOR     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr LSS     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr LTE     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr LUNLESS bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr MOD     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr MUL     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr POW     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+;
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
 // reduces allocations
 bin_modifier -> Result<Option<BinModifier>, String>:
                 group_modifiers { $1 }
-                ;
+;
 
 bool_modifier -> Result<Option<BinModifier>, String>:
                 { Ok(None) }
-                | BOOL
+        |       BOOL
                 {
                         let modifier = BinModifier::default().with_return_bool(true);
                         Ok(Some(modifier))
                 }
-                ;
+;
 
 on_or_ignoring -> Result<Option<BinModifier>, String>:
                 bool_modifier IGNORING grouping_labels
                 {
                         Ok(update_optional_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
                 }
-                | bool_modifier ON grouping_labels
+        |       bool_modifier ON grouping_labels
                 {
                         Ok(update_optional_matching($1?, Some(VectorMatchModifier::On($3?))))
                 }
-                ;
+;
 
 group_modifiers -> Result<Option<BinModifier>, String>:
                 bool_modifier { $1 }
-                | on_or_ignoring { $1 }
-                | on_or_ignoring GROUP_LEFT grouping_labels
+        |       on_or_ignoring { $1 }
+        |       on_or_ignoring GROUP_LEFT grouping_labels
                 {
                         Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne($3?)))
                 }
-                | on_or_ignoring GROUP_RIGHT grouping_labels
+        |       on_or_ignoring GROUP_RIGHT grouping_labels
                 {
                         Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
                 }
-                | GROUP_LEFT grouping_labels
-                { Err("unexpected <group_left>".into()) }
-                | GROUP_RIGHT grouping_labels
-                { Err("unexpected <group_right>".into()) }
-                ;
+        |       on_or_ignoring GROUP_LEFT
+                {
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(HashSet::new())))
+                }
+        |       on_or_ignoring GROUP_RIGHT
+                {
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(HashSet::new())))
+                }
+        |       GROUP_LEFT grouping_labels { Err("unexpected <group_left>".into()) }
+        |       GROUP_RIGHT grouping_labels { Err("unexpected <group_right>".into()) }
+;
 
 grouping_labels -> Result<Labels, String>:
                 LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
-                | LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
-                | LEFT_PAREN RIGHT_PAREN { Ok(HashSet::new()) }
-                ;
+        |       LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
+        |       LEFT_PAREN RIGHT_PAREN { Ok(HashSet::new()) }
+;
 
 grouping_label_list -> Result<Labels, String>:
                 grouping_label_list COMMA grouping_label
@@ -242,8 +257,8 @@ grouping_label_list -> Result<Labels, String>:
                         v.insert($3?.val);
                         Ok(v)
                 }
-                | grouping_label { Ok(HashSet::from([$1?.val])) }
-                ;
+        |       grouping_label { Ok(HashSet::from([$1?.val])) }
+;
 
 grouping_label -> Result<Token, String>:
                 maybe_label
@@ -256,7 +271,7 @@ grouping_label -> Result<Token, String>:
                             Err(format!("{label} is not valid label in grouping opts"))
                         }
                 }
-                ;
+;
 
 /*
  * Function calls.
@@ -270,34 +285,40 @@ function_call -> Result<Expr, String>:
                             Some(func) => Expr::new_call(func, $2?)
                         }
                 }
-                ;
+;
 
 function_call_body -> Result<FunctionArgs, String>:
                 LEFT_PAREN function_call_args RIGHT_PAREN { $2 }
-                | LEFT_PAREN RIGHT_PAREN { Ok(FunctionArgs::empty_args()) }
-                ;
+        |       LEFT_PAREN RIGHT_PAREN { Ok(FunctionArgs::empty_args()) }
+;
 
 function_call_args -> Result<FunctionArgs, String>:
                 function_call_args COMMA expr { Ok($1?.append_args($3?)) }
-                | expr { Ok(FunctionArgs::new_args($1?)) }
-                | function_call_args COMMA { Err("trailing commas not allowed in function call args".into()) }
-                ;
+        |       expr { Ok(FunctionArgs::new_args($1?)) }
+        |       function_call_args COMMA { Err("trailing commas not allowed in function call args".into()) }
+;
 
 /*
  * Expressions inside parentheses.
  */
 paren_expr -> Result<Expr, String>:
                 LEFT_PAREN expr RIGHT_PAREN { Expr::new_paren_expr($2?) }
-                ;
+;
 
 /*
  * Offset modifiers.
  */
 offset_expr -> Result<Expr, String>:
                 expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
-                | expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
-                | expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
-                ;
+        |       expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
+        |       expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
+        |       expr OFFSET NUMBER
+                {
+                        let num = parse_str_radix(&lexeme_to_string($lexer, &$3)?)?;
+                        Err(format!("unexpected number '{num}' in offset, expected duration"))
+                }
+        |       expr OFFSET EOF { Err("unexpected end of input in offset, expected duration".into()) }
+;
 
 /*
  * @ modifiers.
@@ -306,23 +327,32 @@ offset_expr -> Result<Expr, String>:
  */
 at_expr -> Result<Expr, String>:
                 expr AT number_literal { $1?.at_expr(AtModifier::try_from($3?)?) }
-                | expr AT ADD number_literal { $1?.at_expr(AtModifier::try_from($4?)?) }
-                | expr AT SUB number_literal
+        |       expr AT ADD number_literal { $1?.at_expr(AtModifier::try_from($4?)?) }
+        |       expr AT SUB number_literal
                 {
                         let nl = $4.map(|nl| -nl);
                         $1?.at_expr(AtModifier::try_from(nl?)?)
                 }
-                | expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
+        |       expr AT at_modifier_preprocessors LEFT_PAREN RIGHT_PAREN
                 {
                         let at = AtModifier::try_from($3?)?;
                         $1?.at_expr(at)
                 }
-                ;
+        |       expr AT DURATION
+                {
+                        let du = lexeme_to_string($lexer, &$3)?;
+                        Err(format!("unexpected duration '{du}' in @, expected timestamp"))
+                }
+        |       expr AT EOF
+                {
+                        Err("unexpected end of input in @, expected timestamp".into())
+                }
+;
 
 at_modifier_preprocessors -> Result<Token, String>:
                 START { lexeme_to_token($lexer, $1) }
-                | END { lexeme_to_token($lexer, $1) }
-                ;
+        |       END { lexeme_to_token($lexer, $1) }
+;
 
 /*
  * Subquery and range selectors.
@@ -332,22 +362,26 @@ matrix_selector -> Result<Expr, String>:
                 {
                         Expr::new_matrix_selector($1?, $3?)
                 }
-                ;
+        |       expr LEFT_BRACKET RIGHT_BRACKET
+                {
+                        Err("missing unit character in duration".into())
+                }
+;
 
 subquery_expr -> Result<Expr, String>:
                 expr LEFT_BRACKET duration COLON maybe_duration RIGHT_BRACKET
                 {
                         Expr::new_subquery_expr($1?, $3?, $5?)
                 }
-                ;
+;
 
 /*
  * Unary expressions.
  */
 unary_expr -> Result<Expr, String>:
                 ADD expr %prec MUL { $2 }
-                | SUB expr %prec MUL { Expr::new_unary_expr($2?) }
-                ;
+        |       SUB expr %prec MUL { Expr::new_unary_expr($2?) }
+;
 
 /*
  * Vector selectors.
@@ -360,28 +394,28 @@ vector_selector -> Result<Expr, String>:
                         let matchers = $2?.append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
                 }
-                | metric_identifier
+        |       metric_identifier
                 {
                         let name = $1?.val;
                         let matcher = Matcher::new_eq_metric_matcher(name.clone());
                         let matchers = Matchers::empty().append(matcher);
                         Expr::new_vector_selector(Some(name), matchers)
                 }
-                | label_matchers { Expr::new_vector_selector(None, $1?) }
-                ;
+        |       label_matchers { Expr::new_vector_selector(None, $1?) }
+;
 
 label_matchers -> Result<Matchers, String>:
                 LEFT_BRACE label_match_list RIGHT_BRACE { $2 }
-                | LEFT_BRACE label_match_list COMMA RIGHT_BRACE { $2 }
-                | LEFT_BRACE RIGHT_BRACE { Ok(Matchers::empty()) }
-                | LEFT_BRACE COMMA RIGHT_BRACE
+        |       LEFT_BRACE label_match_list COMMA RIGHT_BRACE { $2 }
+        |       LEFT_BRACE RIGHT_BRACE { Ok(Matchers::empty()) }
+        |       LEFT_BRACE COMMA RIGHT_BRACE
                 { Err("unexpected ',' in label matching, expected identifier or right_brace".into()) }
-                ;
+;
 
 label_match_list -> Result<Matchers, String>:
                 label_match_list COMMA label_matcher { Ok($1?.append($3?)) }
-                | label_matcher { Ok(Matchers::empty().append($1?)) }
-                ;
+        |       label_matcher { Ok(Matchers::empty().append($1?)) }
+;
 
 label_matcher -> Result<Matcher, String>:
                 IDENTIFIER match_op STRING
@@ -390,51 +424,63 @@ label_matcher -> Result<Matcher, String>:
                         let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
-                | IDENTIFIER match_op match_op
+        |       IDENTIFIER match_op match_op
                 {
                         let op = $3?.val;
                         Err(format!("unexpected '{op}' in label matching, expected string"))
 
                 }
-                | IDENTIFIER match_op IDENTIFIER
+        |       IDENTIFIER match_op match_op STRING
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       IDENTIFIER match_op match_op IDENTIFIER
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       IDENTIFIER match_op IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$3)?;
                         Err(format!("unexpected identifier '{id}' in label matching, expected string"))
                 }
-                | IDENTIFIER
+        |       IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$1)?;
                         Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
                 }
-                ;
+;
 
 /*
  * Metric descriptions.
  */
 metric_identifier -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
-                | BOTTOMK { lexeme_to_token($lexer, $1) }
-                | BY { lexeme_to_token($lexer, $1) }
-                | COUNT { lexeme_to_token($lexer, $1) }
-                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
-                | GROUP { lexeme_to_token($lexer, $1) }
-                | IDENTIFIER { lexeme_to_token($lexer, $1) }
-                | LAND { lexeme_to_token($lexer, $1) }
-                | LOR { lexeme_to_token($lexer, $1) }
-                | LUNLESS { lexeme_to_token($lexer, $1) }
-                | MAX { lexeme_to_token($lexer, $1) }
-                | METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
-                | MIN { lexeme_to_token($lexer, $1) }
-                | OFFSET { lexeme_to_token($lexer, $1) }
-                | QUANTILE { lexeme_to_token($lexer, $1) }
-                | STDDEV { lexeme_to_token($lexer, $1) }
-                | STDVAR { lexeme_to_token($lexer, $1) }
-                | SUM { lexeme_to_token($lexer, $1) }
-                | TOPK { lexeme_to_token($lexer, $1) }
-                | WITHOUT { lexeme_to_token($lexer, $1) }
-                | START { lexeme_to_token($lexer, $1) }
-                | END { lexeme_to_token($lexer, $1) }
-                ;
+        |       BOTTOMK { lexeme_to_token($lexer, $1) }
+        |       BY { lexeme_to_token($lexer, $1) }
+        |       COUNT { lexeme_to_token($lexer, $1) }
+        |       COUNT_VALUES { lexeme_to_token($lexer, $1) }
+        |       GROUP { lexeme_to_token($lexer, $1) }
+        |       IDENTIFIER { lexeme_to_token($lexer, $1) }
+        |       LAND { lexeme_to_token($lexer, $1) }
+        |       LOR { lexeme_to_token($lexer, $1) }
+        |       LUNLESS { lexeme_to_token($lexer, $1) }
+        |       MAX { lexeme_to_token($lexer, $1) }
+        |       METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
+        |       MIN { lexeme_to_token($lexer, $1) }
+        |       OFFSET { lexeme_to_token($lexer, $1) }
+        |       QUANTILE { lexeme_to_token($lexer, $1) }
+        |       STDDEV { lexeme_to_token($lexer, $1) }
+        |       STDVAR { lexeme_to_token($lexer, $1) }
+        |       SUM { lexeme_to_token($lexer, $1) }
+        |       TOPK { lexeme_to_token($lexer, $1) }
+        |       WITHOUT { lexeme_to_token($lexer, $1) }
+        |       START { lexeme_to_token($lexer, $1) }
+        |       END { lexeme_to_token($lexer, $1) }
+;
 
 /*
  * Series descriptions (only used by unit tests).
@@ -446,57 +492,57 @@ metric_identifier -> Result<Token, String>:
  */
 aggregate_op -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
-                | BOTTOMK { lexeme_to_token($lexer, $1) }
-                | COUNT { lexeme_to_token($lexer, $1) }
-                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
-                | GROUP { lexeme_to_token($lexer, $1) }
-                | MAX { lexeme_to_token($lexer, $1) }
-                | MIN { lexeme_to_token($lexer, $1) }
-                | QUANTILE { lexeme_to_token($lexer, $1) }
-                | STDDEV { lexeme_to_token($lexer, $1) }
-                | STDVAR { lexeme_to_token($lexer, $1) }
-                | SUM { lexeme_to_token($lexer, $1) }
-                | TOPK { lexeme_to_token($lexer, $1) }
-                ;
+        |       BOTTOMK { lexeme_to_token($lexer, $1) }
+        |       COUNT { lexeme_to_token($lexer, $1) }
+        |       COUNT_VALUES { lexeme_to_token($lexer, $1) }
+        |       GROUP { lexeme_to_token($lexer, $1) }
+        |       MAX { lexeme_to_token($lexer, $1) }
+        |       MIN { lexeme_to_token($lexer, $1) }
+        |       QUANTILE { lexeme_to_token($lexer, $1) }
+        |       STDDEV { lexeme_to_token($lexer, $1) }
+        |       STDVAR { lexeme_to_token($lexer, $1) }
+        |       SUM { lexeme_to_token($lexer, $1) }
+        |       TOPK { lexeme_to_token($lexer, $1) }
+;
 
 // inside of grouping options label names can be recognized as keywords by the lexer.
 // This is a list of keywords that could also be a label name.
 maybe_label -> Result<Token, String>:
                 AVG { lexeme_to_token($lexer, $1) }
-                | BOOL { lexeme_to_token($lexer, $1) }
-                | BOTTOMK { lexeme_to_token($lexer, $1) }
-                | BY { lexeme_to_token($lexer, $1) }
-                | COUNT { lexeme_to_token($lexer, $1) }
-                | COUNT_VALUES { lexeme_to_token($lexer, $1) }
-                | GROUP { lexeme_to_token($lexer, $1) }
-                | GROUP_LEFT { lexeme_to_token($lexer, $1) }
-                | GROUP_RIGHT { lexeme_to_token($lexer, $1) }
-                | IDENTIFIER { lexeme_to_token($lexer, $1) }
-                | IGNORING { lexeme_to_token($lexer, $1) }
-                | LAND { lexeme_to_token($lexer, $1) }
-                | LOR { lexeme_to_token($lexer, $1) }
-                | LUNLESS { lexeme_to_token($lexer, $1) }
-                | MAX { lexeme_to_token($lexer, $1) }
-                | METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
-                | MIN { lexeme_to_token($lexer, $1) }
-                | OFFSET { lexeme_to_token($lexer, $1) }
-                | ON { lexeme_to_token($lexer, $1) }
-                | QUANTILE { lexeme_to_token($lexer, $1) }
-                | STDDEV { lexeme_to_token($lexer, $1) }
-                | STDVAR { lexeme_to_token($lexer, $1) }
-                | SUM { lexeme_to_token($lexer, $1) }
-                | TOPK { lexeme_to_token($lexer, $1) }
-                | START { lexeme_to_token($lexer, $1) }
-                | END { lexeme_to_token($lexer, $1) }
-                | ATAN2 { lexeme_to_token($lexer, $1) }
-                ;
+        |       BOOL { lexeme_to_token($lexer, $1) }
+        |       BOTTOMK { lexeme_to_token($lexer, $1) }
+        |       BY { lexeme_to_token($lexer, $1) }
+        |       COUNT { lexeme_to_token($lexer, $1) }
+        |       COUNT_VALUES { lexeme_to_token($lexer, $1) }
+        |       GROUP { lexeme_to_token($lexer, $1) }
+        |       GROUP_LEFT { lexeme_to_token($lexer, $1) }
+        |       GROUP_RIGHT { lexeme_to_token($lexer, $1) }
+        |       IDENTIFIER { lexeme_to_token($lexer, $1) }
+        |       IGNORING { lexeme_to_token($lexer, $1) }
+        |       LAND { lexeme_to_token($lexer, $1) }
+        |       LOR { lexeme_to_token($lexer, $1) }
+        |       LUNLESS { lexeme_to_token($lexer, $1) }
+        |       MAX { lexeme_to_token($lexer, $1) }
+        |       METRIC_IDENTIFIER { lexeme_to_token($lexer, $1) }
+        |       MIN { lexeme_to_token($lexer, $1) }
+        |       OFFSET { lexeme_to_token($lexer, $1) }
+        |       ON { lexeme_to_token($lexer, $1) }
+        |       QUANTILE { lexeme_to_token($lexer, $1) }
+        |       STDDEV { lexeme_to_token($lexer, $1) }
+        |       STDVAR { lexeme_to_token($lexer, $1) }
+        |       SUM { lexeme_to_token($lexer, $1) }
+        |       TOPK { lexeme_to_token($lexer, $1) }
+        |       START { lexeme_to_token($lexer, $1) }
+        |       END { lexeme_to_token($lexer, $1) }
+        |       ATAN2 { lexeme_to_token($lexer, $1) }
+;
 
 match_op -> Result<Token, String>:
                 EQL { lexeme_to_token($lexer, $1) }
-                | NEQ { lexeme_to_token($lexer, $1) }
-                | EQL_REGEX { lexeme_to_token($lexer, $1) }
-                | NEQ_REGEX { lexeme_to_token($lexer, $1) }
-                ;
+        |       NEQ { lexeme_to_token($lexer, $1) }
+        |       EQL_REGEX { lexeme_to_token($lexer, $1) }
+        |       NEQ_REGEX { lexeme_to_token($lexer, $1) }
+;
 
 /*
  * Literals.
@@ -507,26 +553,23 @@ number_literal -> Result<Expr, String>:
                         let num = parse_str_radix($lexer.span_str($span));
                         Ok(Expr::from(num?))
                 }
-                ;
+;
 
 string_literal -> Result<Expr, String>:
                 STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
-                ;
+;
 
 duration -> Result<Duration, String>:
                 DURATION { parse_duration($lexer.span_str($span)) }
-                ;
+;
 
 /*
  * Wrappers for optional arguments.
  */
 maybe_duration -> Result<Option<Duration>, String>:
                 { Ok(None) }
-                | duration
-                {
-                        $1.map(Some)
-                }
-                ;
+        |       duration { $1.map(Some) }
+;
 
 %%
 

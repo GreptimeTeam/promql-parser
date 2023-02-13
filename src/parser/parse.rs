@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{lex, Expr};
+use crate::parser::{lex, Expr, INVALID_QUERY_INFO};
 
 /// Parse the given query literal to an AST (which is [`Expr`] in this crate).
 pub fn parse(input: &str) -> Result<Expr, String> {
@@ -21,10 +21,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         Ok(lexer) => {
             // NOTE: the errs is ignored so far.
             let (res, _errs) = crate::promql_y::parse(&lexer);
-            match res {
-                Some(r) => r,
-                None => Err("empty AST".into()),
-            }
+            res.ok_or_else(|| String::from(INVALID_QUERY_INFO))?
         }
     }
 }
@@ -37,10 +34,12 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 /// - all cases will be splitted into different blocks based on the type of parsed Expr.
 #[cfg(test)]
 mod tests {
+    use regex::Regex;
+
     use crate::label::{MatchOp, Matcher, Matchers};
     use crate::parser::{
         get_function, token, AggModifier, AtModifier as At, BinModifier, Expr, FunctionArgs,
-        Offset, VectorMatchCardinality, VectorMatchModifier, VectorSelector,
+        Offset, VectorMatchCardinality, VectorMatchModifier, VectorSelector, INVALID_QUERY_INFO,
     };
     use crate::util::duration;
     use std::collections::HashSet;
@@ -86,7 +85,7 @@ mod tests {
             assert_eq!(
                 crate::parser::parse(&input),
                 expected,
-                "\n<parse> <{input:?}> does not match"
+                "\n<parse> <{input}> does not match"
             );
         }
     }
@@ -105,6 +104,7 @@ mod tests {
             ("5e3", Expr::from(5000.0)),
             ("0xc", Expr::from(12.0)),
             ("0755", Expr::from(493.0)),
+            ("08", Expr::from(8.0)),
             ("+5.5e-3", Expr::from(0.0055)),
             ("-0755", Expr::from(-493.0)),
 
@@ -641,6 +641,41 @@ mod tests {
                     Expr::from(VectorSelector::from("sum")),
                 ),
             ),
+            // cases from https://prometheus.io/docs/prometheus/latest/querying/operators
+            (
+                r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
+                {
+                    let name = String::from("method_code:http_errors:rate5m");
+                    let matchers = Matchers::new(HashSet::from([
+                        Matcher::new_eq_metric_matcher(name.clone()),
+                        Matcher::new(MatchOp::Equal, String::from("code"), String::from("500")),
+                    ]));
+                    let lhs = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                    Expr::new_binary_expr(
+                        lhs,
+                        token::T_DIV,
+                        Some(BinModifier::default().with_matching(Some(
+                            VectorMatchModifier::Ignoring(HashSet::from([String::from("code")])),
+                        ))),
+                        Expr::from(VectorSelector::from("method:http_requests:rate5m")),
+                    )
+                },
+            ),
+            (
+                r#"method_code:http_errors:rate5m / ignoring(code) group_left method:http_requests:rate5m"#,
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("method_code:http_errors:rate5m")),
+                    token::T_DIV,
+                    Some(
+                        BinModifier::default()
+                            .with_matching(Some(VectorMatchModifier::Ignoring(HashSet::from([
+                                String::from("code"),
+                            ]))))
+                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::new())),
+                    ),
+                    Expr::from(VectorSelector::from("method:http_requests:rate5m")),
+                ),
+            ),
         ];
         assert_cases(Case::new_result_cases(cases));
 
@@ -759,7 +794,8 @@ mod tests {
 
         let cases = vec![
             (r#"-"string""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
-            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector")
+            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector"),
+            (r#"-"foo""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -967,10 +1003,11 @@ mod tests {
                 r#"foo{__name__ == "bar"}"#,
                 "unexpected '=' in label matching, expected string",
             ),
-            // (
-            //     r#"foo{__name__="bar" lol}"#,
-            //     "invalid label matcher, expected label matching operator after 'lol'",
-            // ),
+            (
+                r#"foo{__name__="bar" lol}"#,
+                // "invalid label matcher, expected label matching operator after 'lol'",
+                INVALID_QUERY_INFO,
+            ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
 
@@ -1075,21 +1112,36 @@ mod tests {
             ("foo[5m1h]", "not a valid duration string: 5m1h"),
             ("foo[5m1m]", "not a valid duration string: 5m1m"),
             ("foo[0m]", "duration must be greater than 0"),
-            (r#"foo["5m"]"#, r#"unexpected character inside brackets: ""#),
-            (r#"foo[]"#, r#"empty duration string"#),
+            (
+                r#"foo["5m"]"#,
+                r#"unexpected character inside brackets: '"'"#,
+            ),
+            (r#"foo[]"#, "missing unit character in duration"),
             (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
-            // ("some_metric[5m] OFFSET 1", ""),
+            (
+                "some_metric[5m] OFFSET 1",
+                "unexpected number '1' in offset, expected duration",
+            ),
             (
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
             ),
-            ("some_metric[5m] OFFSET", "empty duration string"),
+            (
+                "some_metric[5m] OFFSET",
+                "unexpected end of input in offset, expected duration",
+            ),
             (
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
             ),
-            // ("some_metric[5m] @ 1m", ""),
-            // ("some_metric[5m] @", ""),
+            (
+                "some_metric[5m] @ 1m",
+                "unexpected duration '1m' in @, expected timestamp",
+            ),
+            (
+                "some_metric[5m] @",
+                "unexpected end of input in @, expected timestamp",
+            ),
             (
                 "some_metric @ 1234 [5m]",
                 "no @ modifiers allowed before range",
@@ -1108,67 +1160,68 @@ mod tests {
             ("sum by (foo) (some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("avg by (foo)(some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
-                Expr::new_aggregate_expr(token::T_AVG, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_AVG, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("max by (foo)(some_metric)", {
                 let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_MAX, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_MAX, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum without (foo) (some_metric)", {
                 let modifier = AggModifier::Without(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum (some_metric) without (foo)", {
                 let modifier = AggModifier::Without(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("stddev(some_metric)", {
-                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_STDDEV, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_STDDEV, None, FunctionArgs::new_args(ex))
             }),
             ("stdvar by (foo)(some_metric)", {
                 let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_STDVAR, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_STDVAR,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                )
             }),
             ("sum by ()(some_metric)", {
                 let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,bar,)(some_metric)", {
                 let modifier =
                     AggModifier::By(HashSet::from([String::from("foo"), String::from("bar")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,)(some_metric)", {
                 let modifier = AggModifier::By(HashSet::from([String::from("foo")]));
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("topk(5, some_metric)", {
-                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from(5.0);
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_TOPK, modifier, args)
+                Expr::new_aggregate_expr(token::T_TOPK, None, args)
             }),
             (r#"count_values("value", some_metric)"#, {
-                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from("value");
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_COUNT_VALUES, modifier, args)
+                Expr::new_aggregate_expr(token::T_COUNT_VALUES, None, args)
             }),
             (
                 "sum without(and, by, avg, count, alert, annotations)(some_metric)",
@@ -1180,31 +1233,34 @@ mod tests {
                             .collect(),
                     );
                     let ex = Expr::from(VectorSelector::from("some_metric"));
-                    Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                    Expr::new_aggregate_expr(
+                        token::T_SUM,
+                        Some(modifier),
+                        FunctionArgs::new_args(ex),
+                    )
                 },
             ),
             ("sum(sum)", {
-                let modifier = AggModifier::By(HashSet::new());
                 let ex = Expr::from(VectorSelector::from("sum"));
-                Expr::new_aggregate_expr(token::T_SUM, modifier, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
             }),
         ];
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            // ("sum without(==)(some_metric)", ""),
-            // ("sum without(,)(some_metric)", ""),
-            // ("sum without(foo,,)(some_metric)", ""),
-            ("sum some_metric by (test)", "no arguments for aggregate expression 'sum' provided"),
-            // ("sum (some_metric) by test", ""),
+            ("sum without(==)(some_metric)", INVALID_QUERY_INFO),
+            ("sum without(,)(some_metric)", INVALID_QUERY_INFO),
+            ("sum without(foo,,)(some_metric)", INVALID_QUERY_INFO),
+            ("sum some_metric by (test)", INVALID_QUERY_INFO),
+            ("sum (some_metric) by test", INVALID_QUERY_INFO),
             (
                 "sum () by (test)",
                 "no arguments for aggregate expression 'sum' provided",
             ),
-            // ("MIN keep_common (some_metric)", ""),
-            // ("MIN (some_metric) keep_common", ""),
-            ("sum (some_metric) without (test) by (test)", "ParseError: invalid input at [33:34]"),
-            ("sum without (test) (some_metric) by (test)", "ParseError: invalid input at [33:34]"),
+            ("MIN keep_common (some_metric)", INVALID_QUERY_INFO),
+            ("MIN (some_metric) keep_common", INVALID_QUERY_INFO),
+            ("sum (some_metric) without (test) by (test)", INVALID_QUERY_INFO),
+            ("sum without (test) (some_metric) by (test)", INVALID_QUERY_INFO),
             (
                 "topk(some_metric)",
                 "wrong number of arguments for aggregate expression provided, expected 2, got 1",
@@ -1265,6 +1321,382 @@ mod tests {
                     FunctionArgs::new_args(ex).append_args(Expr::from(5.0)),
                 )
             }),
+            // cases from https://prometheus.io/docs/prometheus/latest/querying/functions
+            (r#"absent(nonexistent{job="myjob"})"#, {
+                let name = String::from("nonexistent");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
+                ]));
+                let ex = Expr::new_vector_selector(Some(name), matchers).unwrap();
+                Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
+            }),
+            (r#"absent(nonexistent{job="myjob",instance=~".*"})"#, {
+                let name = String::from("nonexistent");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
+                    Matcher::new(
+                        MatchOp::Re(Regex::new(".*").unwrap()),
+                        String::from("instance"),
+                        String::from(".*"),
+                    ),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                    Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
+                })
+            }),
+            (r#"absent(sum(nonexistent{job="myjob"}))"#, {
+                let name = String::from("nonexistent");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| {
+                        Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
+                    })
+                    .and_then(|ex| {
+                        Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
+                    })
+            }),
+            (r#"absent_over_time(nonexistent{job="myjob"}[1h])"#, {
+                let name = String::from("nonexistent");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
+                    .and_then(|ex| {
+                        Expr::new_call(
+                            get_function("absent_over_time").unwrap(),
+                            FunctionArgs::new_args(ex),
+                        )
+                    })
+            }),
+            (
+                r#"absent_over_time(nonexistent{job="myjob",instance=~".*"}[1h])"#,
+                {
+                    let name = String::from("nonexistent");
+                    let matchers = Matchers::new(HashSet::from([
+                        Matcher::new_eq_metric_matcher(name.clone()),
+                        Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
+                        Matcher::new(
+                            MatchOp::Re(Regex::new(".*").unwrap()),
+                            String::from("instance"),
+                            String::from(".*"),
+                        ),
+                    ]));
+                    Expr::new_vector_selector(Some(name), matchers)
+                        .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
+                        .and_then(|ex| {
+                            Expr::new_call(
+                                get_function("absent_over_time").unwrap(),
+                                FunctionArgs::new_args(ex),
+                            )
+                        })
+                },
+            ),
+            (r#"delta(cpu_temp_celsius{host="zeus"}[2h])"#, {
+                let name = String::from("cpu_temp_celsius");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(MatchOp::Equal, String::from("host"), String::from("zeus")),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION * 2))
+                    .and_then(|ex| {
+                        Expr::new_call(get_function("delta").unwrap(), FunctionArgs::new_args(ex))
+                    })
+            }),
+            (
+                r#"histogram_count(rate(http_request_duration_seconds[10m]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_count").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
+                }),
+            ),
+            (
+                r#"histogram_sum(rate(http_request_duration_seconds[10m])) / histogram_count(rate(http_request_duration_seconds[10m]))"#,
+                {
+                    let rate = Expr::new_matrix_selector(
+                        Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                        duration::MINUTE_DURATION * 10,
+                    )
+                    .and_then(|ex| {
+                        Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                    })
+                    .unwrap();
+                    let lhs = Expr::new_call(
+                        get_function("histogram_sum").unwrap(),
+                        FunctionArgs::new_args(rate.clone()),
+                    )
+                    .unwrap();
+                    let rhs = Expr::new_call(
+                        get_function("histogram_count").unwrap(),
+                        FunctionArgs::new_args(rate),
+                    )
+                    .unwrap();
+                    Expr::new_binary_expr(lhs, token::T_DIV, None, rhs)
+                },
+            ),
+            (
+                r#"histogram_fraction(0, 0.2, rate(http_request_duration_seconds[1h]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::HOUR_DURATION,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_fraction").unwrap(),
+                        FunctionArgs::new_args(Expr::from(0.0_f64))
+                            .append_args(Expr::from(0.2))
+                            .append_args(ex),
+                    )
+                }),
+            ),
+            (
+                r#"histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds_bucket")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_quantile").unwrap(),
+                        FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
+                    )
+                }),
+            ),
+            (
+                r#"histogram_quantile(0.9, sum by (job, le) (rate(http_request_duration_seconds_bucket[10m])))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds_bucket")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_aggregate_expr(
+                        token::T_SUM,
+                        Some(AggModifier::By(HashSet::from([
+                            String::from("job"),
+                            String::from("le"),
+                        ]))),
+                        FunctionArgs::new_args(ex),
+                    )
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_quantile").unwrap(),
+                        FunctionArgs::new_args(Expr::from(0.9_f64)).append_args(ex),
+                    )
+                }),
+            ),
+            (r#"increase(http_requests_total{job="api-server"}[5m])"#, {
+                let name = String::from("http_requests_total");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from("job"),
+                        String::from("api-server"),
+                    ),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 5))
+                    .and_then(|ex| {
+                        Expr::new_call(
+                            get_function("increase").unwrap(),
+                            FunctionArgs::new_args(ex),
+                        )
+                    })
+            }),
+            (r#"irate(http_requests_total{job="api-server"}[5m])"#, {
+                let name = String::from("http_requests_total");
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_eq_metric_matcher(name.clone()),
+                    Matcher::new(
+                        MatchOp::Equal,
+                        String::from("job"),
+                        String::from("api-server"),
+                    ),
+                ]));
+                Expr::new_vector_selector(Some(name), matchers)
+                    .and_then(|ex| Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 5))
+                    .and_then(|ex| {
+                        Expr::new_call(get_function("irate").unwrap(), FunctionArgs::new_args(ex))
+                    })
+            }),
+            (
+                r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+                {
+                    let name = String::from("up");
+                    let matchers = Matchers::new(HashSet::from([
+                        Matcher::new_eq_metric_matcher(name.clone()),
+                        Matcher::new(MatchOp::Equal, String::from("src1"), String::from("a")),
+                        Matcher::new(MatchOp::Equal, String::from("src2"), String::from("b")),
+                        Matcher::new(MatchOp::Equal, String::from("src3"), String::from("c")),
+                        Matcher::new(
+                            MatchOp::Equal,
+                            String::from("job"),
+                            String::from("api-server"),
+                        ),
+                    ]));
+                    Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                        Expr::new_call(
+                            get_function("label_join").unwrap(),
+                            FunctionArgs::new_args(ex)
+                                .append_args(Expr::from("foo"))
+                                .append_args(Expr::from(","))
+                                .append_args(Expr::from("src1"))
+                                .append_args(Expr::from("src2"))
+                                .append_args(Expr::from("src3")),
+                        )
+                    })
+                },
+            ),
+            (
+                r#"label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")"#,
+                {
+                    let name = String::from("up");
+                    let matchers = Matchers::new(HashSet::from([
+                        Matcher::new_eq_metric_matcher(name.clone()),
+                        Matcher::new(MatchOp::Equal, String::from("service"), String::from("a:c")),
+                        Matcher::new(
+                            MatchOp::Equal,
+                            String::from("job"),
+                            String::from("api-server"),
+                        ),
+                    ]));
+                    Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                        Expr::new_call(
+                            get_function("label_replace").unwrap(),
+                            FunctionArgs::new_args(ex)
+                                .append_args(Expr::from("foo"))
+                                .append_args(Expr::from("$1"))
+                                .append_args(Expr::from("service"))
+                                .append_args(Expr::from("(.*):.*")),
+                        )
+                    })
+                },
+            ),
+            // special cases
+            (
+                r#"exp(+Inf)"#,
+                Expr::new_call(
+                    get_function("exp").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"exp(NaN)"#,
+                Expr::new_call(
+                    get_function("exp").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"ln(+Inf)"#,
+                Expr::new_call(
+                    get_function("ln").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"ln(NaN)"#,
+                Expr::new_call(
+                    get_function("ln").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"ln(0)"#,
+                Expr::new_call(
+                    get_function("ln").unwrap(),
+                    FunctionArgs::new_args(Expr::from(0.0)),
+                ),
+            ),
+            (
+                r#"ln(-1)"#,
+                Expr::new_call(
+                    get_function("ln").unwrap(),
+                    FunctionArgs::new_args(Expr::from(-1.0)),
+                ),
+            ),
+            (
+                r#"log2(+Inf)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"log2(NaN)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"log2(0)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(0.0)),
+                ),
+            ),
+            (
+                r#"log2(-1)"#,
+                Expr::new_call(
+                    get_function("log2").unwrap(),
+                    FunctionArgs::new_args(Expr::from(-1.0)),
+                ),
+            ),
+            (
+                r#"log10(+Inf)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::INFINITY)),
+                ),
+            ),
+            (
+                r#"log10(NaN)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(f64::NAN)),
+                ),
+            ),
+            (
+                r#"log10(0)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(0.0)),
+                ),
+            ),
+            (
+                r#"log10(-1)"#,
+                Expr::new_call(
+                    get_function("log10").unwrap(),
+                    FunctionArgs::new_args(Expr::from(-1.0)),
+                ),
+            ),
         ];
 
         assert_cases(Case::new_result_cases(cases));
@@ -1301,6 +1733,20 @@ mod tests {
             (
                 "rate(some_metric)",
                 "expected type range vector in call to function 'rate', got instant vector",
+            ),
+            (
+                "ln(1)",
+                "expected type instant vector in call to function 'ln', got scalar",
+            ),
+            ("ln()", "expected 1 argument(s) in call to 'ln', got 0"),
+            (
+                "exp(1)",
+                "expected type instant vector in call to function 'exp', got scalar",
+            ),
+            ("exp()", "expected 1 argument(s) in call to 'exp', got 0"),
+            (
+                "label_join()",
+                "expected at least 3 argument(s) in call to 'label_join', got 0",
             ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];
@@ -1508,7 +1954,7 @@ mod tests {
                         .collect();
                     Expr::new_aggregate_expr(
                         token::T_SUM,
-                        AggModifier::Without(labels),
+                        Some(AggModifier::Without(labels)),
                         FunctionArgs::new_args(ex),
                     )
                     .and_then(|ex| {
@@ -1742,8 +2188,8 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let cases = vec![
-            // ("start()", ""),
-            // ("end()", ""),
+            ("start()", INVALID_QUERY_INFO),
+            ("end()", INVALID_QUERY_INFO),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1751,24 +2197,24 @@ mod tests {
     #[test]
     fn test_corner_fail_cases() {
         let fail_cases = vec![
-            ("", "no expression found in input: ''"),
+            ("", "no expression found in input"),
             (
                 "# just a comment\n\n",
-                "no expression found in input: '# just a comment\n\n'",
+                "no expression found in input",
             ),
-            // ("1+", ""),
+            ("1+", INVALID_QUERY_INFO),
             (".", "unexpected character: '.'"),
             ("2.5.", "bad number or duration syntax: 2.5."),
             ("100..4", "bad number or duration syntax: 100.."),
             ("0deadbeef", "bad number or duration syntax: 0de"),
-            // ("1 /", ""),
-            // ("*1", ""),
+            ("1 /", INVALID_QUERY_INFO),
+            ("*1", INVALID_QUERY_INFO),
             ("(1))", "unexpected right parenthesis ')'"),
             ("((1)", "unclosed left parenthesis"),
             ("(", "unclosed left parenthesis"),
             ("1 !~ 1", "unexpected character after '!': '~'"),
             ("1 =~ 1", "unexpected character after '=': '~'"),
-            // ("*test", ""),
+            ("*test", INVALID_QUERY_INFO),
             (
                 "1 offset 1d",
                 "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
@@ -1777,20 +2223,31 @@ mod tests {
                 "foo offset 1s offset 2s",
                 "offset may not be set multiple times"
             ),
-            // ("a - on(b) ignoring(c) d", ""),
+            ("a - on(b) ignoring(c) d", INVALID_QUERY_INFO),
 
             // Fuzzing regression tests.
-            // ("-=", r#"unexpected "=""#),
-            // ("++-++-+-+-<", "unexpected <op:<>"),
-            // ("e-+=/(0)", r#"unexpected "=""#),
+            ("-=", INVALID_QUERY_INFO),
+            ("++-++-+-+-<", INVALID_QUERY_INFO),
+            ("e-+=/(0)", INVALID_QUERY_INFO),
             ("a>b()", "unknown function with name 'b'"),
             (
                 "rate(avg)",
                 "expected type range vector in call to function 'rate', got instant vector"
             ),
 
-            // "(" + strings.Repeat("-{}-1", 10000) + ")" + strings.Repeat("[1m:]", 1000)
+
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
+
+        let fail_cases = vec![
+            // This is testing that we are not re-rendering the expression string for each error, which would timeout.
+            {
+                let input = "(".to_string() + &"-{}-1".repeat(10_000) + ")" + &"[1m:]".repeat(1000);
+                let expected =
+                    Err("vector selector must contain at least one non-empty matcher".into());
+                Case { input, expected }
+            },
+        ];
+        assert_cases(fail_cases);
     }
 }

@@ -22,15 +22,30 @@ pub fn parse_str_radix(s: &str) -> Result<f64, String> {
         .filter(|c| !c.is_whitespace())
         .collect();
 
-    if st.starts_with('0') || st.starts_with("-0") || st.starts_with("+0") {
+    let mut is_not_decimal = false;
+    if st.contains('x') {
+        is_not_decimal = true;
+    }
+
+    if !is_not_decimal
+        && (st.starts_with("-0") || st.starts_with("+0") || st.starts_with('0'))
+        && !st.contains('.')
+        && !st.contains('8')
+        && !st.contains('9')
+        && !st.eq("0")
+        && !st.eq("+0")
+        && !st.eq("-0")
+    {
+        is_not_decimal = true;
+    }
+
+    if is_not_decimal {
         let i = if st.starts_with("-0x") {
             i64::from_str_radix(st.strip_prefix("-0x").unwrap(), 16).map(|x| -x)
         } else if st.starts_with("+0x") {
             i64::from_str_radix(st.strip_prefix("+0x").unwrap(), 16)
         } else if st.starts_with("0x") {
             i64::from_str_radix(st.strip_prefix("0x").unwrap(), 16)
-        } else if st.contains('8') || st.contains('9') {
-            st.parse()
         } else if st.starts_with("-0") {
             i64::from_str_radix(st.strip_prefix("-0").unwrap(), 8).map(|x| -x)
         } else if st.starts_with("+0") {
@@ -40,7 +55,7 @@ pub fn parse_str_radix(s: &str) -> Result<f64, String> {
         };
         return i
             .map(|x| x as f64)
-            .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"));
+            .map_err(|_| format!("ParseFloatError. {s} can't be parsed into i64"));
     }
     st.parse()
         .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
@@ -61,9 +76,15 @@ mod tests {
         assert_eq!(parse_str_radix("2023.0128").unwrap(), 2023.0128_f64);
         assert_eq!(parse_str_radix("-3.14").unwrap(), -3.14_f64);
         assert_eq!(parse_str_radix("+2.718").unwrap(), 2.718_f64);
+        assert_eq!(parse_str_radix("-0.14").unwrap(), -0.14_f64);
+        assert_eq!(parse_str_radix("+0.718").unwrap(), 0.718_f64);
+        assert_eq!(parse_str_radix("0.718").unwrap(), 0.718_f64);
         assert_eq!(parse_str_radix("089").unwrap(), 89_f64);
         assert_eq!(parse_str_radix("+089").unwrap(), 89_f64);
         assert_eq!(parse_str_radix("-089").unwrap(), -89_f64);
+        assert_eq!(parse_str_radix("+0").unwrap(), 0_f64);
+        assert_eq!(parse_str_radix("-0").unwrap(), 0_f64);
+        assert_eq!(parse_str_radix("0").unwrap(), 0_f64);
 
         assert!(parse_str_radix("rust").is_err());
         assert!(parse_str_radix("0xgolang").is_err());
