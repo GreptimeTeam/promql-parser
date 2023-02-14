@@ -42,11 +42,22 @@ This crate declares compatible with [prometheus 0372e25][prom-0372e25], which is
 prometheus release 2.40 at Nov 29, 2022. Any revision on PromQL after this
 commit is not guaranteed.
 
-## Users
+## Community Extensions
 
-This parser is currently being used by the [GreptimeDB][greptimedb] and [py-promql-parser](https://github.com/messense/py-promql-parser).
+There are a number of community projects that extend promql-parser or
+provide integrations with other systems.
 
-If your project is using promql-parser feel free to make a PR to add it to this list.
+### Language Bindings
+
+- [promql-parser-py](https://github.com/messense/py-promql-parser)
+
+## Known Uses
+
+Here are some of the projects known to use promql-parser:
+
+- [GreptimeDB](https://github.com/GreptimeTeam/greptimedb) Open Source & Cloud Native Distributed Time Series Database
+
+If your project is using promql-parser, feel free to make a PR to add it to this list.
 
 ## Contributing
 
@@ -65,4 +76,3 @@ licensed as above, without any additional terms or conditions.
 
 [prom-0372e25]: https://github.com/prometheus/prometheus/tree/0372e259baf014bbade3134fd79bcdfd8cbdef2c
 [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/
-[greptimedb]: https://github.com/GreptimeTeam/greptimedb
