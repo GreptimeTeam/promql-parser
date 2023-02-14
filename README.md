@@ -49,7 +49,7 @@ provide integrations with other systems.
 
 ### Language Bindings
 
-- [promql-parser-py](https://github.com/messense/py-promql-parser)
+- [py-promql-parser](https://github.com/messense/py-promql-parser) Python binding of this crate.
 
 ## Known Uses
 
