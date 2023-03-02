@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{AggregateExpr, BinaryExpr, Expr, ParenExpr, SubqueryExpr, UnaryExpr};
+use crate::parser::{
+    AggregateExpr, BinaryExpr, Expr, Extension, ParenExpr, SubqueryExpr, UnaryExpr,
+};
 
 /// Trait that implements the [Visitor pattern](https://en.wikipedia.org/wiki/Visitor_pattern)
 /// for a depth first walk on [Expr] AST. [`pre_visit`](ExprVisitor::pre_visit) is called
@@ -49,6 +51,14 @@ pub fn walk_expr<V: ExprVisitor>(visitor: &mut V, expr: &Expr) -> Result<bool, V
         }
         Expr::Paren(ParenExpr { expr }) => walk_expr(visitor, expr)?,
         Expr::Subquery(SubqueryExpr { expr, .. }) => walk_expr(visitor, expr)?,
+        Expr::Extension(Extension { expr }) => {
+            for child in expr.children() {
+                if !walk_expr(visitor, child)? {
+                    return Ok(false);
+                }
+            }
+            true
+        }
         Expr::NumberLiteral(_)
         | Expr::StringLiteral(_)
         | Expr::VectorSelector(_)

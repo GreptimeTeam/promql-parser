@@ -30,8 +30,8 @@ pub mod value;
 
 pub use ast::{
     check_ast, AggModifier, AggregateExpr, AtModifier, BinModifier, BinaryExpr, Call, EvalStmt,
-    Expr, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr, UnaryExpr,
-    VectorMatchCardinality, VectorMatchModifier, VectorSelector,
+    Expr, Extension, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr,
+    UnaryExpr, VectorMatchCardinality, VectorMatchModifier, VectorSelector,
 };
 
 pub use function::{get_function, Function, FunctionArgs};
