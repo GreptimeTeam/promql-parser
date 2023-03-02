@@ -18,6 +18,7 @@ use crate::parser::token::{
 };
 use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
 use std::ops::Neg;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 /// Matching Modifier, for VectorMatching of binary expr.
@@ -464,6 +465,31 @@ pub struct Call {
     pub args: FunctionArgs,
 }
 
+/// Node for extending the AST. [Extension] won't be generate by this parser itself.
+#[derive(Debug, Clone)]
+pub struct Extension {
+    pub expr: Arc<dyn ExtensionExpr>,
+}
+
+/// The interface for extending the AST with custom expression node.
+pub trait ExtensionExpr: std::fmt::Debug + Send + Sync {
+    fn as_any(&self) -> &dyn std::any::Any;
+
+    fn name(&self) -> &str;
+
+    fn value_type(&self) -> ValueType;
+
+    fn children(&self) -> &[Expr];
+}
+
+impl PartialEq for Extension {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
+impl Eq for Extension {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
@@ -497,6 +523,10 @@ pub enum Expr {
 
     /// Call represents a function call.
     Call(Call),
+
+    /// Extension represents an extension expression. It is for user to attach additional
+    /// informations to the AST. This parser won't generate Extension node.
+    Extension(Extension),
 }
 
 impl Expr {
@@ -700,6 +730,7 @@ impl Expr {
             Expr::VectorSelector(_) => ValueType::Vector,
             Expr::MatrixSelector(_) => ValueType::Matrix,
             Expr::Call(ex) => ex.func.return_type,
+            Expr::Extension(ex) => ex.expr.value_type(),
         }
     }
 
@@ -779,6 +810,7 @@ pub fn check_ast(expr: Expr) -> Result<Expr, String> {
         Expr::NumberLiteral(_) => Ok(expr),
         Expr::StringLiteral(_) => Ok(expr),
         Expr::MatrixSelector(_) => Ok(expr),
+        Expr::Extension(_) => Ok(expr),
     }
 }
 
