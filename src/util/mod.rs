@@ -16,6 +16,8 @@
 
 pub mod duration;
 pub mod number;
+mod visitor;
 
 pub use duration::parse_duration;
 pub use number::parse_str_radix;
+pub use visitor::{walk_expr, ExprVisitor};
