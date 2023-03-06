@@ -167,9 +167,9 @@ aggregate_expr -> Result<Expr, String>:
                 }
 ;
 
-aggregate_modifier -> Result<AggModifier, String>:
-                BY grouping_labels { Ok(AggModifier::By($2?)) }
-        |       WITHOUT grouping_labels { Ok(AggModifier::Without($2?)) }
+aggregate_modifier -> Result<LabelModifier, String>:
+                BY grouping_labels { Ok(LabelModifier::Include($2?)) }
+        |       WITHOUT grouping_labels { Ok(LabelModifier::Exclude($2?)) }
 ;
 
 /*
@@ -213,11 +213,11 @@ bool_modifier -> Result<Option<BinModifier>, String>:
 on_or_ignoring -> Result<Option<BinModifier>, String>:
                 bool_modifier IGNORING grouping_labels
                 {
-                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::Ignoring($3?))))
+                        Ok(update_optional_matching($1?, Some(LabelModifier::Exclude($3?))))
                 }
         |       bool_modifier ON grouping_labels
                 {
-                        Ok(update_optional_matching($1?, Some(VectorMatchModifier::On($3?))))
+                        Ok(update_optional_matching($1?, Some(LabelModifier::Include($3?))))
                 }
 ;
 
@@ -577,16 +577,18 @@ use std::collections::HashSet;
 use std::time::Duration;
 use crate::label::{Labels, Matcher, Matchers};
 use crate::parser::{
-    AggModifier, AtModifier, BinModifier, Expr, FunctionArgs,
-    Offset, Token, VectorMatchCardinality, VectorMatchModifier,
-    check_ast, get_function, is_label,
-    lexeme_to_string, lexeme_to_token, span_to_string,
+    AtModifier, BinModifier, Expr, FunctionArgs, LabelModifier,
+    Offset, Token, VectorMatchCardinality,
 };
+use crate::parser::function::get_function;
+use crate::parser::ast::check_ast;
+use crate::parser::lex::is_label;
+use crate::parser::production::{lexeme_to_string, lexeme_to_token, span_to_string};
 use crate::util::{parse_duration, parse_str_radix};
 
 fn update_optional_matching(
     modifier: Option<BinModifier>,
-    matching: Option<VectorMatchModifier>,
+    matching: Option<LabelModifier>,
 ) -> Option<BinModifier> {
     let modifier = match modifier {
         Some(modifier) => modifier,

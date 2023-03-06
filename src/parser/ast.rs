@@ -21,24 +21,38 @@ use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-/// Matching Modifier, for VectorMatching of binary expr.
-/// Label lists provided to matching keywords will determine how vectors are combined.
+/// LabelModifier acts as
+///
+/// # Aggregation Modifier
+///
+/// - Exclude means `ignoring`
+/// - Include means `on`
+///
+/// # Vector Match Modifier
+///
+/// - Exclude means `without` removes the listed labels from the result vector,
+/// while all other labels are preserved in the output.
+/// - Include means `by` does the opposite and drops labels that are not listed in the by clause,
+/// even if their label values are identical between all elements of the vector.
+///
+/// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VectorMatchModifier {
-    On(Labels),
-    Ignoring(Labels),
+pub enum LabelModifier {
+    Include(Labels),
+    Exclude(Labels),
 }
 
-impl VectorMatchModifier {
+impl LabelModifier {
     pub fn labels(&self) -> &Labels {
         match self {
-            VectorMatchModifier::On(l) => l,
-            VectorMatchModifier::Ignoring(l) => l,
+            LabelModifier::Include(l) => l,
+            LabelModifier::Exclude(l) => l,
         }
     }
 
+    /// is_on is for aggregation expr
     pub fn is_on(&self) -> bool {
-        matches!(*self, VectorMatchModifier::On(_))
+        matches!(*self, LabelModifier::Include(_))
     }
 }
 
@@ -72,7 +86,7 @@ pub struct BinModifier {
 
     /// on/ignoring on labels.
     /// like a + b, no match modifier is needed.
-    pub matching: Option<VectorMatchModifier>,
+    pub matching: Option<LabelModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
 }
@@ -93,7 +107,7 @@ impl BinModifier {
         self
     }
 
-    pub fn with_matching(mut self, matching: Option<VectorMatchModifier>) -> Self {
+    pub fn with_matching(mut self, matching: Option<LabelModifier>) -> Self {
         self.matching = matching;
         self
     }
@@ -124,20 +138,6 @@ impl BinModifier {
     pub fn is_matching_labels_not_empty(&self) -> bool {
         matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
     }
-}
-
-/// Aggregation Modifier.
-///
-/// - `without` removes the listed labels from the result vector,
-/// while all other labels are preserved in the output.
-/// - `by` does the opposite and drops labels that are not listed in the by clause,
-/// even if their label values are identical between all elements of the vector.
-///
-/// if empty listed labels, meaning no grouping
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggModifier {
-    By(Labels),
-    Without(Labels),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,7 +254,7 @@ pub struct AggregateExpr {
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
     /// modifier is optional for some aggregation operators, like sum.
-    pub modifier: Option<AggModifier>,
+    pub modifier: Option<LabelModifier>,
 }
 
 /// UnaryExpr will negate the expr
@@ -672,7 +672,7 @@ impl Expr {
 
     pub fn new_aggregate_expr(
         op: TokenId,
-        modifier: Option<AggModifier>,
+        modifier: Option<LabelModifier>,
         args: FunctionArgs,
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
@@ -1128,17 +1128,14 @@ mod tests {
     #[test]
     fn test_binary_labels() {
         assert_eq!(
-            VectorMatchModifier::On(HashSet::from([String::from("foo"), String::from("bar")]))
+            LabelModifier::Include(HashSet::from([String::from("foo"), String::from("bar")]))
                 .labels(),
             &HashSet::from([String::from("foo"), String::from("bar")])
         );
 
         assert_eq!(
-            VectorMatchModifier::Ignoring(HashSet::from([
-                String::from("foo"),
-                String::from("bar")
-            ]))
-            .labels(),
+            LabelModifier::Exclude(HashSet::from([String::from("foo"), String::from("bar")]))
+                .labels(),
             &HashSet::from([String::from("foo"), String::from("bar")])
         );
 
