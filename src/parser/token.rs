@@ -165,7 +165,7 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
 /// When changing this list, make sure to also change
 /// the maybe_label grammar rule in the generated parser
 /// to avoid misinterpretation of labels as keywords.
-pub fn get_keyword_token(s: &str) -> Option<TokenId> {
+pub(crate) fn get_keyword_token(s: &str) -> Option<TokenId> {
     KEYWORDS.get(s).copied()
 }
 

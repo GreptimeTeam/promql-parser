@@ -264,7 +264,7 @@ lazy_static! {
 }
 
 /// get_function returns a predefined Function object for the given name.
-pub fn get_function(name: &str) -> Option<Function> {
+pub(crate) fn get_function(name: &str) -> Option<Function> {
     FUNCTIONS.get(name).cloned()
 }
 
