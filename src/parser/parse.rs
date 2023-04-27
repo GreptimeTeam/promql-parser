@@ -713,7 +713,7 @@ mod tests {
             ),
             (
                 "foo == on(bar) 10",
-                "vector matching only allowed between instant vectors",
+                "vector matching only allowed between vectors",
             ),
             // NOTE: group modifier CAN NOT be used without on/ignoring modifier
             ("foo + group_left(baz) bar", "unexpected <group_left>"),
@@ -796,9 +796,9 @@ mod tests {
         assert_cases(Case::new_expr_cases(cases));
 
         let cases = vec![
-            (r#"-"string""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
-            ("-test[5m]", "unary expression only allowed on expressions of type scalar or instant vector, got: range vector"),
-            (r#"-"foo""#, "unary expression only allowed on expressions of type scalar or instant vector, got: string"),
+            (r#"-"string""#, "unary expression only allowed on expressions of type scalar or vector, got: string"),
+            ("-test[5m]", "unary expression only allowed on expressions of type scalar or vector, got: matrix"),
+            (r#"-"foo""#, "unary expression only allowed on expressions of type scalar or vector, got: string"),
         ];
         assert_cases(Case::new_fail_cases(cases));
     }
@@ -1276,7 +1276,7 @@ mod tests {
             ),
             (
                 "topk(some_metric, other_metric)",
-                "expected type scalar in aggregation expression, got instant vector",
+                "expected type scalar in aggregation expression, got vector",
             ),
             (
                 "count_values(5, other_metric)",
@@ -1284,7 +1284,7 @@ mod tests {
             ),
             (
                 "rate(some_metric[5m]) @ 1234",
-                "@ modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+                "@ modifier must be preceded by an vector selector or matrix selector or a subquery"
             ),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
@@ -1721,7 +1721,7 @@ mod tests {
             ),
             (
                 "floor(1)",
-                "expected type instant vector in call to function 'floor', got scalar",
+                "expected type vector in call to function 'floor', got scalar",
             ),
             (
                 "hour(some_metric, some_metric, some_metric)",
@@ -1737,16 +1737,16 @@ mod tests {
             ),
             (
                 "rate(some_metric)",
-                "expected type range vector in call to function 'rate', got instant vector",
+                "expected type matrix in call to function 'rate', got vector",
             ),
             (
                 "ln(1)",
-                "expected type instant vector in call to function 'ln', got scalar",
+                "expected type vector in call to function 'ln', got scalar",
             ),
             ("ln()", "expected 1 argument(s) in call to 'ln', got 0"),
             (
                 "exp(1)",
-                "expected type instant vector in call to function 'exp', got scalar",
+                "expected type vector in call to function 'exp', got scalar",
             ),
             ("exp()", "expected 1 argument(s) in call to 'exp', got 0"),
             (
@@ -2090,11 +2090,11 @@ mod tests {
         let fail_cases = vec![
             (
                 "test[5d] OFFSET 10s [10m:5s]",
-                "subquery is only allowed on instant vector, got range vector instead",
+                "subquery is only allowed on vector, got matrix instead",
             ),
             (
                 r#"(foo + bar{nm="val"})[5m:][10m:5s]"#,
-                "subquery is only allowed on instant vector, got range vector instead",
+                "subquery is only allowed on vector, got matrix instead",
             ),
             (
                 "rate(food[1m])[1h] offset 1h",
@@ -2222,7 +2222,7 @@ mod tests {
             ("*test", INVALID_QUERY_INFO),
             (
                 "1 offset 1d",
-                "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery"
+                "offset modifier must be preceded by an vector selector or matrix selector or a subquery"
             ),
             (
                 "foo offset 1s offset 2s",
@@ -2237,7 +2237,7 @@ mod tests {
             ("a>b()", "unknown function with name 'b'"),
             (
                 "rate(avg)",
-                "expected type range vector in call to function 'rate', got instant vector"
+                "expected type matrix in call to function 'rate', got vector"
             ),
 
 
