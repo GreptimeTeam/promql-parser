@@ -125,7 +125,7 @@ impl BinModifier {
     pub fn intersect_labels(&self) -> Option<Vec<&String>> {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return Some(matching.labels().intersection(labels).into_iter().collect());
+                return Some(matching.labels().intersection(labels).collect());
             }
         };
         None
