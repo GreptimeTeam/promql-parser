@@ -23,7 +23,7 @@ const STRING_SYMBOLS: &str = r#"'"`"#;
 pub type LexemeType = DefaultLexeme<TokenId>;
 
 pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenId>, String> {
-    let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).into_iter().collect();
+    let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).collect();
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         Some(Ok(_)) => {
@@ -70,7 +70,7 @@ struct Context {
 impl Context {
     fn new(input: &str) -> Context {
         Self {
-            chars: input.chars().into_iter().collect(),
+            chars: input.chars().collect(),
             idx: 0,
             start: 0,
             pos: 0,

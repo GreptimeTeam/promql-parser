@@ -125,7 +125,7 @@ impl BinModifier {
     pub fn intersect_labels(&self) -> Option<Vec<&String>> {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return Some(matching.labels().intersection(labels).into_iter().collect());
+                return Some(matching.labels().intersection(labels).collect());
             }
         };
         None
@@ -542,8 +542,8 @@ impl Expr {
 
     pub fn new_unary_expr(expr: Expr) -> Result<Self, String> {
         match expr {
-            Expr::StringLiteral(_) => Err("unary expression only allowed on expressions of type scalar or instant vector, got: string".into()),
-            Expr::MatrixSelector(_) => Err("unary expression only allowed on expressions of type scalar or instant vector, got: range vector".into()),
+            Expr::StringLiteral(_) => Err("unary expression only allowed on expressions of type scalar or vector, got: string".into()),
+            Expr::MatrixSelector(_) => Err("unary expression only allowed on expressions of type scalar or vector, got: matrix".into()),
             _ => Ok(-expr),
         }
     }
@@ -615,7 +615,7 @@ impl Expr {
                 Some(_) => already_set_err,
             },
             _ => {
-                Err("@ modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+                Err("@ modifier must be preceded by an vector selector or matrix selector or a subquery".into())
             }
         }
     }
@@ -646,7 +646,7 @@ impl Expr {
                 Some(_) => already_set_err,
             },
             _ => {
-                Err("offset modifier must be preceded by an instant vector selector or range vector selector or a subquery".into())
+                Err("offset modifier must be preceded by an vector selector or matrix selector or a subquery".into())
             }
         }
     }
@@ -908,7 +908,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     if (ex.lhs.value_type() != ValueType::Vector || ex.rhs.value_type() != ValueType::Vector)
         && ex.is_matching_labels_not_empty()
     {
-        return Err("vector matching only allowed between instant vectors".into());
+        return Err("vector matching only allowed between vectors".into());
     }
 
     Ok(Expr::Binary(ex))
@@ -1013,7 +1013,7 @@ fn check_ast_for_unary(ex: UnaryExpr) -> Result<Expr, String> {
     let value_type = ex.expr.value_type();
     if value_type != ValueType::Scalar && value_type != ValueType::Vector {
         return Err(format!(
-            "unary expression only allowed on expressions of type scalar or instant vector, got {value_type}"
+            "unary expression only allowed on expressions of type scalar or vector, got {value_type}"
         ));
     }
 
@@ -1024,7 +1024,7 @@ fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
     let value_type = ex.expr.value_type();
     if value_type != ValueType::Vector {
         return Err(format!(
-            "subquery is only allowed on instant vector, got {value_type} instead"
+            "subquery is only allowed on vector, got {value_type} instead"
         ));
     }
 

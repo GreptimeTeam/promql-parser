@@ -27,8 +27,8 @@ impl Display for ValueType {
         match *self {
             ValueType::Scalar => write!(f, "scalar"),
             ValueType::String => write!(f, "string"),
-            ValueType::Vector => write!(f, "instant vector"),
-            ValueType::Matrix => write!(f, "range vector"),
+            ValueType::Vector => write!(f, "vector"),
+            ValueType::Matrix => write!(f, "matrix"),
         }
     }
 }
@@ -45,7 +45,7 @@ mod tests {
     fn test_value_type() {
         assert_eq!(ValueType::Scalar.to_string(), "scalar");
         assert_eq!(ValueType::String.to_string(), "string");
-        assert_eq!(ValueType::Vector.to_string(), "instant vector");
-        assert_eq!(ValueType::Matrix.to_string(), "range vector");
+        assert_eq!(ValueType::Vector.to_string(), "vector");
+        assert_eq!(ValueType::Matrix.to_string(), "matrix");
     }
 }
