@@ -140,7 +140,6 @@ mod tests {
 
     #[test]
     fn test_check_for_namespace_basic_query() {
-        // Check that for a given query, all metrics are queried by a particular namespace
         let sample_expression = "pg_stat_activity_count{namespace=\"sample\"}";
         let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
         let mut visitor = NamespaceVisitor {
@@ -152,7 +151,6 @@ mod tests {
 
     #[test]
     fn test_check_for_namespace_label_present() {
-        // Check that for a given query, all metrics are queried by a particular namespace
         let sample_expression = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
         let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
         let mut visitor = NamespaceVisitor {
@@ -164,7 +162,6 @@ mod tests {
 
     #[test]
     fn test_check_for_namespace_label_wrong_namespace() {
-        // Check that for a given query, all metrics are queried by a particular namespace
         let sample_expression = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
         let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
         let mut visitor = NamespaceVisitor {
@@ -176,7 +173,6 @@ mod tests {
 
     #[test]
     fn test_check_for_namespace_label_missing_namespace() {
-        // Check that for a given query, all metrics are queried by a particular namespace
         let sample_expression =
             "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1h])))";
         let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
