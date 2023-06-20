@@ -96,13 +96,13 @@ mod tests {
     }
 
     fn vector_selector_includes_namespace(
-        namespace: &String,
+        namespace: &str,
         vector_selector: &VectorSelector,
     ) -> bool {
         let mut includes_namespace = false;
         for filters in &vector_selector.matchers.matchers {
             if filters.name == "namespace"
-                && filters.value == *namespace
+                && filters.value.eq(namespace)
                 && filters.op == MatchOp::Equal
             {
                 includes_namespace = true;
@@ -118,14 +118,14 @@ mod tests {
             match expr {
                 Expr::VectorSelector(vector_selector) => {
                     let includes_namespace =
-                        vector_selector_includes_namespace(&self.namespace, vector_selector);
+                        vector_selector_includes_namespace(self.namespace.as_str(), vector_selector);
                     if !includes_namespace {
                         return Ok(false);
                     }
                 }
                 Expr::MatrixSelector(matrix_selector) => {
                     let includes_namespace = vector_selector_includes_namespace(
-                        &self.namespace,
+                        self.namespace.as_str(),
                         &matrix_selector.vector_selector,
                     );
                     if !includes_namespace {
