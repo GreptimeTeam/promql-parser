@@ -101,11 +101,12 @@ mod tests {
     ) -> bool {
         let mut includes_namespace = false;
         for filters in &vector_selector.matchers.matchers {
-            if filters.name == "namespace"
+            if filters.name.eq("namespace")
                 && filters.value.eq(namespace)
                 && filters.op == MatchOp::Equal
             {
                 includes_namespace = true;
+                break;
             }
         }
         includes_namespace
@@ -117,21 +118,20 @@ mod tests {
         fn pre_visit(&mut self, expr: &Expr) -> Result<bool, Self::Error> {
             match expr {
                 Expr::VectorSelector(vector_selector) => {
-                    let includes_namespace =
-                        vector_selector_includes_namespace(self.namespace.as_str(), vector_selector);
-                    if !includes_namespace {
-                        return Ok(false);
-                    }
+                    let included = vector_selector_includes_namespace(
+                        self.namespace.as_str(),
+                        vector_selector,
+                    );
+                    return Ok(included);
                 }
                 Expr::MatrixSelector(matrix_selector) => {
-                    let includes_namespace = vector_selector_includes_namespace(
+                    let included = vector_selector_includes_namespace(
                         self.namespace.as_str(),
                         &matrix_selector.vector_selector,
                     );
-                    if !includes_namespace {
-                        return Ok(false);
-                    }
+                    return Ok(included);
                 }
+                Expr::NumberLiteral(_) | Expr::StringLiteral(_) => return Ok(false),
                 _ => (),
             }
             Ok(true)
@@ -140,46 +140,57 @@ mod tests {
 
     #[test]
     fn test_check_for_namespace_basic_query() {
-        let sample_expression = "pg_stat_activity_count{namespace=\"sample\"}";
-        let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
+        let expr = "pg_stat_activity_count{namespace=\"sample\"}";
+        let ast = parser::parse(expr).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
-        let all_metrics_specify_namespace = walk_expr(&mut visitor, &abstract_syntax_tree);
-        assert!(all_metrics_specify_namespace.unwrap());
+        assert!(walk_expr(&mut visitor, &ast).unwrap());
     }
 
     #[test]
     fn test_check_for_namespace_label_present() {
-        let sample_expression = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
-        let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
+        let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
+        let ast = parser::parse(expr).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
-        let all_metrics_specify_namespace = walk_expr(&mut visitor, &abstract_syntax_tree);
-        assert!(all_metrics_specify_namespace.unwrap());
+        assert!(walk_expr(&mut visitor, &ast).unwrap());
     }
 
     #[test]
     fn test_check_for_namespace_label_wrong_namespace() {
-        let sample_expression = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
-        let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
+        let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
+        let ast = parser::parse(expr).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "foobar".to_string(),
         };
-        let all_metrics_specify_namespace = walk_expr(&mut visitor, &abstract_syntax_tree);
-        assert!(!all_metrics_specify_namespace.unwrap());
+        assert!(!walk_expr(&mut visitor, &ast).unwrap());
     }
 
     #[test]
     fn test_check_for_namespace_label_missing_namespace() {
-        let sample_expression =
-            "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1h])))";
-        let abstract_syntax_tree = parser::parse(sample_expression).unwrap();
+        let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1h])))";
+        let ast = parser::parse(expr).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
-        let all_metrics_specify_namespace = walk_expr(&mut visitor, &abstract_syntax_tree);
-        assert!(!all_metrics_specify_namespace.unwrap());
+        assert!(!walk_expr(&mut visitor, &ast).unwrap());
+    }
+
+    #[test]
+    fn test_literal_expr() {
+        let mut visitor = NamespaceVisitor {
+            namespace: "sample".to_string(),
+        };
+
+        let ast = parser::parse("1").unwrap();
+        assert!(!walk_expr(&mut visitor, &ast).unwrap());
+
+        let ast = parser::parse("1 + 1").unwrap();
+        assert!(!walk_expr(&mut visitor, &ast).unwrap());
+
+        let ast = parser::parse(r#""1""#).unwrap();
+        assert!(!walk_expr(&mut visitor, &ast).unwrap());
     }
 }
