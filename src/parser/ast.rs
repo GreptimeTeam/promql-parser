@@ -17,6 +17,7 @@ use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
 use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
+use std::fmt;
 use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -789,6 +790,34 @@ impl Neg for Expr {
             _ => Expr::Unary(UnaryExpr {
                 expr: Box::new(self),
             }),
+        }
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expr::Aggregate(agg) => write!(f, "{agg:?}"),
+            Expr::Unary(unary) => write!(f, "{unary:?}"),
+            Expr::Binary(binary) => write!(f, "{binary:?}"),
+            Expr::Paren(paren) => write!(f, "{paren:?}"),
+            Expr::Subquery(subquery) => write!(f, "{subquery:?}"),
+            Expr::NumberLiteral(NumberLiteral { val }) => {
+                if *val == f64::INFINITY {
+                    write!(f, "Inf")
+                } else if *val == f64::NEG_INFINITY {
+                    write!(f, "-Inf")
+                } else if *val == f64::NAN {
+                    write!(f, "NaN")
+                }else {
+                    write!(f, "{val}")
+                }
+            },
+            Expr::StringLiteral(StringLiteral { val }) => write!(f, "{val}"),
+            Expr::VectorSelector(vec_selector) => write!(f, "{vec_selector:?}"),
+            Expr::MatrixSelector(mat_selector) => write!(f, "{mat_selector:?}"),
+            Expr::Call(call) => write!(f, "{call:?}"),
+            Expr::Extension(ext) => write!(f, "{ext:?}"),
         }
     }
 }

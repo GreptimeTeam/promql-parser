@@ -2157,4 +2157,15 @@ mod tests {
         ];
         assert_cases(fail_cases);
     }
+
+
+    #[test]
+    fn test_expr_print() {
+        assert_eq!("1", Expr::from(1.0).to_string());
+        assert_eq!("1.1", Expr::from(1.1).to_string());
+        assert_eq!("0.1", Expr::from(0.1).to_string());
+        assert_eq!("0.005", Expr::from(5e-3).to_string());
+        assert_eq!("0.00005", Expr::from(5e-5).to_string());
+
+    }
 }
