@@ -2141,8 +2141,6 @@ mod tests {
                 "rate(avg)",
                 "expected type matrix in call to function 'rate', got vector"
             ),
-
-
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
 
@@ -2158,14 +2156,234 @@ mod tests {
         assert_cases(fail_cases);
     }
 
-
     #[test]
     fn test_expr_print() {
-        assert_eq!("1", Expr::from(1.0).to_string());
-        assert_eq!("1.1", Expr::from(1.1).to_string());
-        assert_eq!("0.1", Expr::from(0.1).to_string());
-        assert_eq!("0.005", Expr::from(5e-3).to_string());
-        assert_eq!("0.00005", Expr::from(5e-5).to_string());
+        let cases = vec![
+            ("1", "1"),
+            ("Inf", "Inf"),
+            ("inf", "Inf"),
+            ("+Inf", "Inf"),
+            ("-Inf", "-Inf"),
+            (".5", "0.5"),
+            ("5.", "5"),
+            ("123.4567", "123.4567"),
+            ("5e-3", "0.005"),
+            ("5e3", "5000"),
+            ("0xc", "12"),
+            ("0755", "493"),
+            ("08", "8"),
+            ("+5.5e-3", "0.0055"),
+            ("-0755", "-493"),
+            ("NaN", "NaN"),
+            ("NAN", "NaN"),
+            (
+                "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+                "Inf"
+            ),
+            (
+                "\"double-quoted string \\\" with escaped quote\"",
+                "double-quoted string \\\" with escaped quote",
+            ),
+            (
+                r#""double-quoted string \" with escaped quote""#,
+                r#"double-quoted string \" with escaped quote"#,
+            ),
+            (
+                r#"'single-quoted string \' with escaped quote'"#,
+                r#"single-quoted string \' with escaped quote"#,
+            ),
+            (
+                "`backtick-quoted string`",
+                "backtick-quoted string",
+            ),
+            (
+                r#""\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺""#,
+                r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            ),
+            (
+                r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
+                r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            ),
+            (
+                r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
+                r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            ),
+            (
+                "1 + 1",
+                "1 + 1"
+            ),
+            (
+                "1 - 1",
+                "1 - 1"
+            ),
+            (
+                "1 * 1",
+                "1 * 1"
+            ),
+            (
+                "1 / 1",
+                "1 / 1"
+            ),
+            (
+                "1 % 1",
+                "1 % 1"
+            ),
+            (
+                "1 == bool 1",
+                "1 == bool 1",
+            ),
+            (
+                "1 != bool 1",
+                "1 != bool 1",
+            ),
+            (
+                "1 > bool 1",
+                "1 > bool 1",
+            ),
+            (
+                "1 >= bool 1",
+                "1 >= bool 1",
+            ),
+            (
+                "1 < bool 1",
+                "1 < bool 1",
+            ),
+            (
+                "1 <= bool 1",
+                "1 <= bool 1",
+            ),
+            (
+                "- 1 ^ 2",
+                "- 1 ^ 2",
+            ),
+            (
+                "-1*2",
+                "-1 * 2",
+            ),
+            (
+                "-1+2",
+                "-1 + 2",
+            ),
+            (
+                "-1^-2",
+                "- 1 ^ -2",
+            ),
+            (
+                "+1 + -2 * 1",
+                "1 + -2 * 1",
+            ),
+            (
+                "1 + 2/(3*1)",
+                "1 + 2 / (3 * 1)",
+            ),
+            (
+                "1 < bool 2 - 1 * 2",
+                "1 < bool 2 - 1 * 2"
+            ),
+            (
+                "foo * bar",
+                "foo * bar",
+            ),
+            (
+                "foo * sum",
+                "foo * sum",
+            ),
+            (
+                "foo == 1",
+                "foo == 1",
+            ),
+            (
+                "foo == bool 1",
+                "foo == bool 1",
+            ),
+            (
+                "2.5 / bar",
+                "2.5 / bar",
+            ),
+            (
+                "foo and bar",
+                "foo and bar",
+            ),
+            (
+                "foo or bar",
+                "foo or bar",
+            ),
+            (
+                "foo unless bar",
+                "foo unless bar",
+            ),
+            (
+                // Test and/or precedence and reassigning of operands.
+                "foo + bar or bla and blub",
+                "foo + bar or bla and blub",
+            ),
+            (
+                // Test and/or/unless precedence.
+                "foo and bar unless baz or qux",
+                "foo and bar unless baz or qux",
+            ),
+            // (
+            //     // Test precedence and reassigning of operands.
+            //     "bar + on(foo) bla / on(baz, buz) group_right(test) blub",
+            //     "bar + on(foo) bla / on(baz, buz) group_right(test) blub",
+            // ),
+            // (
+            //     "foo * on(test,blub) bar",
+            //     "foo * on(test,blub) bar",
+            // ),
+            // (
+            //     "foo * on(test,blub) group_left bar",
+            //     "foo * on(test,blub) group_left bar",
+            // ),
+            // (
+            //     "foo and on(test,blub) bar",
+            //     "foo and on(test,blub) bar",
+            // ),
+            ("foo and on() bar", "foo and on() bar"),
+            // (
+            //     "foo and ignoring(test,blub) bar", 
+            //     "foo and ignoring(test,blub) bar"
+            // ),
+            ("foo and ignoring() bar", "foo and ignoring() bar"),
+            ("foo unless on(bar) baz", "foo unless on(bar) baz"),
+            // (
+            //     "foo / on(test,blub) group_left(bar) bar",
+            //     "foo / on(test,blub) group_left(bar) bar",
+            // ),
+            // (
+            //     "foo / ignoring(test,blub) group_left(blub) bar",
+            //     "foo / ignoring(test,blub) group_left(blub) bar",
+            // ),
+            // (
+            //     "foo / ignoring(test,blub) group_left(bar) bar",
+            //     "foo / ignoring(test,blub) group_left(bar) bar",
+            // ),
+            // (
+            //     "foo - on(test,blub) group_right(bar,foo) bar",
+            //     "foo - on(test,blub) group_right(bar,foo) bar",
+            // ),
+            // (
+            //     "foo - ignoring(test,blub) group_right(bar,foo) bar",
+            //     "foo - ignoring(test,blub) group_right(bar,foo) bar",
+            // ),
+            (
+                "a + sum",
+                "a + sum",
+            ),
+            // cases from https://prometheus.io/docs/prometheus/latest/querying/operators
+            // (
+            //     r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
+            //     r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
+            // ),
+            (
+                r#"method_code:http_errors:rate5m / ignoring(code) group_left method:http_requests:rate5m"#,
+                r#"method_code:http_errors:rate5m / ignoring(code) group_left() method:http_requests:rate5m"#,
+            ),
+        ];
 
+        for (input, expected) in cases {
+            let expr = crate::parser::parse(&String::from(input)).unwrap();
+            assert_eq!(expected, expr.to_string())
+        }
     }
 }

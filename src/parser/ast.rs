@@ -92,6 +92,59 @@ pub struct BinModifier {
     pub return_bool: bool,
 }
 
+impl fmt::Display for BinModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(matching) = &self.matching {
+            match matching {
+                LabelModifier::Include(labels) => write!(
+                    f,
+                    " on({})",
+                    labels
+                        .iter()
+                        .map(|e| format!("{e}"))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?,
+                LabelModifier::Exclude(labels) => write!(
+                    f,
+                    " ignoring({})",
+                    labels
+                        .iter()
+                        .map(|e| format!("{e}"))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?,
+            }
+        }
+
+        match &self.card {
+            VectorMatchCardinality::ManyToOne(labels) => write!(
+                f,
+                " group_left({})",
+                labels
+                    .iter()
+                    .map(|e| format!("{e}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )?,
+            VectorMatchCardinality::OneToMany(labels) => write!(
+                f,
+                " group_right({})",
+                labels
+                    .iter()
+                    .map(|e| format!("{e}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )?,
+            _ => {}
+        }
+
+        if self.return_bool {
+            write!(f, " bool")?;
+        }
+        write!(f, " ")
+    }
+}
 impl Default for BinModifier {
     fn default() -> Self {
         Self {
@@ -798,23 +851,44 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Aggregate(agg) => write!(f, "{agg:?}"),
-            Expr::Unary(unary) => write!(f, "{unary:?}"),
-            Expr::Binary(binary) => write!(f, "{binary:?}"),
-            Expr::Paren(paren) => write!(f, "{paren:?}"),
+            Expr::Unary(UnaryExpr { expr }) => write!(f, "- {expr}"),
+            Expr::Binary(binary) => {
+                let lhs = binary.lhs.as_ref();
+                let rhs = binary.rhs.as_ref();
+                let op = token_display(binary.op.id());
+                if let Some(modifier) = &binary.modifier {
+                    write!(f, "{lhs} {op}{modifier}{rhs}")
+                } else {
+                    write!(f, "{lhs} {op} {rhs}")
+                }
+            }
+            Expr::Paren(ParenExpr { expr }) => write!(f, "({expr})"),
             Expr::Subquery(subquery) => write!(f, "{subquery:?}"),
             Expr::NumberLiteral(NumberLiteral { val }) => {
                 if *val == f64::INFINITY {
                     write!(f, "Inf")
                 } else if *val == f64::NEG_INFINITY {
                     write!(f, "-Inf")
-                } else if *val == f64::NAN {
+                } else if f64::is_nan(*val) {
                     write!(f, "NaN")
-                }else {
+                } else {
                     write!(f, "{val}")
                 }
-            },
+            }
             Expr::StringLiteral(StringLiteral { val }) => write!(f, "{val}"),
-            Expr::VectorSelector(vec_selector) => write!(f, "{vec_selector:?}"),
+            Expr::VectorSelector(vec_selector) => {
+                if let Some(name) = &vec_selector.name {
+                    write!(f, "{name}")?;
+                }
+                if let Some(offset) = &vec_selector.offset {
+                    write!(f, "{offset:?}")?;
+                }
+                if let Some(at) = &vec_selector.at {
+                    write!(f, "{at:?}")
+                } else {
+                    Ok(())
+                }
+            }
             Expr::MatrixSelector(mat_selector) => write!(f, "{mat_selector:?}"),
             Expr::Call(call) => write!(f, "{call:?}"),
             Expr::Extension(ext) => write!(f, "{ext:?}"),
