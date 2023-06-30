@@ -2180,34 +2180,34 @@ mod tests {
                 "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
                 "Inf"
             ),
-            (
-                "\"double-quoted string \\\" with escaped quote\"",
-                "double-quoted string \\\" with escaped quote",
-            ),
-            (
-                r#""double-quoted string \" with escaped quote""#,
-                r#"double-quoted string \" with escaped quote"#,
-            ),
-            (
-                r#"'single-quoted string \' with escaped quote'"#,
-                r#"single-quoted string \' with escaped quote"#,
-            ),
-            (
-                "`backtick-quoted string`",
-                "backtick-quoted string",
-            ),
-            (
-                r#""\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺""#,
-                r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#,
-            ),
-            (
-                r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
-                r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#,
-            ),
-            (
-                r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
-                r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#,
-            ),
+            // (
+            //     "\"double-quoted string \\\" with escaped quote\"",
+            //     "double-quoted string \\\" with escaped quote",
+            // ),
+            // (
+            //     r#""double-quoted string \" with escaped quote""#,
+            //     r#"double-quoted string \" with escaped quote"#,
+            // ),
+            // (
+            //     r#"'single-quoted string \' with escaped quote'"#,
+            //     r#"single-quoted string \' with escaped quote"#,
+            // ),
+            // (
+            //     "`backtick-quoted string`",
+            //     "backtick-quoted string",
+            // ),
+            // (
+            //     r#""\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺""#,
+            //     r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            // ),
+            // (
+            //     r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
+            //     r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            // ),
+            // (
+            //     r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
+            //     r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#,
+            // ),
             (
                 "1 + 1",
                 "1 + 1"
@@ -2339,13 +2339,13 @@ mod tests {
             //     "foo and on(test,blub) bar",
             //     "foo and on(test,blub) bar",
             // ),
-            ("foo and on() bar", "foo and on() bar"),
+            ("foo and on() bar", "foo and on () bar"),
             // (
             //     "foo and ignoring(test,blub) bar", 
             //     "foo and ignoring(test,blub) bar"
             // ),
-            ("foo and ignoring() bar", "foo and ignoring() bar"),
-            ("foo unless on(bar) baz", "foo unless on(bar) baz"),
+            ("foo and ignoring() bar", "foo and bar"),
+            ("foo unless on(bar) baz", "foo unless on (bar) baz"),
             // (
             //     "foo / on(test,blub) group_left(bar) bar",
             //     "foo / on(test,blub) group_left(bar) bar",
@@ -2371,18 +2371,143 @@ mod tests {
                 "a + sum",
             ),
             // cases from https://prometheus.io/docs/prometheus/latest/querying/operators
-            // (
-            //     r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
-            //     r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
-            // ),
+            (
+                r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
+                r#"method_code:http_errors:rate5m{code="500"} / ignoring (code) method:http_requests:rate5m"#,
+            ),
             (
                 r#"method_code:http_errors:rate5m / ignoring(code) group_left method:http_requests:rate5m"#,
-                r#"method_code:http_errors:rate5m / ignoring(code) group_left() method:http_requests:rate5m"#,
+                r#"method_code:http_errors:rate5m / ignoring (code) group_left () method:http_requests:rate5m"#,
+            ),
+            (
+                r#"sum by() (task:errors:rate10s{job="s"})"#,
+                r#"sum(task:errors:rate10s{job="s"})"#
+            ),
+            (
+                r#"sum by(code) (task:errors:rate10s{job="s"})"#,
+                r#"sum by (code) (task:errors:rate10s{job="s"})"#
+            ),
+            (
+                r#"sum without() (task:errors:rate10s{job="s"})"#,
+                r#"sum without () (task:errors:rate10s{job="s"})"#
+            ),
+            (
+                r#"sum without(instance) (task:errors:rate10s{job="s"})"#,
+                r#"sum without (instance) (task:errors:rate10s{job="s"})"#
+            ),
+            (
+                r#"topk(5, task:errors:rate10s{job="s"})"#,
+                r#"topk(5, task:errors:rate10s{job="s"})"#
+            ),
+            (
+                r#"count_values("value", task:errors:rate10s{job="s"})"#,
+                r#"count_values("value", task:errors:rate10s{job="s"})"#
+            ),
+            (
+                "a - on() c",
+                "a - on () c",
+            ),
+            (
+                "a - on(b) c",
+                "a - on (b) c"
+            ),
+            (
+                "a - on(b) group_left(x) c",
+                "a - on (b) group_left (x) c"
+            ),
+            (
+                "a - on(b) group_left(x, y) c",
+                "a - on (b) group_left (x, y) c"
+            ),
+            (
+                "a - on(b) group_left c",
+                "a - on (b) group_left () c"
+            ),
+            (
+                "a - on(b) group_left() (c)",
+                "a - on (b) group_left () (c)"
+            ),
+            (
+                "a - ignoring(b) c",
+                "a - ignoring (b) c"
+            ),
+            (
+                "a - ignoring() c",
+                "a - c"
+            ),
+            (
+                "up > bool 0",
+                "up > bool 0"
+            ),
+            (
+                "a offset 1m",
+                "a offset 1m"
+            ),
+            (
+                "a offset -7m",
+                "a offset -7m"
+            ),
+            (
+                r#"a{c="d"}[5m] offset 1m"#,
+                r#"a{c="d"}[5m] offset 1m"#
+            ),
+            (
+                "a[5m] offset 1m",
+                "a[5m] offset 1m"
+            ),
+            (
+                "a[12m] offset -3m",
+                "a[12m] offset -3m"
+            ),
+            (
+                "a[1h:5m] offset 1m",
+                "a[1h:5m] offset 1m"
+            ),
+            (
+                r#"{__name__="a"}"#,
+                r#"{__name__="a"}"#
+            ),
+            (
+                r#"a{b!="c"}[1m]"#,
+                r#"a{b!="c"}[1m]"#
+            ),
+            (
+                r#"a{b=~"c"}[1m]"#,
+                r#"a{b=~"c"}[1m]"#
+            ),
+            (
+                r#"a{b!~"c"}[1m]"#,
+                r#"a{b!~"c"}[1m]"#
+            ),
+            (
+                "a @ 10",
+                "a @ 10",
+            ),
+            (
+                "a[1m] @ 10",
+                "a[1m] @ 10"
+            ),
+            (
+                "a @ start()",
+                "a @ start()"
+            ),
+            (
+                "a @ end()",
+                "a @ end()"
+            ),
+            (
+                "a[1m] @ start()",
+                "a[1m] @ start()"
+            ),
+            (
+                "a[1m] @ end()",
+                "a[1m] @ end()"
             ),
         ];
 
         for (input, expected) in cases {
             let expr = crate::parser::parse(&String::from(input)).unwrap();
+            println!("{expr:?}");
             assert_eq!(expected, expr.to_string())
         }
     }

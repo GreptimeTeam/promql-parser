@@ -98,29 +98,30 @@ impl fmt::Display for BinModifier {
             match matching {
                 LabelModifier::Include(labels) => write!(
                     f,
-                    " on({})",
+                    " on ({})",
                     labels
                         .iter()
                         .map(|e| format!("{e}"))
                         .collect::<Vec<String>>()
                         .join(", ")
                 )?,
-                LabelModifier::Exclude(labels) => write!(
-                    f,
-                    " ignoring({})",
-                    labels
+                LabelModifier::Exclude(labels) => {
+                    let labels = labels
                         .iter()
                         .map(|e| format!("{e}"))
                         .collect::<Vec<String>>()
-                        .join(", ")
-                )?,
+                        .join(", ");
+                    if !labels.is_empty() {
+                        write!(f, " ignoring ({labels})",)?;
+                    }
+                }
             }
         }
 
         match &self.card {
             VectorMatchCardinality::ManyToOne(labels) => write!(
                 f,
-                " group_left({})",
+                " group_left ({})",
                 labels
                     .iter()
                     .map(|e| format!("{e}"))
@@ -129,7 +130,7 @@ impl fmt::Display for BinModifier {
             )?,
             VectorMatchCardinality::OneToMany(labels) => write!(
                 f,
-                " group_right({})",
+                " group_right ({})",
                 labels
                     .iter()
                     .map(|e| format!("{e}"))
@@ -200,6 +201,14 @@ pub enum Offset {
     Neg(Duration),
 }
 
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Offset::Pos(dur) => write!(f, "{dur:?}"),
+            Offset::Neg(dur) => write!(f, "-{dur:?}"),
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AtModifier {
     Start,
@@ -850,7 +859,40 @@ impl Neg for Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Aggregate(agg) => write!(f, "{agg:?}"),
+            Expr::Aggregate(agg) => {
+                let op = token_display(agg.op.id());
+                write!(f, "{op}")?;
+                if let Some(modifier) = &agg.modifier {
+                    match modifier {
+                        LabelModifier::Include(labels) => {
+                            let labels = labels
+                                .iter()
+                                .map(|e| format!("{e}"))
+                                .collect::<Vec<String>>()
+                                .join(", ");
+                            if !labels.is_empty() {
+                                write!(f, " by ({labels}) ",)?;
+                            }
+                        }
+                        LabelModifier::Exclude(labels) => write!(
+                            f,
+                            " without ({}) ",
+                            labels
+                                .iter()
+                                .map(|e| format!("{e}"))
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                        )?,
+                    }
+                }
+                write!(f, "(")?;
+                if let Some(param) = &agg.param {
+                    write!(f, "{param}, ")?;
+                }
+                let expr = agg.expr.as_ref();
+                write!(f, "{expr})")?;
+                Ok(())
+            }
             Expr::Unary(UnaryExpr { expr }) => write!(f, "- {expr}"),
             Expr::Binary(binary) => {
                 let lhs = binary.lhs.as_ref();
@@ -875,13 +917,17 @@ impl fmt::Display for Expr {
                     write!(f, "{val}")
                 }
             }
-            Expr::StringLiteral(StringLiteral { val }) => write!(f, "{val}"),
+            Expr::StringLiteral(StringLiteral { val }) => write!(f, "\"{val}\""),
             Expr::VectorSelector(vec_selector) => {
                 if let Some(name) = &vec_selector.name {
                     write!(f, "{name}")?;
                 }
+                let matchers = &vec_selector.matchers.to_string();
+                if !matchers.is_empty() {
+                    write!(f, "{{{matchers}}}")?;
+                }
                 if let Some(offset) = &vec_selector.offset {
-                    write!(f, "{offset:?}")?;
+                    write!(f, " offset {offset}")?;
                 }
                 if let Some(at) = &vec_selector.at {
                     write!(f, "{at:?}")

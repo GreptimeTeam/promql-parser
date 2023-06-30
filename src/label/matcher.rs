@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
@@ -24,6 +25,17 @@ pub enum MatchOp {
     NotEqual,
     Re(Regex),
     NotRe(Regex),
+}
+
+impl fmt::Display for MatchOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MatchOp::Equal => write!(f, "="),
+            MatchOp::NotEqual => write!(f, "!="),
+            MatchOp::Re(reg) => write!(f, "=~{reg}"),
+            MatchOp::NotRe(reg) => write!(f, "!~{reg}"),
+        }
+    }
 }
 
 impl PartialEq for MatchOp {
@@ -140,6 +152,19 @@ impl Matchers {
             }
         }
         None
+    }
+}
+
+impl fmt::Display for Matchers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let matchers_str = self
+            .matchers
+            .iter()
+            .filter(|m| !m.name.eq_ignore_ascii_case(METRIC_NAME))
+            .map(|Matcher { op, name, value }| format!("{name}{op}\"{value}\""))
+            .collect::<Vec<String>>()
+            .join(", ");
+        write!(f, "{matchers_str}")
     }
 }
 
