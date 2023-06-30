@@ -101,14 +101,14 @@ impl fmt::Display for BinModifier {
                     " on ({})",
                     labels
                         .iter()
-                        .map(|e| format!("{e}"))
+                        .map(|e| e.to_string())
                         .collect::<Vec<String>>()
                         .join(", ")
                 )?,
                 LabelModifier::Exclude(labels) => {
                     let labels = labels
                         .iter()
-                        .map(|e| format!("{e}"))
+                        .map(|e| e.to_string())
                         .collect::<Vec<String>>()
                         .join(", ");
                     if !labels.is_empty() {
@@ -124,7 +124,7 @@ impl fmt::Display for BinModifier {
                 " group_left ({})",
                 labels
                     .iter()
-                    .map(|e| format!("{e}"))
+                    .map(|e| e.to_string())
                     .collect::<Vec<String>>()
                     .join(", ")
             )?,
@@ -133,7 +133,7 @@ impl fmt::Display for BinModifier {
                 " group_right ({})",
                 labels
                     .iter()
-                    .map(|e| format!("{e}"))
+                    .map(|e| e.to_string())
                     .collect::<Vec<String>>()
                     .join(", ")
             )?,
@@ -867,7 +867,7 @@ impl fmt::Display for Expr {
                         LabelModifier::Include(labels) => {
                             let labels = labels
                                 .iter()
-                                .map(|e| format!("{e}"))
+                                .map(|e| e.to_string())
                                 .collect::<Vec<String>>()
                                 .join(", ");
                             if !labels.is_empty() {
@@ -879,7 +879,7 @@ impl fmt::Display for Expr {
                             " without ({}) ",
                             labels
                                 .iter()
-                                .map(|e| format!("{e}"))
+                                .map(|e| e.to_string())
                                 .collect::<Vec<String>>()
                                 .join(", ")
                         )?,
