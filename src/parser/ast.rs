@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::label::{Labels, Matcher, Matchers, METRIC_NAME};
+use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
@@ -369,12 +369,11 @@ pub struct VectorSelector {
 
 impl From<String> for VectorSelector {
     fn from(name: String) -> Self {
-        let matcher = Matcher::new_eq_metric_matcher(name.clone());
         VectorSelector {
             name: Some(name),
             offset: None,
             at: None,
-            matchers: Matchers::one(matcher),
+            matchers: Matchers::empty(),
         }
     }
 }
@@ -386,15 +385,14 @@ impl From<String> for VectorSelector {
 /// Basic usage:
 ///
 /// ``` rust
-/// use promql_parser::parser::{Expr, VectorSelector};
-/// use promql_parser::label::{MatchOp, Matcher, Matchers};
+/// use promql_parser::label::Matchers;
+/// use promql_parser::parser::VectorSelector;
 ///
-/// let matcher = Matcher::new_eq_metric_matcher(String::from("foo"));
 /// let vs = VectorSelector {
 ///     name: Some(String::from("foo")),
 ///     offset: None,
 ///     at: None,
-///     matchers: Matchers::one(matcher),
+///     matchers: Matchers::empty(),
 /// };
 ///
 /// assert_eq!(VectorSelector::from("foo"), vs);
@@ -768,12 +766,11 @@ impl From<f64> for Expr {
 /// Basic usage:
 ///
 /// ``` rust
+/// use promql_parser::label::Matchers;
 /// use promql_parser::parser::{Expr, VectorSelector};
-/// use promql_parser::label::{MatchOp, Matcher, Matchers};
 ///
 /// let name = String::from("foo");
-/// let matcher = Matcher::new_eq_metric_matcher(name.clone());
-/// let vs = Expr::new_vector_selector(Some(name), Matchers::one(matcher));
+/// let vs = Expr::new_vector_selector(Some(name), Matchers::empty());
 ///
 /// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
 /// ```
@@ -1029,24 +1026,21 @@ fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
 }
 
 fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
-    // A Vector selector must contain at least one non-empty matcher to prevent
-    // implicit selection of all metrics (e.g. by a typo).
-    if ex.matchers.is_empty_matchers() {
-        return Err("vector selector must contain at least one non-empty matcher".into());
-    }
-
-    if ex.name.is_some() {
-        let name_matchers = ex.matchers.find_matchers(METRIC_NAME);
-        if name_matchers.len() > 0 {
-            return Err(format!(
+    match ex.name {
+        Some(ref name) => match ex.matchers.find_matcher(METRIC_NAME) {
+            Some(val) => Err(format!(
                 "metric name must not be set twice: '{}' or '{}'",
-                ex.name.unwrap(),
-                name_matchers[0]
-            ));
+                name, val
+            )),
+            None => Ok(Expr::VectorSelector(ex)),
+        },
+        None if ex.matchers.is_empty_matchers() => {
+            // When name is None, a vector selector must contain at least one non-empty matcher
+            // to prevent implicit selection of all metrics (e.g. by a typo).
+            Err("vector selector must contain at least one non-empty matcher".into())
         }
+        _ => Ok(Expr::VectorSelector(ex)),
     }
-
-    Ok(Expr::VectorSelector(ex))
 }
 
 #[cfg(test)]

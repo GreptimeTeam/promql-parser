@@ -389,19 +389,16 @@ unary_expr -> Result<Expr, String>:
 vector_selector -> Result<Expr, String>:
                 metric_identifier label_matchers
                 {
-                        let name = $1?.val;
-                        let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                        let matchers = $2?.append(matcher);
-                        Expr::new_vector_selector(Some(name), matchers)
+                        Expr::new_vector_selector(Some($1?.val), $2?)
                 }
         |       metric_identifier
                 {
-                        let name = $1?.val;
-                        let matcher = Matcher::new_eq_metric_matcher(name.clone());
-                        let matchers = Matchers::empty().append(matcher);
-                        Expr::new_vector_selector(Some(name), matchers)
+                        Expr::new_vector_selector(Some($1?.val), Matchers::empty())
                 }
-        |       label_matchers { Expr::new_vector_selector(None, $1?) }
+        |       label_matchers
+                {
+                        Expr::new_vector_selector(None, $1?)
+                }
 ;
 
 label_matchers -> Result<Matchers, String>:

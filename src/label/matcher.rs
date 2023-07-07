@@ -136,13 +136,14 @@ impl Matchers {
         self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
     }
 
-    /// find all the matchers whose name equals the specified name.
-    pub fn find_matchers(&self, name: &str) -> Vec<&String> {
-        self.matchers
-            .iter()
-            .filter(|m| m.name.eq_ignore_ascii_case(name))
-            .map(|m| &m.value)
-            .collect()
+    /// find the matcher's value whose name equals the specified name.
+    pub fn find_matcher(&self, name: &str) -> Option<String> {
+        for m in &self.matchers {
+            if m.name.eq(name) {
+                return Some(m.value.clone());
+            }
+        }
+        None
     }
 }
 
