@@ -976,16 +976,13 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     }
 
     // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
-    if name.eq_ignore_ascii_case("exp") {
+    if name.eq("exp") {
         if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
             if val.is_nan() || val.is_infinite() {
                 return Ok(Expr::Call(ex));
             }
         }
-    } else if name.eq_ignore_ascii_case("ln")
-        || name.eq_ignore_ascii_case("log2")
-        || name.eq_ignore_ascii_case("log10")
-    {
+    } else if name.eq("ln") || name.eq("log2") || name.eq("log10") {
         if let Some(val) = ex.args.first().and_then(|ex| ex.scalar_value()) {
             if val.is_nan() || val.is_infinite() || val <= 0.0 {
                 return Ok(Expr::Call(ex));
@@ -1038,14 +1035,15 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
         return Err("vector selector must contain at least one non-empty matcher".into());
     }
 
-    let mut du = ex.matchers.find_matchers(METRIC_NAME);
-    if du.len() >= 2 {
-        // this is to ensure that the err information can be predicted with fixed order
-        du.sort();
-        return Err(format!(
-            "metric name must not be set twice: '{}' or '{}'",
-            du[0], du[1]
-        ));
+    if ex.name.is_some() {
+        let name_matchers = ex.matchers.find_matchers(METRIC_NAME);
+        if name_matchers.len() > 0 {
+            return Err(format!(
+                "metric name must not be set twice: '{}' or '{}'",
+                ex.name.unwrap(),
+                name_matchers[0]
+            ));
+        }
     }
 
     Ok(Expr::VectorSelector(ex))
