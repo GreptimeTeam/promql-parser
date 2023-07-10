@@ -36,7 +36,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 mod tests {
     use regex::Regex;
 
-    use crate::label::{MatchOp, Matcher, Matchers};
+    use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
     use crate::parser::function::get_function;
     use crate::parser::{
         token, AtModifier as At, BinModifier, Expr, FunctionArgs, LabelModifier, Offset,
@@ -647,10 +647,7 @@ mod tests {
                 r#"method_code:http_errors:rate5m{code="500"} / ignoring(code) method:http_requests:rate5m"#,
                 {
                     let name = String::from("method_code:http_errors:rate5m");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("code"), String::from("500")),
-                    ]));
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "code", "500"));
                     let lhs = Expr::new_vector_selector(Some(name), matchers).unwrap();
                     Expr::new_binary_expr(
                         lhs,
@@ -875,35 +872,21 @@ mod tests {
                 Expr::from(VectorSelector::from("foo")).at_expr(At::try_from(-33f64).unwrap()),
             ),
             (r#"foo:bar{a="bc"}"#, {
-                let name = String::from("foo:bar");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("bc")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "a", "bc"));
+                Expr::new_vector_selector(Some(String::from("foo:bar")), matchers)
             }),
             (r#"foo{NaN='bc'}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("NaN"), String::from("bc")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "NaN", "bc"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{bar='}'}"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("}")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "}"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
-                let name = String::from("foo");
                 let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
-                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+                    Matcher::new(MatchOp::Equal, "a", "b"),
+                    Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
                         token::T_EQL_REGEX,
                         String::from("test"),
@@ -917,14 +900,13 @@ mod tests {
                     )
                     .unwrap(),
                 ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
                 let name = String::from("foo");
                 let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b")),
-                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
+                    Matcher::new(MatchOp::Equal, "a", "b"),
+                    Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
                         token::T_EQL_REGEX,
                         String::from("test"),
@@ -939,6 +921,31 @@ mod tests {
                     .unwrap(),
                 ]));
                 Expr::new_vector_selector(Some(name), matchers)
+            }),
+            // the following multiple __name__ matcher test cases are not from prometheus
+            (r#"{__name__="foo",__name__="bar"}"#, {
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new(MatchOp::Equal, METRIC_NAME, "foo"),
+                    Matcher::new(MatchOp::Equal, METRIC_NAME, "bar"),
+                ]));
+                Expr::new_vector_selector(None, matchers)
+            }),
+            (r#"{__name__=~"foo.+",__name__=~".*bar"}"#, {
+                let matchers = Matchers::new(HashSet::from([
+                    Matcher::new_matcher(
+                        token::T_EQL_REGEX,
+                        String::from(METRIC_NAME),
+                        String::from("foo.+"),
+                    )
+                    .unwrap(),
+                    Matcher::new_matcher(
+                        token::T_EQL_REGEX,
+                        String::from(METRIC_NAME),
+                        String::from(".*bar"),
+                    )
+                    .unwrap(),
+                ]));
+                Expr::new_vector_selector(None, matchers)
             }),
         ];
         assert_cases(Case::new_result_cases(cases));
@@ -992,7 +999,7 @@ mod tests {
             ),
             (
                 r#"foo{__name__="bar"}"#,
-                "metric name must not be set twice: 'bar' or 'foo'",
+                "metric name must not be set twice: 'foo' or 'bar'",
             ),
             (
                 "foo{__name__= =}",
@@ -1080,25 +1087,17 @@ mod tests {
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::WEEK_DURATION * 2))),
             ),
             (r#"test{a="b"}[5y] OFFSET 3d"#, {
-                let name = String::from("test");
-                let name_matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let label_matcher =
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
                 Expr::new_vector_selector(
-                    Some(name),
-                    Matchers::new(HashSet::from([name_matcher, label_matcher])),
+                    Some(String::from("test")),
+                    Matchers::one(Matcher::new(MatchOp::Equal, "a", "b")),
                 )
                 .and_then(|ex| Expr::new_matrix_selector(ex, duration::YEAR_DURATION * 5))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::DAY_DURATION * 3)))
             }),
             (r#"test{a="b"}[5y] @ 1603774699"#, {
-                let name = String::from("test");
-                let name_matcher = Matcher::new_eq_metric_matcher(name.clone());
-                let label_matcher =
-                    Matcher::new(MatchOp::Equal, String::from("a"), String::from("b"));
                 Expr::new_vector_selector(
-                    Some(name),
-                    Matchers::new(HashSet::from([name_matcher, label_matcher])),
+                    Some(String::from("test")),
+                    Matchers::one(Matcher::new(MatchOp::Equal, "a", "b")),
                 )
                 .and_then(|ex| Expr::new_matrix_selector(ex, duration::YEAR_DURATION * 5))
                 .and_then(|ex| ex.at_expr(At::try_from(1603774699_f64).unwrap()))
@@ -1299,10 +1298,7 @@ mod tests {
             ),
             (r#"floor(some_metric{foo!="bar"})"#, {
                 let name = String::from("some_metric");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::NotEqual, String::from("foo"), String::from("bar")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::NotEqual, "foo", "bar"));
                 let ex = Expr::new_vector_selector(Some(name), matchers).unwrap();
                 Expr::new_call(get_function("floor").unwrap(), FunctionArgs::new_args(ex))
             }),
@@ -1329,23 +1325,15 @@ mod tests {
             // cases from https://prometheus.io/docs/prometheus/latest/querying/functions
             (r#"absent(nonexistent{job="myjob"})"#, {
                 let name = String::from("nonexistent");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "myjob"));
                 let ex = Expr::new_vector_selector(Some(name), matchers).unwrap();
                 Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
             }),
             (r#"absent(nonexistent{job="myjob",instance=~".*"})"#, {
                 let name = String::from("nonexistent");
                 let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
-                    Matcher::new(
-                        MatchOp::Re(Regex::new(".*").unwrap()),
-                        String::from("instance"),
-                        String::from(".*"),
-                    ),
+                    Matcher::new(MatchOp::Equal, "job", "myjob"),
+                    Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
                 ]));
                 Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                     Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
@@ -1353,10 +1341,7 @@ mod tests {
             }),
             (r#"absent(sum(nonexistent{job="myjob"}))"#, {
                 let name = String::from("nonexistent");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "myjob"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| {
                         Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
@@ -1367,10 +1352,7 @@ mod tests {
             }),
             (r#"absent_over_time(nonexistent{job="myjob"}[1h])"#, {
                 let name = String::from("nonexistent");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "myjob"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
                     .and_then(|ex| {
@@ -1385,13 +1367,8 @@ mod tests {
                 {
                     let name = String::from("nonexistent");
                     let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("job"), String::from("myjob")),
-                        Matcher::new(
-                            MatchOp::Re(Regex::new(".*").unwrap()),
-                            String::from("instance"),
-                            String::from(".*"),
-                        ),
+                        Matcher::new(MatchOp::Equal, "job", "myjob"),
+                        Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
                     ]));
                     Expr::new_vector_selector(Some(name), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
@@ -1405,10 +1382,7 @@ mod tests {
             ),
             (r#"delta(cpu_temp_celsius{host="zeus"}[2h])"#, {
                 let name = String::from("cpu_temp_celsius");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("host"), String::from("zeus")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "host", "zeus"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION * 2))
                     .and_then(|ex| {
@@ -1517,14 +1491,7 @@ mod tests {
             ),
             (r#"increase(http_requests_total{job="api-server"}[5m])"#, {
                 let name = String::from("http_requests_total");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from("job"),
-                        String::from("api-server"),
-                    ),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "api-server"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 5))
                     .and_then(|ex| {
@@ -1536,14 +1503,7 @@ mod tests {
             }),
             (r#"irate(http_requests_total{job="api-server"}[5m])"#, {
                 let name = String::from("http_requests_total");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(
-                        MatchOp::Equal,
-                        String::from("job"),
-                        String::from("api-server"),
-                    ),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "api-server"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, duration::MINUTE_DURATION * 5))
                     .and_then(|ex| {
@@ -1555,15 +1515,10 @@ mod tests {
                 {
                     let name = String::from("up");
                     let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("src1"), String::from("a")),
-                        Matcher::new(MatchOp::Equal, String::from("src2"), String::from("b")),
-                        Matcher::new(MatchOp::Equal, String::from("src3"), String::from("c")),
-                        Matcher::new(
-                            MatchOp::Equal,
-                            String::from("job"),
-                            String::from("api-server"),
-                        ),
+                        Matcher::new(MatchOp::Equal, "src1", "a"),
+                        Matcher::new(MatchOp::Equal, "src2", "b"),
+                        Matcher::new(MatchOp::Equal, "src3", "c"),
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
                     ]));
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
@@ -1583,13 +1538,8 @@ mod tests {
                 {
                     let name = String::from("up");
                     let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("service"), String::from("a:c")),
-                        Matcher::new(
-                            MatchOp::Equal,
-                            String::from("job"),
-                            String::from("api-server"),
-                        ),
+                        Matcher::new(MatchOp::Equal, "service", "a:c"),
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
                     ]));
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
@@ -1762,12 +1712,8 @@ mod tests {
     fn test_subquery() {
         let cases = vec![
             (r#"foo{bar="baz"}[10m:6s]"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers).and_then(|ex| {
                     Expr::new_subquery_expr(
                         ex,
                         duration::MINUTE_DURATION * 10,
@@ -1776,12 +1722,8 @@ mod tests {
                 })
             }),
             (r#"foo{bar="baz"}[10m5s:1h6ms]"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers).and_then(|ex| {
                     Expr::new_subquery_expr(
                         ex,
                         duration::MINUTE_DURATION * 10 + duration::SECOND_DURATION * 5,
@@ -1794,12 +1736,8 @@ mod tests {
                 Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 10, None)
             }),
             (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:5s])"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                     .and_then(|ex| {
                         Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
@@ -1819,12 +1757,8 @@ mod tests {
                     })
             }),
             (r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#, {
-                let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                ]));
-                Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
                     .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                     .and_then(|ex| {
                         Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
@@ -1847,12 +1781,8 @@ mod tests {
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
                 {
-                    let name = String::from("foo");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                    ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -1882,12 +1812,8 @@ mod tests {
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] @ 1603775091)[4m:3s]"#,
                 {
-                    let name = String::from("foo");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                    ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -1917,12 +1843,8 @@ mod tests {
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] @ -160377509)[4m:3s]"#,
                 {
-                    let name = String::from("foo");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new_eq_metric_matcher(name.clone()),
-                        Matcher::new(MatchOp::Equal, String::from("bar"), String::from("baz")),
-                    ]));
-                    Expr::new_vector_selector(Some(name), matchers)
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "bar", "baz"));
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, Duration::from_secs(2)))
                         .and_then(|ex| {
                             Expr::new_call(
@@ -2032,45 +1954,31 @@ mod tests {
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION))),
             ),
             (r#"(foo + bar{nm="val"})[5m:]"#, {
-                let name = String::from("bar");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
-                ]));
-
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "nm", "val"));
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_ADD,
                     None,
-                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                    Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
                 .and_then(|ex| Expr::new_paren_expr(ex))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
             }),
             (r#"(foo + bar{nm="val"})[5m:] offset 10m"#, {
-                let name = String::from("bar");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
-                ]));
-
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "nm", "val"));
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
                     token::T_ADD,
                     None,
-                    Expr::new_vector_selector(Some(name), matchers).unwrap(),
+                    Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
                 .and_then(|ex| Expr::new_paren_expr(ex))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION * 10)))
             }),
             (r#"(foo + bar{nm="val"} @ 1234)[5m:] @ 1603775019"#, {
-                let name = String::from("bar");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("nm"), String::from("val")),
-                ]));
-                let rhs = Expr::new_vector_selector(Some(name), matchers)
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "nm", "val"));
+                let rhs = Expr::new_vector_selector(Some(String::from("bar")), matchers)
                     .and_then(|ex| ex.at_expr(At::try_from(1234_f64).unwrap()))
                     .unwrap();
 
@@ -2149,18 +2057,12 @@ mod tests {
             ("end", Ok(Expr::from(VectorSelector::from("end")))),
             (r#"start{end="foo"}"#, {
                 let name = String::from("start");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("end"), String::from("foo")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "end", "foo"));
                 Expr::new_vector_selector(Some(name), matchers)
             }),
             (r#"end{start="foo"}"#, {
                 let name = String::from("end");
-                let matchers = Matchers::new(HashSet::from([
-                    Matcher::new_eq_metric_matcher(name.clone()),
-                    Matcher::new(MatchOp::Equal, String::from("start"), String::from("foo")),
-                ]));
+                let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "start", "foo"));
                 Expr::new_vector_selector(Some(name), matchers)
             }),
             ("foo unless on(start) bar", {

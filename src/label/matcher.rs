@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
-use crate::label::METRIC_NAME;
 use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
@@ -61,16 +60,11 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(op: MatchOp, name: String, value: String) -> Self {
-        Self { op, name, value }
-    }
-
-    /// build a matcher instance with default metric name and Equal operation
-    pub fn new_eq_metric_matcher(value: String) -> Self {
+    pub fn new(op: MatchOp, name: &str, value: &str) -> Self {
         Self {
-            op: MatchOp::Equal,
-            name: METRIC_NAME.into(),
-            value,
+            op,
+            name: name.into(),
+            value: value.into(),
         }
     }
 
@@ -85,19 +79,21 @@ impl Matcher {
     }
 
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
-        match id {
-            T_EQL => Ok(Matcher::new(MatchOp::Equal, name, value)),
-            T_NEQ => Ok(Matcher::new(MatchOp::NotEqual, name, value)),
+        let op = match id {
+            T_EQL => Ok(MatchOp::Equal),
+            T_NEQ => Ok(MatchOp::NotEqual),
             T_EQL_REGEX => {
                 let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-                Ok(Matcher::new(MatchOp::Re(re), name, value))
+                Ok(MatchOp::Re(re))
             }
             T_NEQ_REGEX => {
                 let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-                Ok(Matcher::new(MatchOp::NotRe(re), name, value))
+                Ok(MatchOp::NotRe(re))
             }
             _ => Err(format!("invalid match op {id}")),
-        }
+        };
+
+        op.map(|op| Matcher { op, name, value })
     }
 }
 
@@ -136,13 +132,14 @@ impl Matchers {
         self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
     }
 
-    /// find all the matchers whose name equals the specified name.
-    pub fn find_matchers(&self, name: &str) -> Vec<&String> {
-        self.matchers
-            .iter()
-            .filter(|m| m.name.eq_ignore_ascii_case(name))
-            .map(|m| &m.value)
-            .collect()
+    /// find the matcher's value whose name equals the specified name.
+    pub fn find_matcher(&self, name: &str) -> Option<String> {
+        for m in &self.matchers {
+            if m.name.eq(name) {
+                return Some(m.value.clone());
+            }
+        }
+        None
     }
 }
 
@@ -220,68 +217,56 @@ mod tests {
     #[test]
     fn test_matcher_hash() {
         assert_eq!(
-            hash(Matcher::new(MatchOp::Equal, "name".into(), "value".into())),
-            hash(Matcher::new(MatchOp::Equal, "name".into(), "value".into())),
+            hash(Matcher::new(MatchOp::Equal, "name", "value")),
+            hash(Matcher::new(MatchOp::Equal, "name", "value")),
         );
 
         assert_eq!(
-            hash(Matcher::new(
-                MatchOp::NotEqual,
-                "name".into(),
-                "value".into()
-            )),
-            hash(Matcher::new(
-                MatchOp::NotEqual,
-                "name".into(),
-                "value".into()
-            )),
+            hash(Matcher::new(MatchOp::NotEqual, "name", "value")),
+            hash(Matcher::new(MatchOp::NotEqual, "name", "value")),
         );
 
         assert_eq!(
             hash(Matcher::new(
                 MatchOp::Re(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
             hash(Matcher::new(
                 MatchOp::Re(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
         );
 
         assert_eq!(
             hash(Matcher::new(
                 MatchOp::NotRe(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
             hash(Matcher::new(
                 MatchOp::NotRe(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
         );
 
         assert_ne!(
-            hash(Matcher::new(MatchOp::Equal, "name".into(), "value".into())),
-            hash(Matcher::new(
-                MatchOp::NotEqual,
-                "name".into(),
-                "value".into()
-            )),
+            hash(Matcher::new(MatchOp::Equal, "name", "value")),
+            hash(Matcher::new(MatchOp::NotEqual, "name", "value")),
         );
 
         assert_ne!(
             hash(Matcher::new(
                 MatchOp::Re(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
             hash(Matcher::new(
                 MatchOp::NotRe(Regex::new("\\s+").unwrap()),
-                "name".into(),
-                "\\s+".into()
+                "name",
+                "\\s+"
             )),
         );
     }
@@ -289,12 +274,12 @@ mod tests {
     #[test]
     fn test_matcher_eq_ne() {
         let op = MatchOp::Equal;
-        let matcher = Matcher::new(op, "name".into(), "up".into());
+        let matcher = Matcher::new(op, "name", "up");
         assert!(matcher.is_match("up"));
         assert!(!matcher.is_match("down"));
 
         let op = MatchOp::NotEqual;
-        let matcher = Matcher::new(op, "name".into(), "up".into());
+        let matcher = Matcher::new(op, "name", "up");
         assert!(matcher.is_match("foo"));
         assert!(matcher.is_match("bar"));
         assert!(!matcher.is_match("up"));
@@ -302,10 +287,10 @@ mod tests {
 
     #[test]
     fn test_matcher_re() {
-        let value = "api/v1/.*".to_string();
+        let value = "api/v1/.*";
         let re = Regex::new(&value).unwrap();
         let op = MatchOp::Re(re);
-        let matcher = Matcher::new(op, "name".into(), value);
+        let matcher = Matcher::new(op, "name", value);
         assert!(matcher.is_match("api/v1/query"));
         assert!(matcher.is_match("api/v1/range_query"));
         assert!(!matcher.is_match("api/v2"));
@@ -314,112 +299,72 @@ mod tests {
     #[test]
     fn test_eq_matcher_equality() {
         assert_eq!(
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"))
+            Matcher::new(MatchOp::Equal, "code", "200"),
+            Matcher::new(MatchOp::Equal, "code", "200")
         );
 
         assert_ne!(
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("201"))
+            Matcher::new(MatchOp::Equal, "code", "200"),
+            Matcher::new(MatchOp::Equal, "code", "201")
         );
 
         assert_ne!(
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"))
+            Matcher::new(MatchOp::Equal, "code", "200"),
+            Matcher::new(MatchOp::NotEqual, "code", "200")
         );
     }
 
     #[test]
     fn test_ne_matcher_equality() {
         assert_eq!(
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200"))
+            Matcher::new(MatchOp::NotEqual, "code", "200"),
+            Matcher::new(MatchOp::NotEqual, "code", "200")
         );
 
         assert_ne!(
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("201"))
+            Matcher::new(MatchOp::NotEqual, "code", "200"),
+            Matcher::new(MatchOp::NotEqual, "code", "201")
         );
 
         assert_ne!(
-            Matcher::new(MatchOp::NotEqual, String::from("code"), String::from("200")),
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("200"))
+            Matcher::new(MatchOp::NotEqual, "code", "200"),
+            Matcher::new(MatchOp::Equal, "code", "200")
         );
     }
 
     #[test]
     fn test_re_matcher_equality() {
         assert_eq!(
-            Matcher::new(
-                MatchOp::Re(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(
-                MatchOp::Re(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            )
+            Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2??",)
         );
 
         assert_ne!(
-            Matcher::new(
-                MatchOp::Re(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(
-                MatchOp::Re(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2*?"),
-            )
+            Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2*?",)
         );
 
         assert_ne!(
-            Matcher::new(
-                MatchOp::Re(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("2??"))
+            Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::Equal, "code", "2??")
         );
     }
 
     #[test]
     fn test_not_re_matcher_equality() {
         assert_eq!(
-            Matcher::new(
-                MatchOp::NotRe(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(
-                MatchOp::NotRe(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            )
+            Matcher::new(MatchOp::NotRe(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::NotRe(Regex::new("2??").unwrap()), "code", "2??",)
         );
 
         assert_ne!(
-            Matcher::new(
-                MatchOp::NotRe(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(
-                MatchOp::NotRe(Regex::new("2?*").unwrap()),
-                String::from("code"),
-                String::from("2*?"),
-            )
+            Matcher::new(MatchOp::NotRe(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::NotRe(Regex::new("2?*").unwrap()), "code", "2*?",)
         );
 
         assert_ne!(
-            Matcher::new(
-                MatchOp::NotRe(Regex::new("2??").unwrap()),
-                String::from("code"),
-                String::from("2??"),
-            ),
-            Matcher::new(MatchOp::Equal, String::from("code"), String::from("2??"))
+            Matcher::new(MatchOp::NotRe(Regex::new("2??").unwrap()), "code", "2??",),
+            Matcher::new(MatchOp::Equal, "code", "2??")
         );
     }
 
@@ -427,62 +372,50 @@ mod tests {
     fn test_matchers_equality() {
         assert_eq!(
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into()))
-                .append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into()))
-                .append(Matcher::new(MatchOp::Equal, "name2".into(), "val2".into())),
+                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
+                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
+                .append(Matcher::new(MatchOp::Equal, "name2", "val2")),
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into()))
-                .append(Matcher::new(MatchOp::Equal, "name2".into(), "val2".into()))
+                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
+                .append(Matcher::new(MatchOp::Equal, "name2", "val2"))
         );
 
         assert_ne!(
-            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into())),
-            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name2".into(), "val2".into()))
+            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name1", "val1")),
+            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name2", "val2"))
         );
 
         assert_ne!(
-            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into())),
-            Matchers::empty().append(Matcher::new(
-                MatchOp::NotEqual,
-                "name1".into(),
-                "val1".into()
-            ))
+            Matchers::empty().append(Matcher::new(MatchOp::Equal, "name1", "val1")),
+            Matchers::empty().append(Matcher::new(MatchOp::NotEqual, "name1", "val1"))
         );
 
         assert_eq!(
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into()))
-                .append(Matcher::new(
-                    MatchOp::NotEqual,
-                    "name2".into(),
-                    "val2".into()
-                ))
+                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
+                .append(Matcher::new(MatchOp::NotEqual, "name2", "val2"))
                 .append(Matcher::new(
                     MatchOp::Re(Regex::new("\\d+").unwrap()),
-                    "name2".into(),
-                    "\\d+".into()
+                    "name2",
+                    "\\d+"
                 ))
                 .append(Matcher::new(
                     MatchOp::NotRe(Regex::new("\\d+").unwrap()),
-                    "name2".into(),
-                    "\\d+".into()
+                    "name2",
+                    "\\d+"
                 )),
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1".into(), "val1".into()))
-                .append(Matcher::new(
-                    MatchOp::NotEqual,
-                    "name2".into(),
-                    "val2".into()
-                ))
+                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
+                .append(Matcher::new(MatchOp::NotEqual, "name2", "val2"))
                 .append(Matcher::new(
                     MatchOp::Re(Regex::new("\\d+").unwrap()),
-                    "name2".into(),
-                    "\\d+".into()
+                    "name2",
+                    "\\d+"
                 ))
                 .append(Matcher::new(
                     MatchOp::NotRe(Regex::new("\\d+").unwrap()),
-                    "name2".into(),
-                    "\\d+".into()
+                    "name2",
+                    "\\d+"
                 ))
         );
     }
