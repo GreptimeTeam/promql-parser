@@ -32,8 +32,8 @@ impl fmt::Display for MatchOp {
         match self {
             MatchOp::Equal => write!(f, "="),
             MatchOp::NotEqual => write!(f, "!="),
-            MatchOp::Re(reg) => write!(f, "=~{reg}"),
-            MatchOp::NotRe(reg) => write!(f, "!~{reg}"),
+            MatchOp::Re(_reg) => write!(f, "=~"),
+            MatchOp::NotRe(_reg) => write!(f, "!~"),
         }
     }
 }

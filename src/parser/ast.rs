@@ -22,6 +22,32 @@ use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+
+// cover duration to string
+
+fn duration_display(duration: &Duration) -> String {
+    let millisecs = duration.as_millis();
+    let secs = millisecs / 1000;
+    let d = secs / (60 * 60 * 24);
+    let h = (secs / (60 * 60)) % 24;
+    let m = (secs / 60) % 60;
+    let s = secs % 60;
+    let mut ss = Vec::new();
+    if d != 0 {
+        ss.push(format!("{d}d"));
+    }
+    if h != 0 {
+        ss.push(format!("{h}h"));
+    }
+    if m != 0 {
+        ss.push(format!("{m}m"));
+    }
+    if s != 0 {
+        ss.push(format!("{s}s"))
+    }
+    ss.join("")
+}
+
 /// LabelModifier acts as
 ///
 /// # Aggregation Modifier
@@ -204,8 +230,8 @@ pub enum Offset {
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Pos(dur) => write!(f, "{dur:?}"),
-            Offset::Neg(dur) => write!(f, "-{dur:?}"),
+            Offset::Pos(dur) => write!(f, "{}", duration_display(dur)),
+            Offset::Neg(dur) => write!(f, "-{}", duration_display(dur)),
         }
     }
 }
@@ -217,6 +243,15 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
+impl fmt::Display for AtModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AtModifier::Start => write!(f, "@ {}()", token_display(T_START)),
+            AtModifier::End => write!(f, "@ {}()", token_display(T_END)),
+            AtModifier::At(time) => write!(f, "@ {:?}", time),
+        }
+    }
+}
 impl TryFrom<TokenId> for AtModifier {
     type Error = String;
 
@@ -388,6 +423,23 @@ pub struct SubqueryExpr {
     pub range: Duration,
     /// Default is the global evaluation interval.
     pub step: Option<Duration>,
+}
+
+impl fmt::Display for SubqueryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.step {
+            Some(step) => write!(f, "{}[{}:{}]",self.expr, duration_display(&self.range), duration_display(step))?,
+            None => write!(f, "{}[{}]",self.expr, duration_display(&self.range))?
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " {at}")
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -905,7 +957,7 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Paren(ParenExpr { expr }) => write!(f, "({expr})"),
-            Expr::Subquery(subquery) => write!(f, "{subquery:?}"),
+            Expr::Subquery(subquery) => write!(f, "{subquery}"),
             Expr::NumberLiteral(NumberLiteral { val }) => {
                 if *val == f64::INFINITY {
                     write!(f, "Inf")
@@ -918,24 +970,44 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::StringLiteral(StringLiteral { val }) => write!(f, "\"{val}\""),
-            Expr::VectorSelector(vec_selector) => {
-                if let Some(name) = &vec_selector.name {
+            Expr::VectorSelector(vector_selector) => {
+                if let Some(name) = &vector_selector.name {
                     write!(f, "{name}")?;
                 }
-                let matchers = &vec_selector.matchers.to_string();
+                let matchers = &vector_selector.matchers.to_string();
                 if !matchers.is_empty() {
                     write!(f, "{{{matchers}}}")?;
                 }
-                if let Some(offset) = &vec_selector.offset {
+                if let Some(offset) = &vector_selector.offset {
                     write!(f, " offset {offset}")?;
                 }
-                if let Some(at) = &vec_selector.at {
-                    write!(f, "{at:?}")
+                if let Some(at) = &vector_selector.at {
+                    write!(f, " {at}")
                 } else {
                     Ok(())
                 }
             }
-            Expr::MatrixSelector(mat_selector) => write!(f, "{mat_selector:?}"),
+            Expr::MatrixSelector(MatrixSelector {
+                vector_selector,
+                range,
+            }) => {
+                if let Some(name) = &vector_selector.name {
+                    write!(f, "{name}")?;
+                }
+                let matchers = &vector_selector.matchers.to_string();
+                if !matchers.is_empty() {
+                    write!(f, "{{{matchers}}}")?;
+                }
+                write!(f, "[{}]", duration_display(range))?;
+                if let Some(offset) = &vector_selector.offset {
+                    write!(f, " offset {offset}")?;
+                }
+                if let Some(at) = &vector_selector.at {
+                    write!(f, " {at}")
+                } else {
+                    Ok(())
+                }
+            }
             Expr::Call(call) => write!(f, "{call:?}"),
             Expr::Extension(ext) => write!(f, "{ext:?}"),
         }
