@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 use lazy_static::lazy_static;
 
@@ -54,6 +55,18 @@ impl FunctionArgs {
 
     pub fn last(&self) -> Option<Box<Expr>> {
         self.args.last().cloned()
+    }
+}
+
+impl fmt::Display for FunctionArgs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = self
+            .args
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        write!(f, "{s}")
     }
 }
 
@@ -297,5 +310,11 @@ mod tests {
         let args2 = FunctionArgs::new_args(arg1).append_args(arg2);
 
         assert_eq!(args1, args2);
+    }
+
+    #[test]
+    fn test_args_display() {
+        let args = FunctionArgs::new_args(Expr::from(VectorSelector::from("up")));
+        assert_eq!("up", args.to_string())
     }
 }

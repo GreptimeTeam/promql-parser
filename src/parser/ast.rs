@@ -65,24 +65,6 @@ impl LabelModifier {
     }
 }
 
-// impl fmt::Display for LabelModifier {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         if self.is_on() && self.labels().is_empty() {
-//             write!(f, "")
-//         } else {
-//             let op = if self.is_on() { "by" } else { "without" };
-//             let labels = self
-//                 .labels()
-//                 .0
-//                 .iter()
-//                 .map(|e| e.to_string())
-//                 .collect::<Vec<String>>()
-//                 .join(", ");
-//             write!(f, "{op} ({labels})")
-//         }
-//     }
-// }
-
 /// The label list provided with the group_left or group_right modifier contains
 /// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,32 +110,28 @@ pub struct BinModifier {
 
 impl fmt::Display for BinModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = String::from(self.bool_string());
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(labels) => write!(f, " on ({})", labels.labels.join(", "))?,
-                LabelModifier::Exclude(labels) => {
-                    let labels = labels.labels.join(", ");
-                    if !labels.is_empty() {
-                        write!(f, " ignoring ({labels})",)?;
+                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls})")),
+                LabelModifier::Exclude(ls) => {
+                    if !ls.is_empty() {
+                        s.push_str(&format!("ignoring ({ls})"));
                     }
                 }
             }
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(labels) => {
-                write!(f, " group_left ({})", labels.labels.join(", "))?
+            VectorMatchCardinality::ManyToOne(ls) => {
+                s.push_str(&format!(" group_left ({ls})"));
             }
-            VectorMatchCardinality::OneToMany(labels) => {
-                write!(f, " group_right ({})", labels.labels.join(", "))?
+            VectorMatchCardinality::OneToMany(ls) => {
+                s.push_str(&format!(" group_right ({ls})"));
             }
             _ => {}
         }
-
-        if self.return_bool {
-            write!(f, " bool")?;
-        }
-        write!(f, " ")
+        write!(f, "{s}")
     }
 }
 
@@ -205,6 +183,14 @@ impl BinModifier {
 
     pub fn is_matching_labels_not_empty(&self) -> bool {
         matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
+    }
+
+    pub fn bool_string(&self) -> &str {
+        if self.return_bool {
+            "bool "
+        } else {
+            ""
+        }
     }
 }
 
@@ -344,7 +330,8 @@ pub struct AggregateExpr {
 
 impl fmt::Display for AggregateExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut v: Vec<String> = vec![token_display(self.op.id()).into()];
+        write!(f, "{}", token_display(self.op.id()))?;
+        // let mut v: Vec<String> = vec![token_display(self.op.id()).into()];
 
         // modifier
         {
@@ -352,25 +339,24 @@ impl fmt::Display for AggregateExpr {
                 match modifier {
                     LabelModifier::Include(ls) => {
                         if !ls.is_empty() {
-                            v.push(format!("by {ls}"))
+                            write!(f, " by ({ls})")?;
                         }
                     }
-                    LabelModifier::Exclude(ls) => v.push(format!("without {ls}")),
+                    LabelModifier::Exclude(ls) => write!(f, " without ({ls})")?,
                 }
             }
         }
 
         // body
         {
-            let mut body = String::from("(");
+            write!(f, "(")?;
             if let Some(param) = &self.param {
-                body.push_str(&format!("{param}, "));
+                write!(f, "{param}, ")?;
             }
-            body.push_str(&format!("{})", self.expr));
-            v.push(body)
+            write!(f, "{})", self.expr)?;
         }
 
-        write!(f, "{}", v.join(" "))
+        Ok(())
     }
 }
 
@@ -425,6 +411,16 @@ impl BinaryExpr {
     }
 }
 
+impl fmt::Display for BinaryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let op = token_display(self.op.id());
+        match &self.modifier {
+            Some(modifier) => write!(f, "{} {} {} {}", self.lhs, op, modifier, self.rhs),
+            None => write!(f, "{} {} {}", self.lhs, op, self.rhs),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
@@ -446,24 +442,21 @@ pub struct SubqueryExpr {
 
 impl fmt::Display for SubqueryExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.step {
-            Some(step) => write!(
-                f,
-                "{}[{}:{}]",
-                self.expr,
-                display_duration(&self.range),
-                display_duration(step)
-            )?,
-            None => write!(f, "{}[{}]", self.expr, display_duration(&self.range))?,
-        }
+        let step = match &self.step {
+            Some(step) => display_duration(step),
+            None => String::from(""),
+        };
+        let range = display_duration(&self.range);
+        write!(f, "{}[{range}:{step}]", self.expr)?;
+
         if let Some(offset) = &self.offset {
             write!(f, " offset {offset}")?;
         }
         if let Some(at) = &self.at {
-            write!(f, " {at}")
-        } else {
-            Ok(())
+            write!(f, " {at}")?;
         }
+
+        Ok(())
     }
 }
 
@@ -494,9 +487,29 @@ impl Neg for NumberLiteral {
     }
 }
 
+impl fmt::Display for NumberLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.val == f64::INFINITY {
+            write!(f, "Inf")
+        } else if self.val == f64::NEG_INFINITY {
+            write!(f, "-Inf")
+        } else if f64::is_nan(self.val) {
+            write!(f, "NaN")
+        } else {
+            write!(f, "{}", self.val)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
+}
+
+impl fmt::Display for StringLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"{}\"", self.val)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -552,10 +565,36 @@ impl Neg for VectorSelector {
     }
 }
 
+impl fmt::Display for VectorSelector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = &self.name {
+            write!(f, "{name}")?;
+        }
+        let matchers = &self.matchers.to_string();
+        if !matchers.is_empty() {
+            write!(f, "{{{matchers}}}")?;
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " {at}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
     pub vector_selector: VectorSelector,
     pub range: Duration,
+}
+
+impl fmt::Display for MatrixSelector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let range = display_duration(&self.range);
+        write!(f, "{}[{range}]", self.vector_selector)
+    }
 }
 
 /// Call represents Prometheus Function.
@@ -601,6 +640,12 @@ pub struct MatrixSelector {
 pub struct Call {
     pub func: Function,
     pub args: FunctionArgs,
+}
+
+impl fmt::Display for Call {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", self.func.name, self.args)
+    }
 }
 
 /// Node for extending the AST. [Extension] won't be generate by this parser itself.
@@ -938,69 +983,14 @@ impl fmt::Display for Expr {
         match self {
             Expr::Aggregate(agg) => write!(f, "{agg}"),
             Expr::Unary(UnaryExpr { expr }) => write!(f, "- {expr}"),
-            Expr::Binary(binary) => {
-                let lhs = binary.lhs.as_ref();
-                let rhs = binary.rhs.as_ref();
-                let op = token_display(binary.op.id());
-                if let Some(modifier) = &binary.modifier {
-                    write!(f, "{lhs} {op}{modifier}{rhs}")
-                } else {
-                    write!(f, "{lhs} {op} {rhs}")
-                }
-            }
+            Expr::Binary(bin) => write!(f, "{bin}"),
             Expr::Paren(ParenExpr { expr }) => write!(f, "({expr})"),
             Expr::Subquery(subquery) => write!(f, "{subquery}"),
-            Expr::NumberLiteral(NumberLiteral { val }) => {
-                if *val == f64::INFINITY {
-                    write!(f, "Inf")
-                } else if *val == f64::NEG_INFINITY {
-                    write!(f, "-Inf")
-                } else if f64::is_nan(*val) {
-                    write!(f, "NaN")
-                } else {
-                    write!(f, "{val}")
-                }
-            }
-            Expr::StringLiteral(StringLiteral { val }) => write!(f, "\"{val}\""),
-            Expr::VectorSelector(vector_selector) => {
-                if let Some(name) = &vector_selector.name {
-                    write!(f, "{name}")?;
-                }
-                let matchers = &vector_selector.matchers.to_string();
-                if !matchers.is_empty() {
-                    write!(f, "{{{matchers}}}")?;
-                }
-                if let Some(offset) = &vector_selector.offset {
-                    write!(f, " offset {offset}")?;
-                }
-                if let Some(at) = &vector_selector.at {
-                    write!(f, " {at}")
-                } else {
-                    Ok(())
-                }
-            }
-            Expr::MatrixSelector(MatrixSelector {
-                vector_selector,
-                range,
-            }) => {
-                if let Some(name) = &vector_selector.name {
-                    write!(f, "{name}")?;
-                }
-                let matchers = &vector_selector.matchers.to_string();
-                if !matchers.is_empty() {
-                    write!(f, "{{{matchers}}}")?;
-                }
-                write!(f, "[{}]", display_duration(range))?;
-                if let Some(offset) = &vector_selector.offset {
-                    write!(f, " offset {offset}")?;
-                }
-                if let Some(at) = &vector_selector.at {
-                    write!(f, " {at}")
-                } else {
-                    Ok(())
-                }
-            }
-            Expr::Call(call) => write!(f, "{call:?}"),
+            Expr::NumberLiteral(nl) => write!(f, "{nl}"),
+            Expr::StringLiteral(sl) => write!(f, "{sl}"),
+            Expr::VectorSelector(vs) => write!(f, "{vs}"),
+            Expr::MatrixSelector(ms) => write!(f, "{ms}"),
+            Expr::Call(call) => write!(f, "{call}"),
             Expr::Extension(ext) => write!(f, "{ext:?}"),
         }
     }

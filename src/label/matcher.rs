@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::label::METRIC_NAME;
 use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
 
@@ -158,14 +157,13 @@ impl Matchers {
 
 impl fmt::Display for Matchers {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let matchers_str = self
+        let mut v = self
             .matchers
             .iter()
-            .filter(|m| !m.name.eq_ignore_ascii_case(METRIC_NAME))
             .map(|Matcher { op, name, value }| format!("{name}{op}\"{value}\""))
-            .collect::<Vec<String>>()
-            .join(", ");
-        write!(f, "{matchers_str}")
+            .collect::<Vec<String>>();
+        v.sort();
+        write!(f, "{}", v.join(", "))
     }
 }
 
