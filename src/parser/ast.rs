@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::label::{intersect_labels, is_labels_joint, new_labels, Labels, Matchers, METRIC_NAME};
+use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
@@ -52,36 +52,36 @@ impl LabelModifier {
         }
     }
 
-    /// is_on is for aggregation expr
-    pub fn is_on(&self) -> bool {
+    pub fn is_include(&self) -> bool {
         matches!(*self, LabelModifier::Include(_))
     }
 
     pub fn include(ls: Vec<&str>) -> Self {
-        Self::Include(new_labels(ls))
+        Self::Include(Labels::new(ls))
     }
 
     pub fn exclude(ls: Vec<&str>) -> Self {
-        Self::Exclude(new_labels(ls))
+        Self::Exclude(Labels::new(ls))
     }
 }
 
-impl fmt::Display for LabelModifier {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.is_on() && self.labels().is_empty() {
-            write!(f, "")
-        } else {
-            let op = if self.is_on() { "by" } else { "without" };
-            let labels = self
-                .labels()
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<String>>()
-                .join(", ");
-            write!(f, "{op} ({labels})")
-        }
-    }
-}
+// impl fmt::Display for LabelModifier {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         if self.is_on() && self.labels().is_empty() {
+//             write!(f, "")
+//         } else {
+//             let op = if self.is_on() { "by" } else { "without" };
+//             let labels = self
+//                 .labels()
+//                 .0
+//                 .iter()
+//                 .map(|e| e.to_string())
+//                 .collect::<Vec<String>>()
+//                 .join(", ");
+//             write!(f, "{op} ({labels})")
+//         }
+//     }
+// }
 
 /// The label list provided with the group_left or group_right modifier contains
 /// additional labels from the "one"-side to be included in the result metrics.
@@ -104,11 +104,11 @@ impl VectorMatchCardinality {
     }
 
     pub fn many_to_one(ls: Vec<&str>) -> Self {
-        Self::ManyToOne(new_labels(ls))
+        Self::ManyToOne(Labels::new(ls))
     }
 
     pub fn one_to_many(ls: Vec<&str>) -> Self {
-        Self::OneToMany(new_labels(ls))
+        Self::OneToMany(Labels::new(ls))
     }
 }
 
@@ -130,21 +130,9 @@ impl fmt::Display for BinModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(labels) => write!(
-                    f,
-                    " on ({})",
-                    labels
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )?,
+                LabelModifier::Include(labels) => write!(f, " on ({})", labels.labels.join(", "))?,
                 LabelModifier::Exclude(labels) => {
-                    let labels = labels
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ");
+                    let labels = labels.labels.join(", ");
                     if !labels.is_empty() {
                         write!(f, " ignoring ({labels})",)?;
                     }
@@ -153,24 +141,12 @@ impl fmt::Display for BinModifier {
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(labels) => write!(
-                f,
-                " group_left ({})",
-                labels
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )?,
-            VectorMatchCardinality::OneToMany(labels) => write!(
-                f,
-                " group_right ({})",
-                labels
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )?,
+            VectorMatchCardinality::ManyToOne(labels) => {
+                write!(f, " group_left ({})", labels.labels.join(", "))?
+            }
+            VectorMatchCardinality::OneToMany(labels) => {
+                write!(f, " group_right ({})", labels.labels.join(", "))?
+            }
             _ => {}
         }
 
@@ -180,6 +156,7 @@ impl fmt::Display for BinModifier {
         write!(f, " ")
     }
 }
+
 impl Default for BinModifier {
     fn default() -> Self {
         Self {
@@ -209,21 +186,21 @@ impl BinModifier {
     pub fn is_labels_joint(&self) -> bool {
         matches!(
             (self.card.labels(), &self.matching),
-            (Some(labels), Some(matching)) if is_labels_joint(matching.labels(), labels)
+            (Some(labels), Some(matching)) if labels.is_joint(matching.labels())
         )
     }
 
     pub fn intersect_labels(&self) -> Option<Vec<String>> {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return Some(intersect_labels(matching.labels(), labels));
+                return Some(labels.intersect(matching.labels()).labels);
             }
         };
         None
     }
 
     pub fn is_matching_on(&self) -> bool {
-        matches!(&self.matching, Some(matching) if matching.is_on())
+        matches!(&self.matching, Some(matching) if matching.is_include())
     }
 
     pub fn is_matching_labels_not_empty(&self) -> bool {
@@ -372,9 +349,13 @@ impl fmt::Display for AggregateExpr {
         // modifier
         {
             if let Some(modifier) = &self.modifier {
-                let s = modifier.to_string();
-                if !s.is_empty() {
-                    v.push(s);
+                match modifier {
+                    LabelModifier::Include(ls) => {
+                        if !ls.is_empty() {
+                            v.push(format!("by {ls}"))
+                        }
+                    }
+                    LabelModifier::Exclude(ls) => v.push(format!("without {ls}")),
                 }
             }
         }
@@ -1350,25 +1331,25 @@ mod tests {
     #[test]
     fn test_binary_labels() {
         assert_eq!(
-            &vec![String::from("foo"), String::from("bar")],
-            LabelModifier::Include(vec![String::from("foo"), String::from("bar")]).labels()
+            &Labels::new(vec!["foo", "bar"]),
+            LabelModifier::Include(Labels::new(vec!["foo", "bar"])).labels()
         );
 
         assert_eq!(
-            &vec![String::from("foo"), String::from("bar")],
-            LabelModifier::Exclude(vec![String::from("foo"), String::from("bar")]).labels()
+            &Labels::new(vec!["foo", "bar"]),
+            LabelModifier::Exclude(Labels::new(vec!["foo", "bar"])).labels()
         );
 
         assert_eq!(
-            &vec![String::from("foo"), String::from("bar")],
-            VectorMatchCardinality::OneToMany(vec![String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            VectorMatchCardinality::OneToMany(Labels::new(vec!["foo", "bar"]))
                 .labels()
                 .unwrap()
         );
 
         assert_eq!(
-            &vec![String::from("foo"), String::from("bar")],
-            VectorMatchCardinality::ManyToOne(vec![String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            VectorMatchCardinality::ManyToOne(Labels::new(vec!["foo", "bar"]))
                 .labels()
                 .unwrap()
         );

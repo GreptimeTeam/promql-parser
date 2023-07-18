@@ -234,11 +234,11 @@ group_modifiers -> Result<Option<BinModifier>, String>:
                 }
         |       on_or_ignoring GROUP_LEFT
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(vec![])))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(Labels::new(vec![]))))
                 }
         |       on_or_ignoring GROUP_RIGHT
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(vec![])))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(Labels::new(vec![]))))
                 }
         |       GROUP_LEFT grouping_labels { Err("unexpected <group_left>".into()) }
         |       GROUP_RIGHT grouping_labels { Err("unexpected <group_right>".into()) }
@@ -247,17 +247,12 @@ group_modifiers -> Result<Option<BinModifier>, String>:
 grouping_labels -> Result<Labels, String>:
                 LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
         |       LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
-        |       LEFT_PAREN RIGHT_PAREN { Ok(vec![]) }
+        |       LEFT_PAREN RIGHT_PAREN { Ok(Labels::new(vec![])) }
 ;
 
 grouping_label_list -> Result<Labels, String>:
-                grouping_label_list COMMA grouping_label
-                {
-                        let mut v = $1?;
-                        v.push($3?.val);
-                        Ok(v)
-                }
-        |       grouping_label { Ok(vec![$1?.val]) }
+                grouping_label_list COMMA grouping_label { Ok($1?.append($3?.val)) }
+        |       grouping_label { Ok(Labels::new(vec![&$1?.val])) }
 ;
 
 grouping_label -> Result<Token, String>:

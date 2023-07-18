@@ -16,7 +16,8 @@
 
 mod matcher;
 pub use matcher::{MatchOp, Matcher, Matchers};
-use std::collections::HashSet;
+mod label;
+pub use label::{Label, Labels};
 
 /// "__name__"
 pub const METRIC_NAME: &str = "__name__";
@@ -26,67 +27,3 @@ pub const ALERT_NAME: &str = "alertname";
 pub const BUCKET_LABEL: &str = "le";
 /// "instance"
 pub const INSTANCE_NAME: &str = "instance";
-
-pub type Label = String;
-/// Unordered set for a group of labels.
-pub type Labels = Vec<Label>;
-
-pub fn new_labels(ls: Vec<&str>) -> Labels {
-    ls.iter().map(|s| s.to_string()).collect()
-}
-
-pub fn is_labels_joint(ls1: &Labels, ls2: &Labels) -> bool {
-    let s1: HashSet<&String> = ls1.iter().collect();
-    let s2: HashSet<&String> = ls2.iter().collect();
-
-    !s1.is_disjoint(&s2)
-}
-
-pub fn intersect_labels(ls1: &Labels, ls2: &Labels) -> Labels {
-    let s1: HashSet<&String> = ls1.iter().collect();
-    let s2: HashSet<&String> = ls2.iter().collect();
-
-    s1.intersection(&s2).map(|s| s.to_string()).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_labels_joint() {
-        let cases = vec![
-            (vec!["foo"], vec!["bar"], false),
-            (vec!["foo"], vec!["foo", "bar"], true),
-            (vec!["foo"], vec!["foo"], true),
-        ];
-
-        for (lb1, lb2, is) in cases {
-            let lb1 = new_labels(lb1);
-            let lb2 = new_labels(lb2);
-            assert_eq!(is, is_labels_joint(&lb1, &lb2), "{:?} and {:?}", lb1, lb2)
-        }
-    }
-
-    #[test]
-    fn test_intersect_labels() {
-        let cases = vec![
-            (vec!["foo"], vec!["bar"], vec![]),
-            (vec!["foo"], vec!["foo", "bar"], vec!["foo"]),
-            (vec!["foo"], vec!["foo"], vec!["foo"]),
-            (vec!["foo", "bar"], vec!["bar", "foo"], vec!["foo", "bar"]),
-        ];
-
-        for (lb1, lb2, common) in cases {
-            let lb1 = new_labels(lb1);
-            let lb2 = new_labels(lb2);
-            let intersection: HashSet<_> = intersect_labels(&lb1, &lb2).into_iter().collect();
-            let expect: HashSet<_> = common.iter().map(|s| s.to_string()).collect();
-            assert_eq!(
-                expect, intersection,
-                "{:?} intersect {:?} does not eq {:?}",
-                lb1, lb2, common
-            )
-        }
-    }
-}

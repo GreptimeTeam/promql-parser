@@ -36,7 +36,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 mod tests {
     use regex::Regex;
 
-    use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
+    use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
     use crate::parser::function::get_function;
     use crate::parser::{
         token, AtModifier as At, BinModifier, Expr, FunctionArgs, LabelModifier, Offset,
@@ -498,7 +498,7 @@ mod tests {
                 )
             }),
             ("foo and ignoring() bar", {
-                let matching = LabelModifier::Exclude(vec![]);
+                let matching = LabelModifier::exclude(vec![]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -625,7 +625,7 @@ mod tests {
                     Some(
                         BinModifier::default()
                             .with_matching(Some(LabelModifier::exclude(vec!["code"])))
-                            .with_card(VectorMatchCardinality::ManyToOne(vec![])),
+                            .with_card(VectorMatchCardinality::ManyToOne(Labels::new(vec![]))),
                     ),
                     Expr::from(VectorSelector::from("method:http_requests:rate5m")),
                 ),
@@ -1152,7 +1152,7 @@ mod tests {
                 )
             }),
             ("sum by ()(some_metric)", {
-                let modifier = LabelModifier::Include(vec![]);
+                let modifier = LabelModifier::include(vec![]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
@@ -1181,12 +1181,14 @@ mod tests {
             (
                 "sum without(and, by, avg, count, alert, annotations)(some_metric)",
                 {
-                    let modifier = LabelModifier::Exclude(
-                        vec!["and", "by", "avg", "count", "alert", "annotations"]
-                            .into_iter()
-                            .map(String::from)
-                            .collect(),
-                    );
+                    let modifier = LabelModifier::exclude(vec![
+                        "and",
+                        "by",
+                        "avg",
+                        "count",
+                        "alert",
+                        "annotations",
+                    ]);
                     let ex = Expr::from(VectorSelector::from("some_metric"));
                     Expr::new_aggregate_expr(
                         token::T_SUM,
@@ -1823,13 +1825,16 @@ mod tests {
                 "sum without(and, by, avg, count, alert, annotations)(some_metric) [30m:10s]",
                 {
                     let ex = Expr::from(VectorSelector::from("some_metric"));
-                    let labels = vec!["and", "by", "avg", "count", "alert", "annotations"]
-                        .into_iter()
-                        .map(String::from)
-                        .collect();
                     Expr::new_aggregate_expr(
                         token::T_SUM,
-                        Some(LabelModifier::Exclude(labels)),
+                        Some(LabelModifier::exclude(vec![
+                            "and",
+                            "by",
+                            "avg",
+                            "count",
+                            "alert",
+                            "annotations",
+                        ])),
                         FunctionArgs::new_args(ex),
                     )
                     .and_then(|ex| {
