@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::label::{Labels, Matchers, METRIC_NAME};
+use crate::label::{intersect_labels, is_labels_joint, new_labels, Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
@@ -56,6 +56,31 @@ impl LabelModifier {
     pub fn is_on(&self) -> bool {
         matches!(*self, LabelModifier::Include(_))
     }
+
+    pub fn include(ls: Vec<&str>) -> Self {
+        Self::Include(new_labels(ls))
+    }
+
+    pub fn exclude(ls: Vec<&str>) -> Self {
+        Self::Exclude(new_labels(ls))
+    }
+}
+
+impl fmt::Display for LabelModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_on() && self.labels().is_empty() {
+            write!(f, "")
+        } else {
+            let op = if self.is_on() { "by" } else { "without" };
+            let labels = self
+                .labels()
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>()
+                .join(", ");
+            write!(f, "{op} ({labels})")
+        }
+    }
 }
 
 /// The label list provided with the group_left or group_right modifier contains
@@ -76,6 +101,14 @@ impl VectorMatchCardinality {
             VectorMatchCardinality::ManyToMany => None,
             VectorMatchCardinality::OneToOne => None,
         }
+    }
+
+    pub fn many_to_one(ls: Vec<&str>) -> Self {
+        Self::ManyToOne(new_labels(ls))
+    }
+
+    pub fn one_to_many(ls: Vec<&str>) -> Self {
+        Self::OneToMany(new_labels(ls))
     }
 }
 
@@ -174,14 +207,16 @@ impl BinModifier {
     }
 
     pub fn is_labels_joint(&self) -> bool {
-        matches!((self.card.labels(), &self.matching),
-                 (Some(labels), Some(matching)) if !matching.labels().is_disjoint(labels))
+        matches!(
+            (self.card.labels(), &self.matching),
+            (Some(labels), Some(matching)) if is_labels_joint(matching.labels(), labels)
+        )
     }
 
-    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+    pub fn intersect_labels(&self) -> Option<Vec<String>> {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return Some(matching.labels().intersection(labels).collect());
+                return Some(intersect_labels(matching.labels(), labels));
             }
         };
         None
@@ -330,6 +365,34 @@ pub struct AggregateExpr {
     pub modifier: Option<LabelModifier>,
 }
 
+impl fmt::Display for AggregateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut v: Vec<String> = vec![token_display(self.op.id()).into()];
+
+        // modifier
+        {
+            if let Some(modifier) = &self.modifier {
+                let s = modifier.to_string();
+                if !s.is_empty() {
+                    v.push(s);
+                }
+            }
+        }
+
+        // body
+        {
+            let mut body = String::from("(");
+            if let Some(param) = &self.param {
+                body.push_str(&format!("{param}, "));
+            }
+            body.push_str(&format!("{})", self.expr));
+            v.push(body)
+        }
+
+        write!(f, "{}", v.join(" "))
+    }
+}
+
 /// UnaryExpr will negate the expr
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
@@ -374,7 +437,7 @@ impl BinaryExpr {
     }
 
     /// intersect labels of card and matching
-    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+    pub fn intersect_labels(&self) -> Option<Vec<String>> {
         self.modifier
             .as_ref()
             .and_then(|modifier| modifier.intersect_labels())
@@ -892,40 +955,7 @@ impl Neg for Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Aggregate(agg) => {
-                let op = token_display(agg.op.id());
-                write!(f, "{op}")?;
-                if let Some(modifier) = &agg.modifier {
-                    match modifier {
-                        LabelModifier::Include(labels) => {
-                            let labels = labels
-                                .iter()
-                                .map(|e| e.to_string())
-                                .collect::<Vec<String>>()
-                                .join(", ");
-                            if !labels.is_empty() {
-                                write!(f, " by ({labels}) ",)?;
-                            }
-                        }
-                        LabelModifier::Exclude(labels) => write!(
-                            f,
-                            " without ({}) ",
-                            labels
-                                .iter()
-                                .map(|e| e.to_string())
-                                .collect::<Vec<String>>()
-                                .join(", ")
-                        )?,
-                    }
-                }
-                write!(f, "(")?;
-                if let Some(param) = &agg.param {
-                    write!(f, "{param}, ")?;
-                }
-                let expr = agg.expr.as_ref();
-                write!(f, "{expr})")?;
-                Ok(())
-            }
+            Expr::Aggregate(agg) => write!(f, "{agg}"),
             Expr::Unary(UnaryExpr { expr }) => write!(f, "- {expr}"),
             Expr::Binary(binary) => {
                 let lhs = binary.lhs.as_ref();
@@ -1247,8 +1277,6 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
 
     #[test]
@@ -1322,35 +1350,27 @@ mod tests {
     #[test]
     fn test_binary_labels() {
         assert_eq!(
-            LabelModifier::Include(HashSet::from([String::from("foo"), String::from("bar")]))
-                .labels(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &vec![String::from("foo"), String::from("bar")],
+            LabelModifier::Include(vec![String::from("foo"), String::from("bar")]).labels()
         );
 
         assert_eq!(
-            LabelModifier::Exclude(HashSet::from([String::from("foo"), String::from("bar")]))
-                .labels(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &vec![String::from("foo"), String::from("bar")],
+            LabelModifier::Exclude(vec![String::from("foo"), String::from("bar")]).labels()
         );
 
         assert_eq!(
-            VectorMatchCardinality::OneToMany(HashSet::from([
-                String::from("foo"),
-                String::from("bar")
-            ]))
-            .labels()
-            .unwrap(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &vec![String::from("foo"), String::from("bar")],
+            VectorMatchCardinality::OneToMany(vec![String::from("foo"), String::from("bar")])
+                .labels()
+                .unwrap()
         );
 
         assert_eq!(
-            VectorMatchCardinality::ManyToOne(HashSet::from([
-                String::from("foo"),
-                String::from("bar")
-            ]))
-            .labels()
-            .unwrap(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &vec![String::from("foo"), String::from("bar")],
+            VectorMatchCardinality::ManyToOne(vec![String::from("foo"), String::from("bar")])
+                .labels()
+                .unwrap()
         );
 
         assert_eq!(VectorMatchCardinality::OneToOne.labels(), None);
