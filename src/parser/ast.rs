@@ -17,36 +17,11 @@ use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
 use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
+use crate::util::display_duration;
 use std::fmt;
 use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-
-
-// cover duration to string
-
-fn duration_display(duration: &Duration) -> String {
-    let millisecs = duration.as_millis();
-    let secs = millisecs / 1000;
-    let d = secs / (60 * 60 * 24);
-    let h = (secs / (60 * 60)) % 24;
-    let m = (secs / 60) % 60;
-    let s = secs % 60;
-    let mut ss = Vec::new();
-    if d != 0 {
-        ss.push(format!("{d}d"));
-    }
-    if h != 0 {
-        ss.push(format!("{h}h"));
-    }
-    if m != 0 {
-        ss.push(format!("{m}m"));
-    }
-    if s != 0 {
-        ss.push(format!("{s}s"))
-    }
-    ss.join("")
-}
 
 /// LabelModifier acts as
 ///
@@ -230,8 +205,8 @@ pub enum Offset {
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Pos(dur) => write!(f, "{}", duration_display(dur)),
-            Offset::Neg(dur) => write!(f, "-{}", duration_display(dur)),
+            Offset::Pos(dur) => write!(f, "{}", display_duration(dur)),
+            Offset::Neg(dur) => write!(f, "-{}", display_duration(dur)),
         }
     }
 }
@@ -428,8 +403,14 @@ pub struct SubqueryExpr {
 impl fmt::Display for SubqueryExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.step {
-            Some(step) => write!(f, "{}[{}:{}]",self.expr, duration_display(&self.range), duration_display(step))?,
-            None => write!(f, "{}[{}]",self.expr, duration_display(&self.range))?
+            Some(step) => write!(
+                f,
+                "{}[{}:{}]",
+                self.expr,
+                display_duration(&self.range),
+                display_duration(step)
+            )?,
+            None => write!(f, "{}[{}]", self.expr, display_duration(&self.range))?,
         }
         if let Some(offset) = &self.offset {
             write!(f, " offset {offset}")?;
@@ -998,7 +979,7 @@ impl fmt::Display for Expr {
                 if !matchers.is_empty() {
                     write!(f, "{{{matchers}}}")?;
                 }
-                write!(f, "[{}]", duration_display(range))?;
+                write!(f, "[{}]", display_duration(range))?;
                 if let Some(offset) = &vector_selector.offset {
                     write!(f, " offset {offset}")?;
                 }

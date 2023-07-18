@@ -102,6 +102,40 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
     }
 }
 
+/// display Duration in Prometheus format
+pub fn display_duration(duration: &Duration) -> String {
+    if duration.is_zero() {
+        return "0s".into();
+    }
+    let mut ms = duration.as_millis();
+    let mut ss = Vec::new();
+
+    let mut f = |unit: &str, mult: u128, exact: bool| {
+        if exact && ms % mult != 0 {
+            return;
+        }
+
+        let v = ms / mult;
+        if v > 0 {
+            ss.push(format!("{}{}", v, unit));
+            ms -= v * mult
+        }
+    };
+
+    // Only format years and weeks if the remainder is zero, as it is often
+    // easier to read 90d than 12w6d.
+    f("y", 1000 * 60 * 60 * 24 * 365, true);
+    f("w", 1000 * 60 * 60 * 24 * 7, true);
+
+    f("d", 1000 * 60 * 60 * 24, false);
+    f("h", 1000 * 60 * 60, false);
+    f("m", 1000 * 60, false);
+    f("s", 1000, false);
+    f("ms", 1, false);
+
+    ss.join("")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +201,32 @@ mod tests {
         let ds = vec!["1", "1y1m1d", "-1w", "1.5d", "d", "", "0", "0w", "0s"];
         for d in ds {
             assert!(parse_duration(d).is_err(), "{} is invalid duration!", d);
+        }
+    }
+
+    #[test]
+    fn test_display_duration() {
+        let ds = vec![
+            (Duration::from_millis(324), "324ms"),
+            (Duration::from_secs(3), "3s"),
+            (MINUTE_DURATION * 5, "5m"),
+            (MINUTE_DURATION * 5 + MILLI_DURATION * 500, "5m500ms"),
+            (HOUR_DURATION, "1h"),
+            (DAY_DURATION * 4, "4d"),
+            (DAY_DURATION * 4 + HOUR_DURATION, "4d1h"),
+            (
+                DAY_DURATION * 4 + HOUR_DURATION * 2 + MINUTE_DURATION * 10,
+                "4d2h10m",
+            ),
+            (DAY_DURATION * 14, "2w"),
+            (WEEK_DURATION * 3, "3w"),
+            (WEEK_DURATION * 3 + HOUR_DURATION * 49, "23d1h"),
+            (YEAR_DURATION * 10, "10y"),
+        ];
+
+        for (d, expect) in ds {
+            let s = display_duration(&d);
+            assert_eq!(expect, s, "{} and {:?} not matched", s, expect);
         }
     }
 }
