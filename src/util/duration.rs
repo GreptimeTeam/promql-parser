@@ -108,7 +108,7 @@ pub fn display_duration(duration: &Duration) -> String {
         return "0s".into();
     }
     let mut ms = duration.as_millis();
-    let mut ss = Vec::new();
+    let mut ss = String::new();
 
     let mut f = |unit: &str, mult: u128, exact: bool| {
         if exact && ms % mult != 0 {
@@ -117,7 +117,7 @@ pub fn display_duration(duration: &Duration) -> String {
 
         let v = ms / mult;
         if v > 0 {
-            ss.push(format!("{}{}", v, unit));
+            ss.push_str(&format!("{v}{unit}"));
             ms -= v * mult
         }
     };
@@ -133,7 +133,7 @@ pub fn display_duration(duration: &Duration) -> String {
     f("s", 1000, false);
     f("ms", 1, false);
 
-    ss.join("")
+    ss
 }
 
 #[cfg(test)]

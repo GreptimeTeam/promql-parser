@@ -18,6 +18,7 @@ use std::fmt;
 use lazy_static::lazy_static;
 
 use crate::parser::{Expr, ValueType};
+use crate::util::join_vector;
 
 /// called by func in Call
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,13 +61,7 @@ impl FunctionArgs {
 
 impl fmt::Display for FunctionArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = self
-            .args
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-        write!(f, "{s}")
+        write!(f, "{}", join_vector(&self.args, ", ", false))
     }
 }
 

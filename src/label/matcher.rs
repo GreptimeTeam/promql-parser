@@ -15,8 +15,10 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
+
+use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::util::join_vector;
 
 #[derive(Debug, Clone)]
 pub enum MatchOp {
@@ -108,6 +110,12 @@ impl Matcher {
     }
 }
 
+impl fmt::Display for Matcher {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}\"{}\"", self.name, self.op, self.value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
@@ -154,13 +162,7 @@ impl Matchers {
 
 impl fmt::Display for Matchers {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut v = self
-            .matchers
-            .iter()
-            .map(|Matcher { op, name, value }| format!("{name}{op}\"{value}\""))
-            .collect::<Vec<String>>();
-        v.sort();
-        write!(f, "{}", v.join(","))
+        write!(f, "{}", join_vector(&self.matchers, ",", true))
     }
 }
 

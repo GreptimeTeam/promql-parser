@@ -110,28 +110,21 @@ pub struct BinModifier {
 
 impl fmt::Display for BinModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = String::from(self.bool_string());
+        write!(f, "{}", self.bool_str())?;
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls}) ")),
-                LabelModifier::Exclude(ls) => {
-                    if !ls.is_empty() {
-                        s.push_str(&format!("ignoring ({ls}) "));
-                    }
-                }
+                LabelModifier::Include(ls) => write!(f, "on ({ls}) ")?,
+                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(f, "ignoring ({ls}) ")?,
+                _ => (),
             }
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(ls) => {
-                s.push_str(&format!("group_left ({ls}) "));
-            }
-            VectorMatchCardinality::OneToMany(ls) => {
-                s.push_str(&format!("group_right ({ls}) "));
-            }
-            _ => {}
+            VectorMatchCardinality::ManyToOne(ls) => write!(f, "group_left ({ls}) ")?,
+            VectorMatchCardinality::OneToMany(ls) => write!(f, "group_right ({ls}) ")?,
+            _ => (),
         }
-        write!(f, "{s}")
+        Ok(())
     }
 }
 
@@ -185,7 +178,7 @@ impl BinModifier {
         matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
     }
 
-    pub fn bool_string(&self) -> &str {
+    pub fn bool_str(&self) -> &str {
         if self.return_bool {
             "bool "
         } else {
@@ -338,27 +331,20 @@ impl fmt::Display for AggregateExpr {
         write!(f, "{}", token_display(self.op.id()))?;
 
         // modifier
-        {
-            if let Some(modifier) = &self.modifier {
-                match modifier {
-                    LabelModifier::Include(ls) => {
-                        if !ls.is_empty() {
-                            write!(f, " by ({ls}) ")?;
-                        }
-                    }
-                    LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
-                }
+        if let Some(modifier) = &self.modifier {
+            match modifier {
+                LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
+                LabelModifier::Include(ls) if !ls.is_empty() => write!(f, " by ({ls}) ")?,
+                _ => (),
             }
         }
 
         // body
-        {
-            write!(f, "(")?;
-            if let Some(param) = &self.param {
-                write!(f, "{param}, ")?;
-            }
-            write!(f, "{})", self.expr)?;
+        write!(f, "(")?;
+        if let Some(param) = &self.param {
+            write!(f, "{param}, ")?;
         }
+        write!(f, "{})", self.expr)?;
 
         Ok(())
     }

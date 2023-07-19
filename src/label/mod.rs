@@ -69,8 +69,7 @@ impl Labels {
 
 impl fmt::Display for Labels {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let labels = self.labels.join(", ");
-        write!(f, "{labels}")
+        write!(f, "{}", self.labels.join(", "))
     }
 }
 
