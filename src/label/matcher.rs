@@ -163,7 +163,7 @@ impl fmt::Display for Matchers {
             .map(|Matcher { op, name, value }| format!("{name}{op}\"{value}\""))
             .collect::<Vec<String>>();
         v.sort();
-        write!(f, "{}", v.join(", "))
+        write!(f, "{}", v.join(","))
     }
 }
 

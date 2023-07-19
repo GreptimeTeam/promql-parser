@@ -221,7 +221,12 @@ impl fmt::Display for AtModifier {
         match self {
             AtModifier::Start => write!(f, "@ {}()", token_display(T_START)),
             AtModifier::End => write!(f, "@ {}()", token_display(T_END)),
-            AtModifier::At(time) => write!(f, "@ {:?}", time),
+            AtModifier::At(time) => {
+                let d = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO); // This should not happen
+                write!(f, "@ {:.3}", d.as_secs() as f64)
+            }
         }
     }
 }
@@ -339,10 +344,10 @@ impl fmt::Display for AggregateExpr {
                 match modifier {
                     LabelModifier::Include(ls) => {
                         if !ls.is_empty() {
-                            write!(f, " by ({ls})")?;
+                            write!(f, " by ({ls}) ")?;
                         }
                     }
-                    LabelModifier::Exclude(ls) => write!(f, " without ({ls})")?,
+                    LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
                 }
             }
         }
@@ -364,6 +369,12 @@ impl fmt::Display for AggregateExpr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
     pub expr: Box<Expr>,
+}
+
+impl fmt::Display for UnaryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "- {}", self.expr)
+    }
 }
 
 /// Grammar:
@@ -424,6 +435,12 @@ impl fmt::Display for BinaryExpr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
+}
+
+impl fmt::Display for ParenExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({})", self.expr)
+    }
 }
 
 /// Grammar:
@@ -586,14 +603,30 @@ impl fmt::Display for VectorSelector {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
-    pub vector_selector: VectorSelector,
+    pub vs: VectorSelector,
     pub range: Duration,
 }
 
 impl fmt::Display for MatrixSelector {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let range = display_duration(&self.range);
-        write!(f, "{}[{range}]", self.vector_selector)
+        if let Some(name) = &self.vs.name {
+            write!(f, "{name}")?;
+        }
+
+        let matchers = &self.vs.matchers.to_string();
+        if !matchers.is_empty() {
+            write!(f, "{{{matchers}}}")?;
+        }
+
+        write!(f, "[{}]", display_duration(&self.range))?;
+
+        if let Some(offset) = &self.vs.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.vs.at {
+            write!(f, " {at}")?;
+        }
+        Ok(())
     }
 }
 
@@ -763,10 +796,7 @@ impl Expr {
                 Err("no @ modifiers allowed before range".into())
             }
             Expr::VectorSelector(vs) => {
-                let ms = Expr::MatrixSelector(MatrixSelector {
-                    vector_selector: vs,
-                    range,
-                });
+                let ms = Expr::MatrixSelector(MatrixSelector { vs, range });
                 Ok(ms)
             }
             _ => Err("ranges only allowed for vector selectors".into()),
@@ -783,9 +813,9 @@ impl Expr {
                 }
                 Some(_) => already_set_err,
             },
-            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+            Expr::MatrixSelector(mut ms) => match ms.vs.at {
                 None => {
-                    ms.vector_selector.at = Some(at);
+                    ms.vs.at = Some(at);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
@@ -814,9 +844,9 @@ impl Expr {
                 }
                 Some(_) => already_set_err,
             },
-            Expr::MatrixSelector(mut ms) => match ms.vector_selector.offset {
+            Expr::MatrixSelector(mut ms) => match ms.vs.offset {
                 None => {
-                    ms.vector_selector.offset = Some(offset);
+                    ms.vs.offset = Some(offset);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
@@ -981,16 +1011,16 @@ impl Neg for Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Aggregate(agg) => write!(f, "{agg}"),
-            Expr::Unary(UnaryExpr { expr }) => write!(f, "- {expr}"),
-            Expr::Binary(bin) => write!(f, "{bin}"),
-            Expr::Paren(ParenExpr { expr }) => write!(f, "({expr})"),
-            Expr::Subquery(subquery) => write!(f, "{subquery}"),
-            Expr::NumberLiteral(nl) => write!(f, "{nl}"),
-            Expr::StringLiteral(sl) => write!(f, "{sl}"),
-            Expr::VectorSelector(vs) => write!(f, "{vs}"),
-            Expr::MatrixSelector(ms) => write!(f, "{ms}"),
-            Expr::Call(call) => write!(f, "{call}"),
+            Expr::Aggregate(ex) => write!(f, "{ex}"),
+            Expr::Unary(ex) => write!(f, "{ex}"),
+            Expr::Binary(ex) => write!(f, "{ex}"),
+            Expr::Paren(ex) => write!(f, "{ex}"),
+            Expr::Subquery(ex) => write!(f, "{ex}"),
+            Expr::NumberLiteral(ex) => write!(f, "{ex}"),
+            Expr::StringLiteral(ex) => write!(f, "{ex}"),
+            Expr::VectorSelector(ex) => write!(f, "{ex}"),
+            Expr::MatrixSelector(ex) => write!(f, "{ex}"),
+            Expr::Call(ex) => write!(f, "{ex}"),
             Expr::Extension(ext) => write!(f, "{ext:?}"),
         }
     }
@@ -1430,5 +1460,103 @@ mod tests {
             .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
             .unwrap_err()
         );
+    }
+
+    #[test]
+    fn test_expr_to_string() {
+        let cases = vec![
+            ("1", "1"),
+            ("Inf", "Inf"),
+            ("inf", "Inf"),
+            ("+Inf", "Inf"),
+            ("-Inf", "-Inf"),
+            (".5", "0.5"),
+            ("5.", "5"),
+            ("123.4567", "123.4567"),
+            ("5e-3", "0.005"),
+            ("5e3", "5000"),
+            ("0xc", "12"),
+            ("0755", "493"),
+            ("08", "8"),
+            ("+5.5e-3", "0.0055"),
+            ("-0755", "-493"),
+            ("NaN", "NaN"),
+            ("NAN", "NaN"),
+            ("- 1^2", "- 1 ^ 2"),
+            ("+1 + -2 * 1", "1 + -2 * 1"),
+            ("1 + 2/(3*1)", "1 + 2 / (3 * 1)"),
+            ("foo*sum", "foo * sum"),
+            ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
+            (
+                r#"up{job="hi", instance="in"}"#,
+                r#"up{instance="in",job="hi"}"#,
+            ),
+            ("sum (up) by (job,instance)", "sum by (job, instance) (up)"),
+            (
+                "foo / on(test,blub) group_left(bar) bar",
+                "foo / on (test, blub) group_left (bar) bar",
+            ),
+            (
+                r#"foo{a="b",foo!="bar",test=~"test",bar!~"baz"}"#,
+                r#"foo{a="b",bar!~"baz",foo!="bar",test=~"test"}"#,
+            ),
+            (
+                r#"{__name__=~"foo.+",__name__=~".*bar"}"#,
+                r#"{__name__=~".*bar",__name__=~"foo.+"}"#,
+            ),
+            (
+                r#"test{a="b"}[5y] OFFSET 3d"#,
+                r#"test{a="b"}[5y] offset 3d"#,
+            ),
+            (
+                "sum(some_metric) without(and, by, avg, count, alert, annotations)",
+                "sum without (and, by, avg, count, alert, annotations) (some_metric)",
+            ),
+            (
+                r#"floor(some_metric{foo!="bar"})"#,
+                r#"floor(some_metric{foo!="bar"})"#,
+            ),
+            (
+                "sum(rate(http_request_duration_seconds[10m])) / count(rate(http_request_duration_seconds[10m]))",
+                "sum(rate(http_request_duration_seconds[10m])) / count(rate(http_request_duration_seconds[10m]))",
+            ),
+            ("rate(some_metric[5m])", "rate(some_metric[5m])"),
+            ("round(some_metric,5)", "round(some_metric, 5)"),
+            (
+                r#"absent(sum(nonexistent{job="myjob"}))"#,
+                r#"absent(sum(nonexistent{job="myjob"}))"#,
+            ),
+            (
+                "histogram_quantile(0.9,rate(http_request_duration_seconds_bucket[10m]))",
+                "histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))",
+            ),
+            (
+                "histogram_quantile(0.9,sum(rate(http_request_duration_seconds_bucket[10m])) by(job,le))",
+                "histogram_quantile(0.9, sum by (job, le) (rate(http_request_duration_seconds_bucket[10m])))",
+            ),
+            (
+                r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+                r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
+            ),
+            ("some_metric OFFSET 1m [10m:5s]", "some_metric offset 1m[10m:5s]"),
+            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]")
+        ];
+
+        for (input, expected) in cases {
+            let expr = crate::parser::parse(input).unwrap();
+            assert_eq!(
+                expected,
+                expr.to_string(),
+                "{input} and {expected} do not match"
+            )
+        }
     }
 }

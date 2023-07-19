@@ -2104,48 +2104,4 @@ mod tests {
         ];
         assert_cases(fail_cases);
     }
-
-    #[test]
-    fn test_expr_print() {
-        let cases = vec![
-            ("1", "1"),
-            ("Inf", "Inf"),
-            ("inf", "Inf"),
-            ("+Inf", "Inf"),
-            ("-Inf", "-Inf"),
-            (".5", "0.5"),
-            ("5.", "5"),
-            ("123.4567", "123.4567"),
-            ("5e-3", "0.005"),
-            ("5e3", "5000"),
-            ("0xc", "12"),
-            ("0755", "493"),
-            ("08", "8"),
-            ("+5.5e-3", "0.0055"),
-            ("-0755", "-493"),
-            ("NaN", "NaN"),
-            ("NAN", "NaN"),
-            (
-                "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
-                "Inf"
-            ),
-            ("- 1^2", "- 1 ^ 2"),
-            ("+1 + -2 * 1", "1 + -2 * 1"),
-            ("1 + 2/(3*1)", "1 + 2 / (3 * 1)"),
-            ("foo*sum", "foo * sum"),
-
-            // (
-            //     // Test precedence and reassigning of operands.
-            //     "bar + on(foo) bla / on(baz, buz) group_right(test) blub",
-            //     "bar + on (foo) bla / on (baz, buz) group_right (test) blub",
-            // ),
-            // ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
-            ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
-        ];
-
-        for (input, expected) in cases {
-            let expr = crate::parser::parse(input).unwrap();
-            assert_eq!(expected, expr.to_string())
-        }
-    }
 }

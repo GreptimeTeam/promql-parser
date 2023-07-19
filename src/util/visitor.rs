@@ -127,7 +127,7 @@ mod tests {
                 Expr::MatrixSelector(matrix_selector) => {
                     let included = vector_selector_includes_namespace(
                         self.namespace.as_str(),
-                        &matrix_selector.vector_selector,
+                        &matrix_selector.vs,
                     );
                     return Ok(included);
                 }
