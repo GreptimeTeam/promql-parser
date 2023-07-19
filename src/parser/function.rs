@@ -314,7 +314,22 @@ mod tests {
 
     #[test]
     fn test_args_display() {
-        let args = FunctionArgs::new_args(Expr::from(VectorSelector::from("up")));
-        assert_eq!("up", args.to_string())
+        let cases = vec![
+            (
+                FunctionArgs::new_args(Expr::from(VectorSelector::from("up"))),
+                "up",
+            ),
+            (
+                FunctionArgs::empty_args()
+                    .append_args(Expr::from("src1"))
+                    .append_args(Expr::from("src2"))
+                    .append_args(Expr::from("src3")),
+                r#""src1", "src2", "src3""#,
+            ),
+        ];
+
+        for (args, expect) in cases {
+            assert_eq!(expect, args.to_string())
+        }
     }
 }

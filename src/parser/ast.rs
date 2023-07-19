@@ -336,7 +336,6 @@ pub struct AggregateExpr {
 impl fmt::Display for AggregateExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", token_display(self.op.id()))?;
-        // let mut v: Vec<String> = vec![token_display(self.op.id()).into()];
 
         // modifier
         {

@@ -207,6 +207,7 @@ mod tests {
     #[test]
     fn test_display_duration() {
         let ds = vec![
+            (Duration::ZERO, "0s"),
             (Duration::from_millis(324), "324ms"),
             (Duration::from_secs(3), "3s"),
             (MINUTE_DURATION * 5, "5m"),
