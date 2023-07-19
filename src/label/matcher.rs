@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -111,27 +110,25 @@ impl Matcher {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matchers {
-    pub matchers: HashSet<Matcher>,
+    pub matchers: Vec<Matcher>,
 }
 
 impl Matchers {
     pub fn empty() -> Self {
-        Self {
-            matchers: HashSet::new(),
-        }
+        Self { matchers: vec![] }
     }
 
     pub fn one(matcher: Matcher) -> Self {
-        let matchers = HashSet::from([matcher]);
+        let matchers = vec![matcher];
         Self { matchers }
     }
 
-    pub fn new(matchers: HashSet<Matcher>) -> Self {
+    pub fn new(matchers: Vec<Matcher>) -> Self {
         Self { matchers }
     }
 
     pub fn append(mut self, matcher: Matcher) -> Self {
-        self.matchers.insert(matcher);
+        self.matchers.push(matcher);
         self
     }
 
@@ -396,7 +393,6 @@ mod tests {
     fn test_matchers_equality() {
         assert_eq!(
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
                 .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
                 .append(Matcher::new(MatchOp::Equal, "name2", "val2")),
             Matchers::empty()

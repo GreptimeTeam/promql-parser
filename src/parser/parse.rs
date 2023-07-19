@@ -43,7 +43,6 @@ mod tests {
         VectorMatchCardinality, VectorSelector, INVALID_QUERY_INFO,
     };
     use crate::util::duration;
-    use std::collections::HashSet;
     use std::time::Duration;
 
     struct Case {
@@ -838,7 +837,7 @@ mod tests {
                 Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "a", "b"),
                     Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
@@ -853,12 +852,12 @@ mod tests {
                         String::from("baz"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
                 let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "a", "b"),
                     Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
@@ -873,19 +872,19 @@ mod tests {
                         String::from("baz"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(name), matchers)
             }),
             // the following multiple __name__ matcher test cases are not from prometheus
             (r#"{__name__="foo",__name__="bar"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, METRIC_NAME, "foo"),
                     Matcher::new(MatchOp::Equal, METRIC_NAME, "bar"),
-                ]));
+                ]);
                 Expr::new_vector_selector(None, matchers)
             }),
             (r#"{__name__=~"foo.+",__name__=~".*bar"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new_matcher(
                         token::T_EQL_REGEX,
                         String::from(METRIC_NAME),
@@ -898,7 +897,7 @@ mod tests {
                         String::from(".*bar"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(None, matchers)
             }),
         ];
@@ -1284,10 +1283,10 @@ mod tests {
             }),
             (r#"absent(nonexistent{job="myjob",instance=~".*"})"#, {
                 let name = String::from("nonexistent");
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "job", "myjob"),
                     Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                     Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
                 })
@@ -1319,10 +1318,10 @@ mod tests {
                 r#"absent_over_time(nonexistent{job="myjob",instance=~".*"}[1h])"#,
                 {
                     let name = String::from("nonexistent");
-                    let matchers = Matchers::new(HashSet::from([
+                    let matchers = Matchers::new(vec![
                         Matcher::new(MatchOp::Equal, "job", "myjob"),
                         Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
-                    ]));
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
                         .and_then(|ex| {
@@ -1464,12 +1463,12 @@ mod tests {
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
                 {
                     let name = String::from("up");
-                    let matchers = Matchers::new(HashSet::from([
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
                         Matcher::new(MatchOp::Equal, "src1", "a"),
                         Matcher::new(MatchOp::Equal, "src2", "b"),
                         Matcher::new(MatchOp::Equal, "src3", "c"),
-                        Matcher::new(MatchOp::Equal, "job", "api-server"),
-                    ]));
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
                             get_function("label_join").unwrap(),
@@ -1487,10 +1486,10 @@ mod tests {
                 r#"label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")"#,
                 {
                     let name = String::from("up");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new(MatchOp::Equal, "service", "a:c"),
+                    let matchers = Matchers::new(vec![
                         Matcher::new(MatchOp::Equal, "job", "api-server"),
-                    ]));
+                        Matcher::new(MatchOp::Equal, "service", "a:c"),
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
                             get_function("label_replace").unwrap(),

@@ -113,10 +113,10 @@ impl fmt::Display for BinModifier {
         let mut s = String::from(self.bool_string());
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls})")),
+                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls}) ")),
                 LabelModifier::Exclude(ls) => {
                     if !ls.is_empty() {
-                        s.push_str(&format!("ignoring ({ls})"));
+                        s.push_str(&format!("ignoring ({ls}) "));
                     }
                 }
             }
@@ -124,10 +124,10 @@ impl fmt::Display for BinModifier {
 
         match &self.card {
             VectorMatchCardinality::ManyToOne(ls) => {
-                s.push_str(&format!(" group_left ({ls})"));
+                s.push_str(&format!("group_left ({ls}) "));
             }
             VectorMatchCardinality::OneToMany(ls) => {
-                s.push_str(&format!(" group_right ({ls})"));
+                s.push_str(&format!("group_right ({ls}) "));
             }
             _ => {}
         }
@@ -426,7 +426,7 @@ impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op = token_display(self.op.id());
         match &self.modifier {
-            Some(modifier) => write!(f, "{} {} {} {}", self.lhs, op, modifier, self.rhs),
+            Some(modifier) => write!(f, "{} {} {}{}", self.lhs, op, modifier, self.rhs),
             None => write!(f, "{} {} {}", self.lhs, op, self.rhs),
         }
     }
@@ -535,6 +535,28 @@ pub struct VectorSelector {
     pub matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+impl VectorSelector {
+    pub fn new(name: Option<String>, matchers: Matchers) -> Self {
+        VectorSelector {
+            name,
+            matchers,
+            offset: None,
+            at: None,
+        }
+    }
+}
+
+impl Default for VectorSelector {
+    fn default() -> Self {
+        Self {
+            name: None,
+            matchers: Matchers::empty(),
+            offset: None,
+            at: None,
+        }
+    }
 }
 
 impl From<String> for VectorSelector {
@@ -747,12 +769,7 @@ pub enum Expr {
 
 impl Expr {
     pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
-        let vs = VectorSelector {
-            name,
-            offset: None,
-            at: None,
-            matchers,
-        };
+        let vs = VectorSelector::new(name, matchers);
         Ok(Self::VectorSelector(vs))
     }
 
@@ -1279,6 +1296,7 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::label::{MatchOp, Matcher, Matchers};
 
     #[test]
     fn test_valid_at_modifier() {
@@ -1464,7 +1482,7 @@ mod tests {
 
     #[test]
     fn test_expr_to_string() {
-        let cases = vec![
+        let mut cases = vec![
             ("1", "1"),
             ("Inf", "Inf"),
             ("inf", "Inf"),
@@ -1550,6 +1568,62 @@ mod tests {
             ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]")
         ];
 
+        // the following cases are from https://github.com/prometheus/prometheus/blob/main/promql/parser/printer_test.go
+        let mut cases1 = vec![
+            (
+                r#"sum by() (task:errors:rate10s{job="s"})"#,
+                r#"sum(task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum by(code) (task:errors:rate10s{job="s"})"#,
+                r#"sum by (code) (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum without() (task:errors:rate10s{job="s"})"#,
+                r#"sum without () (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum without(instance) (task:errors:rate10s{job="s"})"#,
+                r#"sum without (instance) (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"topk(5, task:errors:rate10s{job="s"})"#,
+                r#"topk(5, task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"count_values("value", task:errors:rate10s{job="s"})"#,
+                r#"count_values("value", task:errors:rate10s{job="s"})"#,
+            ),
+            ("a - on() c", "a - on () c"),
+            ("a - on(b) c", "a - on (b) c"),
+            ("a - on(b) group_left(x) c", "a - on (b) group_left (x) c"),
+            (
+                "a - on(b) group_left(x, y) c",
+                "a - on (b) group_left (x, y) c",
+            ),
+            ("a - on(b) group_left c", "a - on (b) group_left () c"),
+            ("a - ignoring(b) c", "a - ignoring (b) c"),
+            ("a - ignoring() c", "a - c"),
+            ("up > bool 0", "up > bool 0"),
+            ("a offset 1m", "a offset 1m"),
+            ("a offset -7m", "a offset -7m"),
+            (r#"a{c="d"}[5m] offset 1m"#, r#"a{c="d"}[5m] offset 1m"#),
+            ("a[5m] offset 1m", "a[5m] offset 1m"),
+            ("a[12m] offset -3m", "a[12m] offset -3m"),
+            ("a[1h:5m] offset 1m", "a[1h:5m] offset 1m"),
+            (r#"{__name__="a"}"#, r#"{__name__="a"}"#),
+            (r#"a{b!="c"}[1m]"#, r#"a{b!="c"}[1m]"#),
+            (r#"a{b=~"c"}[1m]"#, r#"a{b=~"c"}[1m]"#),
+            (r#"a{b!~"c"}[1m]"#, r#"a{b!~"c"}[1m]"#),
+            ("a @ 10", "a @ 10.000"),
+            ("a[1m] @ 10", "a[1m] @ 10.000"),
+            ("a @ start()", "a @ start()"),
+            ("a @ end()", "a @ end()"),
+            ("a[1m] @ start()", "a[1m] @ start()"),
+            ("a[1m] @ end()", "a[1m] @ end()"),
+        ];
+
+        cases.append(&mut cases1);
         for (input, expected) in cases {
             let expr = crate::parser::parse(input).unwrap();
             assert_eq!(
@@ -1557,6 +1631,44 @@ mod tests {
                 expr.to_string(),
                 "{input} and {expected} do not match"
             )
+        }
+    }
+
+    #[test]
+    fn test_vector_selector_to_string() {
+        let cases = vec![
+            (VectorSelector::default(), ""),
+            (VectorSelector::from("foobar"), "foobar"),
+            (
+                {
+                    let name = Some(String::from("foobar"));
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "a", "x"));
+                    VectorSelector::new(name, matchers)
+                },
+                r#"foobar{a="x"}"#,
+            ),
+            (
+                {
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "a", "x"),
+                        Matcher::new(MatchOp::Equal, "b", "y"),
+                    ]);
+                    VectorSelector::new(None, matchers)
+                },
+                r#"{a="x",b="y"}"#,
+            ),
+            (
+                {
+                    let matchers =
+                        Matchers::one(Matcher::new(MatchOp::Equal, METRIC_NAME, "foobar"));
+                    VectorSelector::new(None, matchers)
+                },
+                r#"{__name__="foobar"}"#,
+            ),
+        ];
+
+        for (vs, expect) in cases {
+            assert_eq!(expect, vs.to_string(), "{vs:?} does not match {expect}")
         }
     }
 }
