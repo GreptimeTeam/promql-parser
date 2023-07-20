@@ -69,9 +69,9 @@ impl Prettier for FunctionArgs {
     fn pretty(&self, level: usize, max: usize) -> String {
         let mut v = vec![];
         for ex in &self.args {
-            v.push(format!("{},", ex.pretty(level, max)));
+            v.push(ex.pretty(level, max));
         }
-        v.join("\n")
+        v.join(",\n")
     }
 }
 

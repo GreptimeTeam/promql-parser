@@ -81,12 +81,12 @@ pub trait Prettier: std::fmt::Display {
         INDENT_STR.repeat(n)
     }
 
-    /// override format if it needs pretty
+    /// override format if expr needs to be splited into multiple lines
     fn format(&self, level: usize, _max: usize) -> String {
         format!("{}{self}", self.indent(level))
     }
 
-    /// override needs_split to return false to return the default format
+    /// override needs_split to return false, in order not to split multiple lines
     fn needs_split(&self, max: usize) -> bool {
         self.to_string().len() > max
     }

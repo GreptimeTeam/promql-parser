@@ -445,7 +445,7 @@ impl BinaryExpr {
 
     fn get_op_matching_string(&self) -> String {
         match &self.modifier {
-            Some(modifier) => format!("{}{}", self.op, modifier.to_string()),
+            Some(modifier) => format!("{}{modifier}", self.op),
             None => self.op.to_string(),
         }
     }
@@ -520,11 +520,13 @@ impl SubqueryExpr {
         let range = display_duration(&self.range);
 
         let mut s = format!("[{range}:{step}]");
-        if let Some(offset) = &self.offset {
-            s.push_str(&format!(" offset {offset}"));
-        }
+
         if let Some(at) = &self.at {
             s.push_str(&format!(" {at}"));
+        }
+
+        if let Some(offset) = &self.offset {
+            s.push_str(&format!(" offset {offset}"));
         }
         s
     }
@@ -540,7 +542,7 @@ impl Prettier for SubqueryExpr {
     fn pretty(&self, level: usize, max: usize) -> String {
         format!(
             "{}{}",
-            self.expr.pretty(level + 1, max),
+            self.expr.pretty(level, max),
             self.get_time_suffix_string()
         )
     }
@@ -694,11 +696,11 @@ impl fmt::Display for VectorSelector {
         if !matchers.is_empty() {
             write!(f, "{{{matchers}}}")?;
         }
-        if let Some(offset) = &self.offset {
-            write!(f, " offset {offset}")?;
-        }
         if let Some(at) = &self.at {
             write!(f, " {at}")?;
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
         }
         Ok(())
     }
@@ -729,12 +731,14 @@ impl fmt::Display for MatrixSelector {
 
         write!(f, "[{}]", display_duration(&self.range))?;
 
-        if let Some(offset) = &self.vs.offset {
-            write!(f, " offset {offset}")?;
-        }
         if let Some(at) = &self.vs.at {
             write!(f, " {at}")?;
         }
+
+        if let Some(offset) = &self.vs.offset {
+            write!(f, " offset {offset}")?;
+        }
+
         Ok(())
     }
 }
@@ -1634,6 +1638,10 @@ mod tests {
             ("foo*sum", "foo * sum"),
             ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
             (
+                r#"up{job="hi", instance="in"} offset 5m @ 100"#,
+                r#"up{instance="in",job="hi"} @ 100.000 offset 5m"#,
+            ),
+            (
                 r#"up{job="hi", instance="in"}"#,
                 r#"up{instance="in",job="hi"}"#,
             ),
@@ -1766,13 +1774,7 @@ mod tests {
         cases.append(&mut cases1);
         for (input, expected) in cases {
             let expr = crate::parser::parse(input).unwrap();
-            assert_eq!(
-                expected,
-                expr.to_string(),
-                "{} and {} do not match",
-                input,
-                expected
-            )
+            assert_eq!(expected, expr.to_string())
         }
     }
 
@@ -1810,7 +1812,7 @@ mod tests {
         ];
 
         for (vs, expect) in cases {
-            assert_eq!(expect, vs.to_string(), "{vs:?} does not match {expect}")
+            assert_eq!(expect, vs.to_string())
         }
     }
 
@@ -1819,99 +1821,93 @@ mod tests {
         let cases = vec![
             ("sum(foo)", "sum(foo)"),
             (
-                "sum by() (task:errors:rate10s{job=\"s\"})",
-                "sum(
-  task:errors:rate10s{job=\"s\"}
-)",
+                r#"sum by() (task:errors:rate10s{job="s"})"#,
+                r#"sum(
+  task:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "sum without(job,foo) (task:errors:rate10s{job=\"s\"})",
-                "sum without (job, foo) (
-  task:errors:rate10s{job=\"s\"}
-)",
+                r#"sum without(job,foo) (task:errors:rate10s{job="s"})"#,
+                r#"sum without (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "sum(task:errors:rate10s{job=\"s\"}) without(job,foo)",
-                "sum without (job, foo) (
-  task:errors:rate10s{job=\"s\"}
-)",
+                r#"sum(task:errors:rate10s{job="s"}) without(job,foo)"#,
+                r#"sum without (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "sum by(job,foo) (task:errors:rate10s{job=\"s\"})",
-                "sum by (job, foo) (
-  task:errors:rate10s{job=\"s\"}
-)",
+                r#"sum by(job,foo) (task:errors:rate10s{job="s"})"#,
+                r#"sum by (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "sum (task:errors:rate10s{job=\"s\"}) by(job,foo)",
-                "sum by (job, foo) (
-  task:errors:rate10s{job=\"s\"}
-)",
+                r#"sum (task:errors:rate10s{job="s"}) by(job,foo)"#,
+                r#"sum by (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "topk(10, ask:errors:rate10s{job=\"s\"})",
-                "topk(
+                r#"topk(10, ask:errors:rate10s{job="s"})"#,
+                r#"topk(
   10,
-  ask:errors:rate10s{job=\"s\"}
-)",
+  ask:errors:rate10s{job="s"}
+)"#,
             ),
             (
-                "sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job=\"s\"}))",
-                "sum by (job, foo) (
+                r#"sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
   sum by (job, foo) (
-    task:errors:rate10s{job=\"s\"}
+    task:errors:rate10s{job="s"}
   )
-)",
+)"#,
             ),
             (
-                "sum by(job,foo) (sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job=\"s\"})))",
-                "sum by (job, foo) (
+                r#"sum by(job,foo) (sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job="s"})))"#,
+                r#"sum by (job, foo) (
   sum by (job, foo) (
     sum by (job, foo) (
-      task:errors:rate10s{job=\"s\"}
+      task:errors:rate10s{job="s"}
     )
   )
-)",
+)"#,
             ),
             (
-                "sum by(job,foo)
-(sum by(job,foo) (task:errors:rate10s{job=\"s\"}))",
-                 "sum by (job, foo) (
+                r#"sum by(job,foo)
+(sum by(job,foo) (task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
   sum by (job, foo) (
-    task:errors:rate10s{job=\"s\"}
+    task:errors:rate10s{job="s"}
   )
-)",
+)"#,
             ),
             (
-                "sum by(job,foo)
-(sum(task:errors:rate10s{job=\"s\"}) without(job,foo))",
-                "sum by (job, foo) (
+                r#"sum by(job,foo)
+(sum(task:errors:rate10s{job="s"}) without(job,foo))"#,
+                r#"sum by (job, foo) (
   sum without (job, foo) (
-    task:errors:rate10s{job=\"s\"}
+    task:errors:rate10s{job="s"}
   )
-)",
+)"#,
             ),
             (
-            "sum by(job,foo) # Comment 1.
+                r#"sum by(job,foo) # Comment 1.
 (sum by(job,foo) ( # Comment 2.
-task:errors:rate10s{job=\"s\"}))",
-                 "sum by (job, foo) (
+task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
   sum by (job, foo) (
-    task:errors:rate10s{job=\"s\"}
+    task:errors:rate10s{job="s"}
   )
-)",
+)"#,
             ),
         ];
 
         for (input, expect) in cases {
             let expr = crate::parser::parse(&input);
-            assert_eq!(
-                expect,
-                expr.unwrap().pretty(0, 10),
-                "{} and {} does not match",
-                input,
-                expect
-            );
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
 
@@ -1982,13 +1978,446 @@ task:errors:rate10s{job=\"s\"}))",
 
         for (input, expect) in cases {
             let expr = crate::parser::parse(&input);
-            assert_eq!(
-                expect,
-                expr.unwrap().pretty(0, 10),
-                "{} and {} does not match",
-                input,
-                expect
-            );
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_call_expr_pretty() {
+        let cases = vec![
+            (
+                "rate(foo[1m])",
+                "rate(
+  foo[1m]
+)",
+            ),
+            (
+                "sum_over_time(foo[1m])",
+                "sum_over_time(
+  foo[1m]
+)",
+            ),
+            (
+                "rate(long_vector_selector[10m:1m] @ start() offset 1m)",
+                "rate(
+  long_vector_selector[10m:1m] @ start() offset 1m
+)",
+            ),
+            (
+                "histogram_quantile(0.9, rate(foo[1m]))",
+                "histogram_quantile(
+  0.9,
+  rate(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                "histogram_quantile(0.9, rate(foo[1m] @ start()))",
+                "histogram_quantile(
+  0.9,
+  rate(
+    foo[1m] @ start()
+  )
+)",
+            ),
+            (
+                "max_over_time(rate(demo_api_request_duration_seconds_count[1m])[1m:] @ start() offset 1m)",
+                "max_over_time(
+  rate(
+    demo_api_request_duration_seconds_count[1m]
+  )[1m:] @ start() offset 1m
+)",
+            ),
+            (
+                r#"label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")"#,
+                r#"label_replace(
+  up{job="api-server",service="a:c"},
+  "foo",
+  "$1",
+  "service",
+  "(.*):.*"
+)"#,
+            ),
+            (
+                r#"label_replace(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*")"#,
+                r#"label_replace(
+  label_replace(
+    up{job="api-server",service="a:c"},
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  ),
+  "foo",
+  "$1",
+  "service",
+  "(.*):.*"
+)"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_paren_expr_pretty() {
+        let cases = vec![
+            ("(foo)", "(foo)"),
+            (
+                "(_foo_long_)",
+                "(
+  _foo_long_
+)",
+            ),
+            (
+                "((foo_long))",
+                "(
+  (foo_long)
+)",
+            ),
+            (
+                "((_foo_long_))",
+                "(
+  (
+    _foo_long_
+  )
+)",
+            ),
+            (
+                "(((foo_long)))",
+                "(
+  (
+    (foo_long)
+  )
+)",
+            ),
+            ("(1 + 2)", "(1 + 2)"),
+            (
+                "(foo + bar)",
+                "(
+  foo + bar
+)",
+            ),
+            (
+                "(foo_long + bar_long)",
+                "(
+    foo_long
+  +
+    bar_long
+)",
+            ),
+            (
+                "(foo_long + bar_long + bar_2_long)",
+                "(
+      foo_long
+    +
+      bar_long
+  +
+    bar_2_long
+)",
+            ),
+            (
+                "((foo_long + bar_long) + bar_2_long)",
+                "(
+    (
+        foo_long
+      +
+        bar_long
+    )
+  +
+    bar_2_long
+)",
+            ),
+            (
+                "(1111 + 2222)",
+                "(
+    1111
+  +
+    2222
+)",
+            ),
+            (
+                "(sum_over_time(foo[1m]))",
+                "(
+  sum_over_time(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                r#"(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    up{job="api-server",service="a:c"},
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+            (
+                r#"(label_replace(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    label_replace(
+      up{job="api-server",service="a:c"},
+      "foo",
+      "$1",
+      "service",
+      "(.*):.*"
+    ),
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+            (
+                r#"(label_replace(label_replace((up{job="api-server",service="a:c"}), "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    label_replace(
+      (
+        up{job="api-server",service="a:c"}
+      ),
+      "foo",
+      "$1",
+      "service",
+      "(.*):.*"
+    ),
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_unary_expr_pretty() {
+        let cases = vec![
+            ("-1", "-1"),
+            ("-vector_selector", "-vector_selector"),
+            (
+                "(-vector_selector)",
+                "(
+  -vector_selector
+)",
+            ),
+            (
+                "-histogram_quantile(0.9,rate(foo[1m]))",
+                "-histogram_quantile(
+  0.9,
+  rate(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                "-histogram_quantile(0.99, sum by (le) (rate(foo[1m])))",
+                "-histogram_quantile(
+  0.99,
+  sum by (le) (
+    rate(
+      foo[1m]
+    )
+  )
+)",
+            ),
+            (
+                "-histogram_quantile(0.9, -rate(foo[1m] @ start()))",
+                "-histogram_quantile(
+  0.9,
+  -rate(
+    foo[1m] @ start()
+  )
+)",
+            ),
+            (
+                "(-histogram_quantile(0.9, -rate(foo[1m] @ start())))",
+                "(
+  -histogram_quantile(
+    0.9,
+    -rate(
+      foo[1m] @ start()
+    )
+  )
+)",
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_expr_pretty() {
+        // Following queries have been taken from https://monitoring.mixins.dev/
+        let cases = vec![
+            (
+                r#"(node_filesystem_avail_bytes{job="node",fstype!=""} / node_filesystem_size_bytes{job="node",fstype!=""} * 100 < 40 and predict_linear(node_filesystem_avail_bytes{job="node",fstype!=""}[6h], 24*60*60) < 0 and node_filesystem_readonly{job="node",fstype!=""} == 0)"#,
+                r#"(
+            node_filesystem_avail_bytes{fstype!="",job="node"}
+          /
+            node_filesystem_size_bytes{fstype!="",job="node"}
+        *
+          100
+      <
+        40
+    and
+        predict_linear(
+          node_filesystem_avail_bytes{fstype!="",job="node"}[6h],
+            24 * 60
+          *
+            60
+        )
+      <
+        0
+  and
+      node_filesystem_readonly{fstype!="",job="node"}
+    ==
+      0
+)"#,
+            ),
+            (
+                r#"(node_filesystem_avail_bytes{job="node",fstype!=""} / node_filesystem_size_bytes{job="node",fstype!=""} * 100 < 20 and predict_linear(node_filesystem_avail_bytes{job="node",fstype!=""}[6h], 4*60*60) < 0 and node_filesystem_readonly{job="node",fstype!=""} == 0)"#,
+                r#"(
+            node_filesystem_avail_bytes{fstype!="",job="node"}
+          /
+            node_filesystem_size_bytes{fstype!="",job="node"}
+        *
+          100
+      <
+        20
+    and
+        predict_linear(
+          node_filesystem_avail_bytes{fstype!="",job="node"}[6h],
+            4 * 60
+          *
+            60
+        )
+      <
+        0
+  and
+      node_filesystem_readonly{fstype!="",job="node"}
+    ==
+      0
+)"#,
+            ),
+            (
+                r#"(node_timex_offset_seconds > 0.05 and deriv(node_timex_offset_seconds[5m]) >= 0) or (node_timex_offset_seconds < -0.05 and deriv(node_timex_offset_seconds[5m]) <= 0)"#,
+                r#"  (
+        node_timex_offset_seconds
+      >
+        0.05
+    and
+        deriv(
+          node_timex_offset_seconds[5m]
+        )
+      >=
+        0
+  )
+or
+  (
+        node_timex_offset_seconds
+      <
+        -0.05
+    and
+        deriv(
+          node_timex_offset_seconds[5m]
+        )
+      <=
+        0
+  )"#,
+            ),
+            (
+                r#"1 - ((node_memory_MemAvailable_bytes{job="node"} or (node_memory_Buffers_bytes{job="node"} + node_memory_Cached_bytes{job="node"} + node_memory_MemFree_bytes{job="node"} + node_memory_Slab_bytes{job="node"}) ) / node_memory_MemTotal_bytes{job="node"})"#,
+                r#"  1
+-
+  (
+      (
+          node_memory_MemAvailable_bytes{job="node"}
+        or
+          (
+                  node_memory_Buffers_bytes{job="node"}
+                +
+                  node_memory_Cached_bytes{job="node"}
+              +
+                node_memory_MemFree_bytes{job="node"}
+            +
+              node_memory_Slab_bytes{job="node"}
+          )
+      )
+    /
+      node_memory_MemTotal_bytes{job="node"}
+  )"#,
+            ),
+            (
+                r#"min by (job, integration) (rate(alertmanager_notifications_failed_total{job="alertmanager", integration=~".*"}[5m]) / rate(alertmanager_notifications_total{job="alertmanager", integration="~.*"}[5m])) > 0.01"#,
+                r#"  min by (job, integration) (
+      rate(
+        alertmanager_notifications_failed_total{integration=~".*",job="alertmanager"}[5m]
+      )
+    /
+      rate(
+        alertmanager_notifications_total{integration="~.*",job="alertmanager"}[5m]
+      )
+  )
+>
+  0.01"#,
+            ),
+            (
+                r#"(count by (job) (changes(process_start_time_seconds{job="alertmanager"}[10m]) > 4) / count by (job) (up{job="alertmanager"})) >= 0.5"#,
+                r#"  (
+      count by (job) (
+          changes(
+            process_start_time_seconds{job="alertmanager"}[10m]
+          )
+        >
+          4
+      )
+    /
+      count by (job) (
+        up{job="alertmanager"}
+      )
+  )
+>=
+  0.5"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_step_invariant_pretty() {
+        let cases = vec![
+            ("a @ 1", "a @ 1.000"),
+            ("a @ start()", "a @ start()"),
+            ("vector_selector @ start()", "vector_selector @ start()"),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
 }
