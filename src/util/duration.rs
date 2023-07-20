@@ -117,7 +117,7 @@ pub fn display_duration(duration: &Duration) -> String {
 
         let v = ms / mult;
         if v > 0 {
-            ss += format!("{v}{unit}");
+            ss.push_str(&format!("{v}{unit}"));
             ms -= v * mult
         }
     };
