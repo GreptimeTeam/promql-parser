@@ -36,14 +36,13 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 mod tests {
     use regex::Regex;
 
-    use crate::label::{MatchOp, Matcher, Matchers, METRIC_NAME};
+    use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
     use crate::parser::function::get_function;
     use crate::parser::{
         token, AtModifier as At, BinModifier, Expr, FunctionArgs, LabelModifier, Offset,
         VectorMatchCardinality, VectorSelector, INVALID_QUERY_INFO,
     };
     use crate::util::duration;
-    use std::collections::HashSet;
     use std::time::Duration;
 
     struct Case {
@@ -413,13 +412,8 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
-                                String::from("test"),
-                            ])))
-                            .with_matching(Some(LabelModifier::Include(HashSet::from([
-                                String::from("baz"),
-                                String::from("buz"),
-                            ])))),
+                            .with_card(VectorMatchCardinality::one_to_many(vec!["test"]))
+                            .with_matching(Some(LabelModifier::include(vec!["baz", "buz"]))),
                     ),
                     Expr::from(VectorSelector::from("blub")),
                 )
@@ -428,9 +422,8 @@ mod tests {
                         Expr::from(VectorSelector::from("bar")),
                         token::T_ADD,
                         Some(
-                            BinModifier::default().with_matching(Some(LabelModifier::Include(
-                                HashSet::from([String::from("foo")]),
-                            ))),
+                            BinModifier::default()
+                                .with_matching(Some(LabelModifier::include(vec!["foo"]))),
                         ),
                         ex,
                     )
@@ -442,9 +435,8 @@ mod tests {
                     Expr::from(VectorSelector::from("foo")),
                     token::T_MUL,
                     Some(
-                        BinModifier::default().with_matching(Some(LabelModifier::Include(
-                            HashSet::from([String::from("test"), String::from("blub")]),
-                        ))),
+                        BinModifier::default()
+                            .with_matching(Some(LabelModifier::include(vec!["test", "blub"]))),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -456,20 +448,14 @@ mod tests {
                     token::T_MUL,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Include(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::new())),
+                            .with_matching(Some(LabelModifier::include(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::many_to_one(vec![])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
             ),
             ("foo and on(test,blub) bar", {
-                let matching = LabelModifier::Include(HashSet::from([
-                    String::from("test"),
-                    String::from("blub"),
-                ]));
+                let matching = LabelModifier::include(vec!["test", "blub"]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -483,7 +469,7 @@ mod tests {
                 )
             }),
             ("foo and on() bar", {
-                let matching = LabelModifier::Include(HashSet::new());
+                let matching = LabelModifier::include(vec![]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -497,10 +483,7 @@ mod tests {
                 )
             }),
             ("foo and ignoring(test,blub) bar", {
-                let matching = LabelModifier::Exclude(HashSet::from([
-                    String::from("test"),
-                    String::from("blub"),
-                ]));
+                let matching = LabelModifier::exclude(vec!["test", "blub"]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -514,7 +497,7 @@ mod tests {
                 )
             }),
             ("foo and ignoring() bar", {
-                let matching = LabelModifier::Exclude(HashSet::new());
+                let matching = LabelModifier::exclude(vec![]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -528,7 +511,7 @@ mod tests {
                 )
             }),
             ("foo unless on(bar) baz", {
-                let matching = LabelModifier::Include(HashSet::from([String::from("bar")]));
+                let matching = LabelModifier::include(vec!["bar"]);
                 let card = VectorMatchCardinality::ManyToMany;
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -548,13 +531,8 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Include(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
-                                String::from("bar"),
-                            ]))),
+                            .with_matching(Some(LabelModifier::include(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::many_to_one(vec!["bar"])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -566,13 +544,8 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Exclude(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
-                                String::from("blub"),
-                            ]))),
+                            .with_matching(Some(LabelModifier::exclude(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::many_to_one(vec!["blub"])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -584,13 +557,8 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Exclude(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::from([
-                                String::from("bar"),
-                            ]))),
+                            .with_matching(Some(LabelModifier::exclude(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::many_to_one(vec!["bar"])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -602,14 +570,8 @@ mod tests {
                     token::T_SUB,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Include(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
-                                String::from("bar"),
-                                String::from("foo"),
-                            ]))),
+                            .with_matching(Some(LabelModifier::include(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::one_to_many(vec!["bar", "foo"])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -621,14 +583,8 @@ mod tests {
                     token::T_SUB,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Exclude(HashSet::from([
-                                String::from("test"),
-                                String::from("blub"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::OneToMany(HashSet::from([
-                                String::from("bar"),
-                                String::from("foo"),
-                            ]))),
+                            .with_matching(Some(LabelModifier::exclude(vec!["test", "blub"])))
+                            .with_card(VectorMatchCardinality::one_to_many(vec!["bar", "foo"])),
                     ),
                     Expr::from(VectorSelector::from("bar")),
                 ),
@@ -653,9 +609,8 @@ mod tests {
                         lhs,
                         token::T_DIV,
                         Some(
-                            BinModifier::default().with_matching(Some(LabelModifier::Exclude(
-                                HashSet::from([String::from("code")]),
-                            ))),
+                            BinModifier::default()
+                                .with_matching(Some(LabelModifier::exclude(vec!["code"]))),
                         ),
                         Expr::from(VectorSelector::from("method:http_requests:rate5m")),
                     )
@@ -668,10 +623,8 @@ mod tests {
                     token::T_DIV,
                     Some(
                         BinModifier::default()
-                            .with_matching(Some(LabelModifier::Exclude(HashSet::from([
-                                String::from("code"),
-                            ]))))
-                            .with_card(VectorMatchCardinality::ManyToOne(HashSet::new())),
+                            .with_matching(Some(LabelModifier::exclude(vec!["code"])))
+                            .with_card(VectorMatchCardinality::ManyToOne(Labels::new(vec![]))),
                     ),
                     Expr::from(VectorSelector::from("method:http_requests:rate5m")),
                 ),
@@ -884,7 +837,7 @@ mod tests {
                 Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "a", "b"),
                     Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
@@ -899,12 +852,12 @@ mod tests {
                         String::from("baz"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
             (r#"foo{a="b", foo!="bar", test=~"test", bar!~"baz",}"#, {
                 let name = String::from("foo");
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "a", "b"),
                     Matcher::new(MatchOp::NotEqual, "foo", "bar"),
                     Matcher::new_matcher(
@@ -919,19 +872,19 @@ mod tests {
                         String::from("baz"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(name), matchers)
             }),
             // the following multiple __name__ matcher test cases are not from prometheus
             (r#"{__name__="foo",__name__="bar"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, METRIC_NAME, "foo"),
                     Matcher::new(MatchOp::Equal, METRIC_NAME, "bar"),
-                ]));
+                ]);
                 Expr::new_vector_selector(None, matchers)
             }),
             (r#"{__name__=~"foo.+",__name__=~".*bar"}"#, {
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new_matcher(
                         token::T_EQL_REGEX,
                         String::from(METRIC_NAME),
@@ -944,7 +897,7 @@ mod tests {
                         String::from(".*bar"),
                     )
                     .unwrap(),
-                ]));
+                ]);
                 Expr::new_vector_selector(None, matchers)
             }),
         ];
@@ -1161,26 +1114,26 @@ mod tests {
         let cases = vec![
             ("sum by (foo) (some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                let modifier = LabelModifier::Include(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::include(vec!["foo"]);
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("avg by (foo)(some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                let modifier = LabelModifier::Include(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::include(vec!["foo"]);
                 Expr::new_aggregate_expr(token::T_AVG, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("max by (foo)(some_metric)", {
-                let modifier = LabelModifier::Include(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::include(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_MAX, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum without (foo) (some_metric)", {
-                let modifier = LabelModifier::Exclude(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::exclude(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum (some_metric) without (foo)", {
-                let modifier = LabelModifier::Exclude(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::exclude(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
@@ -1189,7 +1142,7 @@ mod tests {
                 Expr::new_aggregate_expr(token::T_STDDEV, None, FunctionArgs::new_args(ex))
             }),
             ("stdvar by (foo)(some_metric)", {
-                let modifier = LabelModifier::Include(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::include(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(
                     token::T_STDVAR,
@@ -1198,20 +1151,17 @@ mod tests {
                 )
             }),
             ("sum by ()(some_metric)", {
-                let modifier = LabelModifier::Include(HashSet::new());
+                let modifier = LabelModifier::include(vec![]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,bar,)(some_metric)", {
-                let modifier = LabelModifier::Include(HashSet::from([
-                    String::from("foo"),
-                    String::from("bar"),
-                ]));
+                let modifier = LabelModifier::include(vec!["foo", "bar"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
             ("sum by (foo,)(some_metric)", {
-                let modifier = LabelModifier::Include(HashSet::from([String::from("foo")]));
+                let modifier = LabelModifier::include(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
             }),
@@ -1230,12 +1180,14 @@ mod tests {
             (
                 "sum without(and, by, avg, count, alert, annotations)(some_metric)",
                 {
-                    let modifier = LabelModifier::Exclude(
-                        vec!["and", "by", "avg", "count", "alert", "annotations"]
-                            .into_iter()
-                            .map(String::from)
-                            .collect(),
-                    );
+                    let modifier = LabelModifier::exclude(vec![
+                        "and",
+                        "by",
+                        "avg",
+                        "count",
+                        "alert",
+                        "annotations",
+                    ]);
                     let ex = Expr::from(VectorSelector::from("some_metric"));
                     Expr::new_aggregate_expr(
                         token::T_SUM,
@@ -1331,10 +1283,10 @@ mod tests {
             }),
             (r#"absent(nonexistent{job="myjob",instance=~".*"})"#, {
                 let name = String::from("nonexistent");
-                let matchers = Matchers::new(HashSet::from([
+                let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "job", "myjob"),
                     Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
-                ]));
+                ]);
                 Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                     Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
                 })
@@ -1366,10 +1318,10 @@ mod tests {
                 r#"absent_over_time(nonexistent{job="myjob",instance=~".*"}[1h])"#,
                 {
                     let name = String::from("nonexistent");
-                    let matchers = Matchers::new(HashSet::from([
+                    let matchers = Matchers::new(vec![
                         Matcher::new(MatchOp::Equal, "job", "myjob"),
                         Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
-                    ]));
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))
                         .and_then(|ex| {
@@ -1475,10 +1427,7 @@ mod tests {
                 .and_then(|ex| {
                     Expr::new_aggregate_expr(
                         token::T_SUM,
-                        Some(LabelModifier::Include(HashSet::from([
-                            String::from("job"),
-                            String::from("le"),
-                        ]))),
+                        Some(LabelModifier::include(vec!["job", "le"])),
                         FunctionArgs::new_args(ex),
                     )
                 })
@@ -1514,12 +1463,12 @@ mod tests {
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
                 {
                     let name = String::from("up");
-                    let matchers = Matchers::new(HashSet::from([
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
                         Matcher::new(MatchOp::Equal, "src1", "a"),
                         Matcher::new(MatchOp::Equal, "src2", "b"),
                         Matcher::new(MatchOp::Equal, "src3", "c"),
-                        Matcher::new(MatchOp::Equal, "job", "api-server"),
-                    ]));
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
                             get_function("label_join").unwrap(),
@@ -1537,10 +1486,10 @@ mod tests {
                 r#"label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")"#,
                 {
                     let name = String::from("up");
-                    let matchers = Matchers::new(HashSet::from([
-                        Matcher::new(MatchOp::Equal, "service", "a:c"),
+                    let matchers = Matchers::new(vec![
                         Matcher::new(MatchOp::Equal, "job", "api-server"),
-                    ]));
+                        Matcher::new(MatchOp::Equal, "service", "a:c"),
+                    ]);
                     Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                         Expr::new_call(
                             get_function("label_replace").unwrap(),
@@ -1875,13 +1824,16 @@ mod tests {
                 "sum without(and, by, avg, count, alert, annotations)(some_metric) [30m:10s]",
                 {
                     let ex = Expr::from(VectorSelector::from("some_metric"));
-                    let labels = vec!["and", "by", "avg", "count", "alert", "annotations"]
-                        .into_iter()
-                        .map(String::from)
-                        .collect();
                     Expr::new_aggregate_expr(
                         token::T_SUM,
-                        Some(LabelModifier::Exclude(labels)),
+                        Some(LabelModifier::exclude(vec![
+                            "and",
+                            "by",
+                            "avg",
+                            "count",
+                            "alert",
+                            "annotations",
+                        ])),
                         FunctionArgs::new_args(ex),
                     )
                     .and_then(|ex| {
@@ -2067,9 +2019,7 @@ mod tests {
             }),
             ("foo unless on(start) bar", {
                 let modifier = BinModifier::default()
-                    .with_matching(Some(LabelModifier::Include(HashSet::from([String::from(
-                        "start",
-                    )]))))
+                    .with_matching(Some(LabelModifier::include(vec!["start"])))
                     .with_card(VectorMatchCardinality::ManyToMany);
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -2080,9 +2030,7 @@ mod tests {
             }),
             ("foo unless on(end) bar", {
                 let modifier = BinModifier::default()
-                    .with_matching(Some(LabelModifier::Include(HashSet::from([String::from(
-                        "end",
-                    )]))))
+                    .with_matching(Some(LabelModifier::include(vec!["end"])))
                     .with_card(VectorMatchCardinality::ManyToMany);
                 Expr::new_binary_expr(
                     Expr::from(VectorSelector::from("foo")),
@@ -2141,8 +2089,6 @@ mod tests {
                 "rate(avg)",
                 "expected type matrix in call to function 'rate', got vector"
             ),
-
-
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
 

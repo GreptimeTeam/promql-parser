@@ -17,6 +17,8 @@ use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
 use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
+use crate::util::display_duration;
+use std::fmt;
 use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -50,9 +52,16 @@ impl LabelModifier {
         }
     }
 
-    /// is_on is for aggregation expr
-    pub fn is_on(&self) -> bool {
+    pub fn is_include(&self) -> bool {
         matches!(*self, LabelModifier::Include(_))
+    }
+
+    pub fn include(ls: Vec<&str>) -> Self {
+        Self::Include(Labels::new(ls))
+    }
+
+    pub fn exclude(ls: Vec<&str>) -> Self {
+        Self::Exclude(Labels::new(ls))
     }
 }
 
@@ -75,6 +84,14 @@ impl VectorMatchCardinality {
             VectorMatchCardinality::OneToOne => None,
         }
     }
+
+    pub fn many_to_one(ls: Vec<&str>) -> Self {
+        Self::ManyToOne(Labels::new(ls))
+    }
+
+    pub fn one_to_many(ls: Vec<&str>) -> Self {
+        Self::OneToMany(Labels::new(ls))
+    }
 }
 
 /// Binary Expr Modifier
@@ -89,6 +106,26 @@ pub struct BinModifier {
     pub matching: Option<LabelModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
+}
+
+impl fmt::Display for BinModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.bool_str())?;
+        if let Some(matching) = &self.matching {
+            match matching {
+                LabelModifier::Include(ls) => write!(f, "on ({ls}) ")?,
+                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(f, "ignoring ({ls}) ")?,
+                _ => (),
+            }
+        }
+
+        match &self.card {
+            VectorMatchCardinality::ManyToOne(ls) => write!(f, "group_left ({ls}) ")?,
+            VectorMatchCardinality::OneToMany(ls) => write!(f, "group_right ({ls}) ")?,
+            _ => (),
+        }
+        Ok(())
+    }
 }
 
 impl Default for BinModifier {
@@ -118,25 +155,35 @@ impl BinModifier {
     }
 
     pub fn is_labels_joint(&self) -> bool {
-        matches!((self.card.labels(), &self.matching),
-                 (Some(labels), Some(matching)) if !matching.labels().is_disjoint(labels))
+        matches!(
+            (self.card.labels(), &self.matching),
+            (Some(labels), Some(matching)) if labels.is_joint(matching.labels())
+        )
     }
 
-    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+    pub fn intersect_labels(&self) -> Option<Vec<String>> {
         if let Some(labels) = self.card.labels() {
             if let Some(matching) = &self.matching {
-                return Some(matching.labels().intersection(labels).collect());
+                return Some(labels.intersect(matching.labels()).labels);
             }
         };
         None
     }
 
     pub fn is_matching_on(&self) -> bool {
-        matches!(&self.matching, Some(matching) if matching.is_on())
+        matches!(&self.matching, Some(matching) if matching.is_include())
     }
 
     pub fn is_matching_labels_not_empty(&self) -> bool {
         matches!(&self.matching, Some(matching) if !matching.labels().is_empty())
+    }
+
+    pub fn bool_str(&self) -> &str {
+        if self.return_bool {
+            "bool "
+        } else {
+            ""
+        }
     }
 }
 
@@ -146,6 +193,14 @@ pub enum Offset {
     Neg(Duration),
 }
 
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Offset::Pos(dur) => write!(f, "{}", display_duration(dur)),
+            Offset::Neg(dur) => write!(f, "-{}", display_duration(dur)),
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AtModifier {
     Start,
@@ -154,6 +209,20 @@ pub enum AtModifier {
     At(SystemTime),
 }
 
+impl fmt::Display for AtModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AtModifier::Start => write!(f, "@ {}()", token_display(T_START)),
+            AtModifier::End => write!(f, "@ {}()", token_display(T_END)),
+            AtModifier::At(time) => {
+                let d = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO); // This should not happen
+                write!(f, "@ {:.3}", d.as_secs() as f64)
+            }
+        }
+    }
+}
 impl TryFrom<TokenId> for AtModifier {
     type Error = String;
 
@@ -257,10 +326,40 @@ pub struct AggregateExpr {
     pub modifier: Option<LabelModifier>,
 }
 
+impl fmt::Display for AggregateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", token_display(self.op.id()))?;
+
+        // modifier
+        if let Some(modifier) = &self.modifier {
+            match modifier {
+                LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
+                LabelModifier::Include(ls) if !ls.is_empty() => write!(f, " by ({ls}) ")?,
+                _ => (),
+            }
+        }
+
+        // body
+        write!(f, "(")?;
+        if let Some(param) = &self.param {
+            write!(f, "{param}, ")?;
+        }
+        write!(f, "{})", self.expr)?;
+
+        Ok(())
+    }
+}
+
 /// UnaryExpr will negate the expr
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryExpr {
     pub expr: Box<Expr>,
+}
+
+impl fmt::Display for UnaryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "- {}", self.expr)
+    }
 }
 
 /// Grammar:
@@ -301,16 +400,32 @@ impl BinaryExpr {
     }
 
     /// intersect labels of card and matching
-    pub fn intersect_labels(&self) -> Option<Vec<&String>> {
+    pub fn intersect_labels(&self) -> Option<Vec<String>> {
         self.modifier
             .as_ref()
             .and_then(|modifier| modifier.intersect_labels())
     }
 }
 
+impl fmt::Display for BinaryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let op = token_display(self.op.id());
+        match &self.modifier {
+            Some(modifier) => write!(f, "{} {} {}{}", self.lhs, op, modifier, self.rhs),
+            None => write!(f, "{} {} {}", self.lhs, op, self.rhs),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
+}
+
+impl fmt::Display for ParenExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({})", self.expr)
+    }
 }
 
 /// Grammar:
@@ -325,6 +440,26 @@ pub struct SubqueryExpr {
     pub range: Duration,
     /// Default is the global evaluation interval.
     pub step: Option<Duration>,
+}
+
+impl fmt::Display for SubqueryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let step = match &self.step {
+            Some(step) => display_duration(step),
+            None => String::from(""),
+        };
+        let range = display_duration(&self.range);
+        write!(f, "{}[{range}:{step}]", self.expr)?;
+
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " {at}")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -354,9 +489,29 @@ impl Neg for NumberLiteral {
     }
 }
 
+impl fmt::Display for NumberLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.val == f64::INFINITY {
+            write!(f, "Inf")
+        } else if self.val == f64::NEG_INFINITY {
+            write!(f, "-Inf")
+        } else if f64::is_nan(self.val) {
+            write!(f, "NaN")
+        } else {
+            write!(f, "{}", self.val)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
+}
+
+impl fmt::Display for StringLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"{}\"", self.val)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -365,6 +520,28 @@ pub struct VectorSelector {
     pub matchers: Matchers,
     pub offset: Option<Offset>,
     pub at: Option<AtModifier>,
+}
+
+impl VectorSelector {
+    pub fn new(name: Option<String>, matchers: Matchers) -> Self {
+        VectorSelector {
+            name,
+            matchers,
+            offset: None,
+            at: None,
+        }
+    }
+}
+
+impl Default for VectorSelector {
+    fn default() -> Self {
+        Self {
+            name: None,
+            matchers: Matchers::empty(),
+            offset: None,
+            at: None,
+        }
+    }
 }
 
 impl From<String> for VectorSelector {
@@ -412,10 +589,52 @@ impl Neg for VectorSelector {
     }
 }
 
+impl fmt::Display for VectorSelector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = &self.name {
+            write!(f, "{name}")?;
+        }
+        let matchers = &self.matchers.to_string();
+        if !matchers.is_empty() {
+            write!(f, "{{{matchers}}}")?;
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.at {
+            write!(f, " {at}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
-    pub vector_selector: VectorSelector,
+    pub vs: VectorSelector,
     pub range: Duration,
+}
+
+impl fmt::Display for MatrixSelector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = &self.vs.name {
+            write!(f, "{name}")?;
+        }
+
+        let matchers = &self.vs.matchers.to_string();
+        if !matchers.is_empty() {
+            write!(f, "{{{matchers}}}")?;
+        }
+
+        write!(f, "[{}]", display_duration(&self.range))?;
+
+        if let Some(offset) = &self.vs.offset {
+            write!(f, " offset {offset}")?;
+        }
+        if let Some(at) = &self.vs.at {
+            write!(f, " {at}")?;
+        }
+        Ok(())
+    }
 }
 
 /// Call represents Prometheus Function.
@@ -461,6 +680,12 @@ pub struct MatrixSelector {
 pub struct Call {
     pub func: Function,
     pub args: FunctionArgs,
+}
+
+impl fmt::Display for Call {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", self.func.name, self.args)
+    }
 }
 
 /// Node for extending the AST. [Extension] won't be generate by this parser itself.
@@ -529,12 +754,7 @@ pub enum Expr {
 
 impl Expr {
     pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
-        let vs = VectorSelector {
-            name,
-            offset: None,
-            at: None,
-            matchers,
-        };
+        let vs = VectorSelector::new(name, matchers);
         Ok(Self::VectorSelector(vs))
     }
 
@@ -578,10 +798,7 @@ impl Expr {
                 Err("no @ modifiers allowed before range".into())
             }
             Expr::VectorSelector(vs) => {
-                let ms = Expr::MatrixSelector(MatrixSelector {
-                    vector_selector: vs,
-                    range,
-                });
+                let ms = Expr::MatrixSelector(MatrixSelector { vs, range });
                 Ok(ms)
             }
             _ => Err("ranges only allowed for vector selectors".into()),
@@ -598,9 +815,9 @@ impl Expr {
                 }
                 Some(_) => already_set_err,
             },
-            Expr::MatrixSelector(mut ms) => match ms.vector_selector.at {
+            Expr::MatrixSelector(mut ms) => match ms.vs.at {
                 None => {
-                    ms.vector_selector.at = Some(at);
+                    ms.vs.at = Some(at);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
@@ -629,9 +846,9 @@ impl Expr {
                 }
                 Some(_) => already_set_err,
             },
-            Expr::MatrixSelector(mut ms) => match ms.vector_selector.offset {
+            Expr::MatrixSelector(mut ms) => match ms.vs.offset {
                 None => {
-                    ms.vector_selector.offset = Some(offset);
+                    ms.vs.offset = Some(offset);
                     Ok(Expr::MatrixSelector(ms))
                 }
                 Some(_) => already_set_err,
@@ -789,6 +1006,24 @@ impl Neg for Expr {
             _ => Expr::Unary(UnaryExpr {
                 expr: Box::new(self),
             }),
+        }
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expr::Aggregate(ex) => write!(f, "{ex}"),
+            Expr::Unary(ex) => write!(f, "{ex}"),
+            Expr::Binary(ex) => write!(f, "{ex}"),
+            Expr::Paren(ex) => write!(f, "{ex}"),
+            Expr::Subquery(ex) => write!(f, "{ex}"),
+            Expr::NumberLiteral(ex) => write!(f, "{ex}"),
+            Expr::StringLiteral(ex) => write!(f, "{ex}"),
+            Expr::VectorSelector(ex) => write!(f, "{ex}"),
+            Expr::MatrixSelector(ex) => write!(f, "{ex}"),
+            Expr::Call(ex) => write!(f, "{ex}"),
+            Expr::Extension(ext) => write!(f, "{ext:?}"),
         }
     }
 }
@@ -1045,9 +1280,8 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
+    use crate::label::{MatchOp, Matcher, Matchers};
 
     #[test]
     fn test_valid_at_modifier() {
@@ -1120,35 +1354,27 @@ mod tests {
     #[test]
     fn test_binary_labels() {
         assert_eq!(
-            LabelModifier::Include(HashSet::from([String::from("foo"), String::from("bar")]))
-                .labels(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            LabelModifier::Include(Labels::new(vec!["foo", "bar"])).labels()
         );
 
         assert_eq!(
-            LabelModifier::Exclude(HashSet::from([String::from("foo"), String::from("bar")]))
-                .labels(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            LabelModifier::Exclude(Labels::new(vec!["foo", "bar"])).labels()
         );
 
         assert_eq!(
-            VectorMatchCardinality::OneToMany(HashSet::from([
-                String::from("foo"),
-                String::from("bar")
-            ]))
-            .labels()
-            .unwrap(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            VectorMatchCardinality::OneToMany(Labels::new(vec!["foo", "bar"]))
+                .labels()
+                .unwrap()
         );
 
         assert_eq!(
-            VectorMatchCardinality::ManyToOne(HashSet::from([
-                String::from("foo"),
-                String::from("bar")
-            ]))
-            .labels()
-            .unwrap(),
-            &HashSet::from([String::from("foo"), String::from("bar")])
+            &Labels::new(vec!["foo", "bar"]),
+            VectorMatchCardinality::ManyToOne(Labels::new(vec!["foo", "bar"]))
+                .labels()
+                .unwrap()
         );
 
         assert_eq!(VectorMatchCardinality::OneToOne.labels(), None);
@@ -1237,5 +1463,197 @@ mod tests {
             .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1000))))
             .unwrap_err()
         );
+    }
+
+    #[test]
+    fn test_expr_to_string() {
+        let mut cases = vec![
+            ("1", "1"),
+            ("Inf", "Inf"),
+            ("inf", "Inf"),
+            ("+Inf", "Inf"),
+            ("-Inf", "-Inf"),
+            (".5", "0.5"),
+            ("5.", "5"),
+            ("123.4567", "123.4567"),
+            ("5e-3", "0.005"),
+            ("5e3", "5000"),
+            ("0xc", "12"),
+            ("0755", "493"),
+            ("08", "8"),
+            ("+5.5e-3", "0.0055"),
+            ("-0755", "-493"),
+            ("NaN", "NaN"),
+            ("NAN", "NaN"),
+            ("- 1^2", "- 1 ^ 2"),
+            ("+1 + -2 * 1", "1 + -2 * 1"),
+            ("1 + 2/(3*1)", "1 + 2 / (3 * 1)"),
+            ("foo*sum", "foo * sum"),
+            ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
+            (
+                r#"up{job="hi", instance="in"}"#,
+                r#"up{instance="in",job="hi"}"#,
+            ),
+            ("sum (up) by (job,instance)", "sum by (job, instance) (up)"),
+            (
+                "foo / on(test,blub) group_left(bar) bar",
+                "foo / on (test, blub) group_left (bar) bar",
+            ),
+            (
+                r#"foo{a="b",foo!="bar",test=~"test",bar!~"baz"}"#,
+                r#"foo{a="b",bar!~"baz",foo!="bar",test=~"test"}"#,
+            ),
+            (
+                r#"{__name__=~"foo.+",__name__=~".*bar"}"#,
+                r#"{__name__=~".*bar",__name__=~"foo.+"}"#,
+            ),
+            (
+                r#"test{a="b"}[5y] OFFSET 3d"#,
+                r#"test{a="b"}[5y] offset 3d"#,
+            ),
+            (
+                "sum(some_metric) without(and, by, avg, count, alert, annotations)",
+                "sum without (and, by, avg, count, alert, annotations) (some_metric)",
+            ),
+            (
+                r#"floor(some_metric{foo!="bar"})"#,
+                r#"floor(some_metric{foo!="bar"})"#,
+            ),
+            (
+                "sum(rate(http_request_duration_seconds[10m])) / count(rate(http_request_duration_seconds[10m]))",
+                "sum(rate(http_request_duration_seconds[10m])) / count(rate(http_request_duration_seconds[10m]))",
+            ),
+            ("rate(some_metric[5m])", "rate(some_metric[5m])"),
+            ("round(some_metric,5)", "round(some_metric, 5)"),
+            (
+                r#"absent(sum(nonexistent{job="myjob"}))"#,
+                r#"absent(sum(nonexistent{job="myjob"}))"#,
+            ),
+            (
+                "histogram_quantile(0.9,rate(http_request_duration_seconds_bucket[10m]))",
+                "histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))",
+            ),
+            (
+                "histogram_quantile(0.9,sum(rate(http_request_duration_seconds_bucket[10m])) by(job,le))",
+                "histogram_quantile(0.9, sum by (job, le) (rate(http_request_duration_seconds_bucket[10m])))",
+            ),
+            (
+                r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+                r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
+            ),
+            ("some_metric OFFSET 1m [10m:5s]", "some_metric offset 1m[10m:5s]"),
+            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]")
+        ];
+
+        // the following cases are from https://github.com/prometheus/prometheus/blob/main/promql/parser/printer_test.go
+        let mut cases1 = vec![
+            (
+                r#"sum by() (task:errors:rate10s{job="s"})"#,
+                r#"sum(task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum by(code) (task:errors:rate10s{job="s"})"#,
+                r#"sum by (code) (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum without() (task:errors:rate10s{job="s"})"#,
+                r#"sum without () (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"sum without(instance) (task:errors:rate10s{job="s"})"#,
+                r#"sum without (instance) (task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"topk(5, task:errors:rate10s{job="s"})"#,
+                r#"topk(5, task:errors:rate10s{job="s"})"#,
+            ),
+            (
+                r#"count_values("value", task:errors:rate10s{job="s"})"#,
+                r#"count_values("value", task:errors:rate10s{job="s"})"#,
+            ),
+            ("a - on() c", "a - on () c"),
+            ("a - on(b) c", "a - on (b) c"),
+            ("a - on(b) group_left(x) c", "a - on (b) group_left (x) c"),
+            (
+                "a - on(b) group_left(x, y) c",
+                "a - on (b) group_left (x, y) c",
+            ),
+            ("a - on(b) group_left c", "a - on (b) group_left () c"),
+            ("a - ignoring(b) c", "a - ignoring (b) c"),
+            ("a - ignoring() c", "a - c"),
+            ("up > bool 0", "up > bool 0"),
+            ("a offset 1m", "a offset 1m"),
+            ("a offset -7m", "a offset -7m"),
+            (r#"a{c="d"}[5m] offset 1m"#, r#"a{c="d"}[5m] offset 1m"#),
+            ("a[5m] offset 1m", "a[5m] offset 1m"),
+            ("a[12m] offset -3m", "a[12m] offset -3m"),
+            ("a[1h:5m] offset 1m", "a[1h:5m] offset 1m"),
+            (r#"{__name__="a"}"#, r#"{__name__="a"}"#),
+            (r#"a{b!="c"}[1m]"#, r#"a{b!="c"}[1m]"#),
+            (r#"a{b=~"c"}[1m]"#, r#"a{b=~"c"}[1m]"#),
+            (r#"a{b!~"c"}[1m]"#, r#"a{b!~"c"}[1m]"#),
+            ("a @ 10", "a @ 10.000"),
+            ("a[1m] @ 10", "a[1m] @ 10.000"),
+            ("a @ start()", "a @ start()"),
+            ("a @ end()", "a @ end()"),
+            ("a[1m] @ start()", "a[1m] @ start()"),
+            ("a[1m] @ end()", "a[1m] @ end()"),
+        ];
+
+        cases.append(&mut cases1);
+        for (input, expected) in cases {
+            let expr = crate::parser::parse(input).unwrap();
+            assert_eq!(
+                expected,
+                expr.to_string(),
+                "{input} and {expected} do not match"
+            )
+        }
+    }
+
+    #[test]
+    fn test_vector_selector_to_string() {
+        let cases = vec![
+            (VectorSelector::default(), ""),
+            (VectorSelector::from("foobar"), "foobar"),
+            (
+                {
+                    let name = Some(String::from("foobar"));
+                    let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "a", "x"));
+                    VectorSelector::new(name, matchers)
+                },
+                r#"foobar{a="x"}"#,
+            ),
+            (
+                {
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "a", "x"),
+                        Matcher::new(MatchOp::Equal, "b", "y"),
+                    ]);
+                    VectorSelector::new(None, matchers)
+                },
+                r#"{a="x",b="y"}"#,
+            ),
+            (
+                {
+                    let matchers =
+                        Matchers::one(Matcher::new(MatchOp::Equal, METRIC_NAME, "foobar"));
+                    VectorSelector::new(None, matchers)
+                },
+                r#"{__name__="foobar"}"#,
+            ),
+        ];
+
+        for (vs, expect) in cases {
+            assert_eq!(expect, vs.to_string(), "{vs:?} does not match {expect}")
+        }
     }
 }

@@ -18,6 +18,14 @@ pub mod duration;
 pub mod number;
 mod visitor;
 
-pub use duration::parse_duration;
+pub use duration::{display_duration, parse_duration};
 pub use number::parse_str_radix;
 pub use visitor::{walk_expr, ExprVisitor};
+
+pub fn join_vector<T: std::fmt::Display>(v: &[T], sep: &str, sort: bool) -> String {
+    let mut vs = v.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+    if sort {
+        vs.sort();
+    }
+    vs.join(sep)
+}

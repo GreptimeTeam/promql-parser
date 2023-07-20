@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use regex::Regex;
+
+use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::util::join_vector;
 
 #[derive(Debug, Clone)]
 pub enum MatchOp {
@@ -24,6 +26,17 @@ pub enum MatchOp {
     NotEqual,
     Re(Regex),
     NotRe(Regex),
+}
+
+impl fmt::Display for MatchOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MatchOp::Equal => write!(f, "="),
+            MatchOp::NotEqual => write!(f, "!="),
+            MatchOp::Re(_reg) => write!(f, "=~"),
+            MatchOp::NotRe(_reg) => write!(f, "!~"),
+        }
+    }
 }
 
 impl PartialEq for MatchOp {
@@ -97,29 +110,33 @@ impl Matcher {
     }
 }
 
+impl fmt::Display for Matcher {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}\"{}\"", self.name, self.op, self.value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matchers {
-    pub matchers: HashSet<Matcher>,
+    pub matchers: Vec<Matcher>,
 }
 
 impl Matchers {
     pub fn empty() -> Self {
-        Self {
-            matchers: HashSet::new(),
-        }
+        Self { matchers: vec![] }
     }
 
     pub fn one(matcher: Matcher) -> Self {
-        let matchers = HashSet::from([matcher]);
+        let matchers = vec![matcher];
         Self { matchers }
     }
 
-    pub fn new(matchers: HashSet<Matcher>) -> Self {
+    pub fn new(matchers: Vec<Matcher>) -> Self {
         Self { matchers }
     }
 
     pub fn append(mut self, matcher: Matcher) -> Self {
-        self.matchers.insert(matcher);
+        self.matchers.push(matcher);
         self
     }
 
@@ -140,6 +157,12 @@ impl Matchers {
             }
         }
         None
+    }
+}
+
+impl fmt::Display for Matchers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", join_vector(&self.matchers, ",", true))
     }
 }
 
@@ -372,7 +395,6 @@ mod tests {
     fn test_matchers_equality() {
         assert_eq!(
             Matchers::empty()
-                .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
                 .append(Matcher::new(MatchOp::Equal, "name1", "val1"))
                 .append(Matcher::new(MatchOp::Equal, "name2", "val2")),
             Matchers::empty()

@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 use lazy_static::lazy_static;
 
 use crate::parser::{Expr, ValueType};
+use crate::util::join_vector;
 
 /// called by func in Call
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +56,12 @@ impl FunctionArgs {
 
     pub fn last(&self) -> Option<Box<Expr>> {
         self.args.last().cloned()
+    }
+}
+
+impl fmt::Display for FunctionArgs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", join_vector(&self.args, ", ", false))
     }
 }
 
@@ -297,5 +305,26 @@ mod tests {
         let args2 = FunctionArgs::new_args(arg1).append_args(arg2);
 
         assert_eq!(args1, args2);
+    }
+
+    #[test]
+    fn test_args_display() {
+        let cases = vec![
+            (
+                FunctionArgs::new_args(Expr::from(VectorSelector::from("up"))),
+                "up",
+            ),
+            (
+                FunctionArgs::empty_args()
+                    .append_args(Expr::from("src1"))
+                    .append_args(Expr::from("src2"))
+                    .append_args(Expr::from("src3")),
+                r#""src1", "src2", "src3""#,
+            ),
+        ];
+
+        for (args, expect) in cases {
+            assert_eq!(expect, args.to_string())
+        }
     }
 }
