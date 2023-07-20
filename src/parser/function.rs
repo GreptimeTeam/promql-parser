@@ -17,7 +17,7 @@ use std::fmt;
 
 use lazy_static::lazy_static;
 
-use crate::parser::{Expr, ValueType};
+use crate::parser::{Expr, Prettier, ValueType};
 use crate::util::join_vector;
 
 /// called by func in Call
@@ -62,6 +62,16 @@ impl FunctionArgs {
 impl fmt::Display for FunctionArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", join_vector(&self.args, ", ", false))
+    }
+}
+
+impl Prettier for FunctionArgs {
+    fn pretty(&self, level: usize) -> String {
+        let mut v = vec![];
+        for ex in &self.args {
+            v.push(format!("{},", ex.pretty(level)));
+        }
+        v.join("\n")
     }
 }
 

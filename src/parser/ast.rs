@@ -16,7 +16,7 @@ use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
-use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
+use crate::parser::{Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType};
 use crate::util::display_duration;
 use std::fmt;
 use std::ops::Neg;
@@ -326,20 +326,25 @@ pub struct AggregateExpr {
     pub modifier: Option<LabelModifier>,
 }
 
-impl fmt::Display for AggregateExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", token_display(self.op.id()))?;
+impl AggregateExpr {
+    fn get_op_string(&self) -> String {
+        let mut s = self.op.to_string();
 
-        // modifier
         if let Some(modifier) = &self.modifier {
             match modifier {
-                LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
-                LabelModifier::Include(ls) if !ls.is_empty() => write!(f, " by ({ls}) ")?,
+                LabelModifier::Exclude(ls) => s.push_str(&format!(" without ({ls}) ")),
+                LabelModifier::Include(ls) if !ls.is_empty() => s.push_str(&format!(" by ({ls}) ")),
                 _ => (),
             }
         }
+        s
+    }
+}
 
-        // body
+impl fmt::Display for AggregateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.get_op_string())?;
+
         write!(f, "(")?;
         if let Some(param) = &self.param {
             write!(f, "{param}, ")?;
@@ -347,6 +352,22 @@ impl fmt::Display for AggregateExpr {
         write!(f, "{})", self.expr)?;
 
         Ok(())
+    }
+}
+
+impl Prettier for AggregateExpr {
+    fn pretty(&self, level: usize) -> String {
+        if !self.needs_split() {
+            return Prettier::pretty(self, level);
+        }
+
+        let mut s = format!("{}{}(\n", self.indent(level), self.get_op_string());
+        if let Some(param) = &self.param {
+            s.push_str(&format!("{},\n", param.pretty(level + 1)));
+        }
+        s.push_str(&format!("{}\n", self.expr.pretty(level + 1),));
+        s.push_str(&format!("{})", self.indent(level)));
+        s
     }
 }
 
@@ -358,7 +379,17 @@ pub struct UnaryExpr {
 
 impl fmt::Display for UnaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "- {}", self.expr)
+        write!(f, "-{}", self.expr)
+    }
+}
+
+impl Prettier for UnaryExpr {
+    fn pretty(&self, level: usize) -> String {
+        format!(
+            "{}-{}",
+            self.indent(level),
+            self.expr.pretty(level).trim_start()
+        )
     }
 }
 
@@ -405,15 +436,42 @@ impl BinaryExpr {
             .as_ref()
             .and_then(|modifier| modifier.intersect_labels())
     }
+
+    fn get_matching_string(&self) -> String {
+        match &self.modifier {
+            Some(modifier) => modifier.to_string(),
+            None => String::from(""),
+        }
+    }
 }
 
 impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let op = token_display(self.op.id());
-        match &self.modifier {
-            Some(modifier) => write!(f, "{} {} {}{}", self.lhs, op, modifier, self.rhs),
-            None => write!(f, "{} {} {}", self.lhs, op, self.rhs),
+        write!(
+            f,
+            "{} {} {}{}",
+            self.lhs,
+            self.op,
+            self.get_matching_string(),
+            self.rhs
+        )
+    }
+}
+
+impl Prettier for BinaryExpr {
+    fn pretty(&self, level: usize) -> String {
+        if !self.needs_split() {
+            return Prettier::pretty(self, level);
         }
+
+        format!(
+            "{}\n{}{}{}\n{}",
+            self.lhs.pretty(level + 1),
+            self.indent(level),
+            self.op,
+            self.get_matching_string(),
+            self.rhs.pretty(level + 1)
+        )
     }
 }
 
@@ -425,6 +483,20 @@ pub struct ParenExpr {
 impl fmt::Display for ParenExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({})", self.expr)
+    }
+}
+
+impl Prettier for ParenExpr {
+    fn pretty(&self, level: usize) -> String {
+        if !self.needs_split() {
+            return Prettier::pretty(self, level);
+        }
+        format!(
+            "{}(\n{}\n{})",
+            self.indent(level),
+            self.expr.pretty(level + 1),
+            self.indent(level)
+        )
     }
 }
 
@@ -442,23 +514,38 @@ pub struct SubqueryExpr {
     pub step: Option<Duration>,
 }
 
-impl fmt::Display for SubqueryExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl SubqueryExpr {
+    fn get_time_suffix_string(&self) -> String {
         let step = match &self.step {
             Some(step) => display_duration(step),
             None => String::from(""),
         };
         let range = display_duration(&self.range);
-        write!(f, "{}[{range}:{step}]", self.expr)?;
 
+        let mut s = format!("[{range}:{step}]");
         if let Some(offset) = &self.offset {
-            write!(f, " offset {offset}")?;
+            s.push_str(&format!(" offset {offset}"));
         }
         if let Some(at) = &self.at {
-            write!(f, " {at}")?;
+            s.push_str(&format!(" {at}"));
         }
+        s
+    }
+}
 
-        Ok(())
+impl fmt::Display for SubqueryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.expr, self.get_time_suffix_string())
+    }
+}
+
+impl Prettier for SubqueryExpr {
+    fn pretty(&self, level: usize) -> String {
+        format!(
+            "{}{}",
+            self.expr.pretty(level + 1),
+            self.get_time_suffix_string()
+        )
     }
 }
 
@@ -503,6 +590,8 @@ impl fmt::Display for NumberLiteral {
     }
 }
 
+impl Prettier for NumberLiteral {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
@@ -513,6 +602,8 @@ impl fmt::Display for StringLiteral {
         write!(f, "\"{}\"", self.val)
     }
 }
+
+impl Prettier for StringLiteral {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
@@ -608,6 +699,8 @@ impl fmt::Display for VectorSelector {
     }
 }
 
+impl Prettier for VectorSelector {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
     pub vs: VectorSelector,
@@ -636,6 +729,8 @@ impl fmt::Display for MatrixSelector {
         Ok(())
     }
 }
+
+impl Prettier for MatrixSelector {}
 
 /// Call represents Prometheus Function.
 /// Some functions have special cases:
@@ -685,6 +780,22 @@ pub struct Call {
 impl fmt::Display for Call {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.func.name, self.args)
+    }
+}
+
+impl Prettier for Call {
+    fn pretty(&self, level: usize) -> String {
+        if !self.needs_split() {
+            return Prettier::pretty(self, level);
+        }
+
+        format!(
+            "{}{}(\n{}\n{})",
+            self.indent(level),
+            self.func.name,
+            self.args.pretty(level + 1),
+            self.indent(level)
+        )
     }
 }
 
@@ -892,9 +1003,8 @@ impl Expr {
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
         if args.is_empty() {
-            let op_display = token_display(op.id());
             return Err(format!(
-                "no arguments for aggregate expression '{op_display}' provided"
+                "no arguments for aggregate expression '{op}' provided"
             ));
         }
         let mut desired_args_count = 1;
@@ -955,6 +1065,10 @@ impl Expr {
             Expr::NumberLiteral(nl) => Some(nl.val),
             _ => None,
         }
+    }
+
+    pub fn prettify(&self) -> String {
+        self.pretty(0)
     }
 }
 
@@ -1028,6 +1142,24 @@ impl fmt::Display for Expr {
     }
 }
 
+impl Prettier for Expr {
+    fn pretty(&self, level: usize) -> String {
+        match self {
+            Expr::Aggregate(ex) => ex.pretty(level),
+            Expr::Unary(ex) => ex.pretty(level),
+            Expr::Binary(ex) => ex.pretty(level),
+            Expr::Paren(ex) => ex.pretty(level),
+            Expr::Subquery(ex) => ex.pretty(level),
+            Expr::NumberLiteral(ex) => ex.pretty(level),
+            Expr::StringLiteral(ex) => ex.pretty(level),
+            Expr::VectorSelector(ex) => ex.pretty(level),
+            Expr::MatrixSelector(ex) => ex.pretty(level),
+            Expr::Call(ex) => ex.pretty(level),
+            Expr::Extension(ext) => format!("{ext:?}"),
+        }
+    }
+}
+
 /// check_ast checks the validity of the provided AST. This includes type checking.
 /// Recursively check correct typing for child nodes and raise errors in case of bad typing.
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
@@ -1068,11 +1200,10 @@ fn expect_type(
 /// the original logic is redundant in prometheus, and the following coding blocks
 /// have been optimized for readability, but all logic SHOULD be covered.
 fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
-    let op_display = token_display(ex.op.id());
-
     if !ex.op.is_operator() {
         return Err(format!(
-            "binary expression does not support operator '{op_display}'"
+            "binary expression does not support operator '{}'",
+            ex.op
         ));
     }
 
@@ -1103,7 +1234,8 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     if ex.op.is_set_operator() {
         if ex.lhs.value_type() == ValueType::Scalar || ex.rhs.value_type() == ValueType::Scalar {
             return Err(format!(
-                "set operator '{op_display}' not allowed in binary scalar expression"
+                "set operator '{}' not allowed in binary scalar expression",
+                ex.op
             ));
         }
 
@@ -1112,7 +1244,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
                 if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
                     || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
                 {
-                    return Err(format!("no grouping allowed for '{op_display}' operation"));
+                    return Err(format!("no grouping allowed for '{}' operation", ex.op));
                 }
             };
         }
@@ -1148,9 +1280,9 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
 
 fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
     if !ex.op.is_aggregator() {
-        let op_display = token_display(ex.op.id());
         return Err(format!(
-            "aggregation operator expected in aggregation expression but got '{op_display}'"
+            "aggregation operator expected in aggregation expression but got '{}'",
+            ex.op
         ));
     }
 
@@ -1469,10 +1601,12 @@ mod tests {
     fn test_expr_to_string() {
         let mut cases = vec![
             ("1", "1"),
+            ("- 1", "-1"),
+            ("+ 1", "1"),
             ("Inf", "Inf"),
             ("inf", "Inf"),
             ("+Inf", "Inf"),
-            ("-Inf", "-Inf"),
+            ("- Inf", "-Inf"),
             (".5", "0.5"),
             ("5.", "5"),
             ("123.4567", "123.4567"),
@@ -1485,7 +1619,7 @@ mod tests {
             ("-0755", "-493"),
             ("NaN", "NaN"),
             ("NAN", "NaN"),
-            ("- 1^2", "- 1 ^ 2"),
+            ("- 1^2", "-1 ^ 2"),
             ("+1 + -2 * 1", "1 + -2 * 1"),
             ("1 + 2/(3*1)", "1 + 2 / (3 * 1)"),
             ("foo*sum", "foo * sum"),
@@ -1500,6 +1634,10 @@ mod tests {
                 "foo / on (test, blub) group_left (bar) bar",
             ),
             (
+                "foo / on(test,blub) group_right(bar) bar",
+                "foo / on (test, blub) group_right (bar) bar",
+            ),
+            (
                 r#"foo{a="b",foo!="bar",test=~"test",bar!~"baz"}"#,
                 r#"foo{a="b",bar!~"baz",foo!="bar",test=~"test"}"#,
             ),
@@ -1510,6 +1648,10 @@ mod tests {
             (
                 r#"test{a="b"}[5y] OFFSET 3d"#,
                 r#"test{a="b"}[5y] offset 3d"#,
+            ),
+            (
+                r#"{a="b"}[5y] OFFSET 3d"#,
+                r#"{a="b"}[5y] offset 3d"#,
             ),
             (
                 "sum(some_metric) without(and, by, avg, count, alert, annotations)",
@@ -1540,6 +1682,10 @@ mod tests {
             (
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s] @ 100"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s] @ 100.000"#,
             ),
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
@@ -1614,7 +1760,9 @@ mod tests {
             assert_eq!(
                 expected,
                 expr.to_string(),
-                "{input} and {expected} do not match"
+                "{} and {} do not match",
+                input,
+                expected
             )
         }
     }
