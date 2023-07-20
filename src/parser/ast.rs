@@ -112,21 +112,29 @@ pub struct BinModifier {
 
 impl fmt::Display for BinModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.bool_str())?;
+        let mut s = String::from(self.bool_str());
+
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(ls) => write!(f, "on ({ls}) ")?,
-                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(f, "ignoring ({ls}) ")?,
+                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls}) ")),
+                LabelModifier::Exclude(ls) if !ls.is_empty() => {
+                    s.push_str(&format!("ignoring ({ls}) "))
+                }
                 _ => (),
             }
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(ls) => write!(f, "group_left ({ls}) ")?,
-            VectorMatchCardinality::OneToMany(ls) => write!(f, "group_right ({ls}) ")?,
+            VectorMatchCardinality::ManyToOne(ls) => s.push_str(&format!("group_left ({ls}) ")),
+            VectorMatchCardinality::OneToMany(ls) => s.push_str(&format!("group_right ({ls}) ")),
             _ => (),
         }
-        Ok(())
+
+        if s.trim().is_empty() {
+            write!(f, "")
+        } else {
+            write!(f, " {}", s.trim_end()) // there is a leading space here
+        }
     }
 }
 
@@ -435,10 +443,10 @@ impl BinaryExpr {
             .and_then(|modifier| modifier.intersect_labels())
     }
 
-    fn get_matching_string(&self) -> String {
+    fn get_op_matching_string(&self) -> String {
         match &self.modifier {
-            Some(modifier) => modifier.to_string(),
-            None => String::from(""),
+            Some(modifier) => format!("{}{}", self.op, modifier.to_string()),
+            None => self.op.to_string(),
         }
     }
 }
@@ -447,10 +455,9 @@ impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{} {} {}{}",
+            "{} {} {}",
             self.lhs,
-            self.op,
-            self.get_matching_string(),
+            self.get_op_matching_string(),
             self.rhs
         )
     }
@@ -459,11 +466,10 @@ impl fmt::Display for BinaryExpr {
 impl Prettier for BinaryExpr {
     fn format(&self, level: usize, max: usize) -> String {
         format!(
-            "{}\n{}{}{}\n{}",
+            "{}\n{}{}\n{}",
             self.lhs.pretty(level + 1, max),
             self.indent(level),
-            self.op,
-            self.get_matching_string(),
+            self.get_op_matching_string(),
             self.rhs.pretty(level + 1, max)
         )
     }
@@ -1894,6 +1900,83 @@ task:errors:rate10s{job=\"s\"}))",
     task:errors:rate10s{job=\"s\"}
   )
 )",
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(
+                expect,
+                expr.unwrap().pretty(0, 10),
+                "{} and {} does not match",
+                input,
+                expect
+            );
+        }
+    }
+
+    #[test]
+    fn test_binary_expr_pretty() {
+        let cases = vec![
+            ("a+b", "a + b"),
+            (
+                "a == bool 1",
+                "  a
+== bool
+  1",
+            ),
+            (
+                "a == 1024000",
+                "  a
+==
+  1024000",
+            ),
+            (
+                "a + ignoring(job) b",
+                "  a
++ ignoring (job)
+  b",
+            ),
+            (
+                "foo_1 + foo_2",
+                "  foo_1
++
+  foo_2",
+            ),
+            (
+                "foo_1 + foo_2 + foo_3",
+                "    foo_1
+  +
+    foo_2
++
+  foo_3",
+            ),
+            (
+                "foo + baar + foo_3",
+                "  foo + baar
++
+  foo_3",
+            ),
+            (
+                "foo_1 + foo_2 + foo_3 + foo_4",
+                "      foo_1
+    +
+      foo_2
+  +
+    foo_3
++
+  foo_4",
+            ),
+            (
+                "foo_1 + ignoring(foo) foo_2 + ignoring(job) group_left foo_3 + on(instance) group_right foo_4",
+
+                 "      foo_1
+    + ignoring (foo)
+      foo_2
+  + ignoring (job) group_left ()
+    foo_3
++ on (instance) group_right ()
+  foo_4",
             ),
         ];
 
