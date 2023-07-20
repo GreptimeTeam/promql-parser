@@ -66,10 +66,10 @@ impl fmt::Display for FunctionArgs {
 }
 
 impl Prettier for FunctionArgs {
-    fn pretty(&self, level: usize) -> String {
+    fn pretty(&self, level: usize, max: usize) -> String {
         let mut v = vec![];
         for ex in &self.args {
-            v.push(format!("{},", ex.pretty(level)));
+            v.push(format!("{},", ex.pretty(level, max)));
         }
         v.join("\n")
     }

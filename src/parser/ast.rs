@@ -16,7 +16,9 @@ use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
-use crate::parser::{Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType};
+use crate::parser::{
+    Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType, MAX_CHARACTERS_PER_LINE,
+};
 use crate::util::display_duration;
 use std::fmt;
 use std::ops::Neg;
@@ -356,16 +358,12 @@ impl fmt::Display for AggregateExpr {
 }
 
 impl Prettier for AggregateExpr {
-    fn pretty(&self, level: usize) -> String {
-        if !self.needs_split() {
-            return Prettier::pretty(self, level);
-        }
-
+    fn format(&self, level: usize, max: usize) -> String {
         let mut s = format!("{}{}(\n", self.indent(level), self.get_op_string());
         if let Some(param) = &self.param {
-            s.push_str(&format!("{},\n", param.pretty(level + 1)));
+            s.push_str(&format!("{},\n", param.pretty(level + 1, max)));
         }
-        s.push_str(&format!("{}\n", self.expr.pretty(level + 1),));
+        s.push_str(&format!("{}\n", self.expr.pretty(level + 1, max),));
         s.push_str(&format!("{})", self.indent(level)));
         s
     }
@@ -384,11 +382,11 @@ impl fmt::Display for UnaryExpr {
 }
 
 impl Prettier for UnaryExpr {
-    fn pretty(&self, level: usize) -> String {
+    fn pretty(&self, level: usize, max: usize) -> String {
         format!(
             "{}-{}",
             self.indent(level),
-            self.expr.pretty(level).trim_start()
+            self.expr.pretty(level, max).trim_start()
         )
     }
 }
@@ -459,18 +457,14 @@ impl fmt::Display for BinaryExpr {
 }
 
 impl Prettier for BinaryExpr {
-    fn pretty(&self, level: usize) -> String {
-        if !self.needs_split() {
-            return Prettier::pretty(self, level);
-        }
-
+    fn format(&self, level: usize, max: usize) -> String {
         format!(
             "{}\n{}{}{}\n{}",
-            self.lhs.pretty(level + 1),
+            self.lhs.pretty(level + 1, max),
             self.indent(level),
             self.op,
             self.get_matching_string(),
-            self.rhs.pretty(level + 1)
+            self.rhs.pretty(level + 1, max)
         )
     }
 }
@@ -487,14 +481,11 @@ impl fmt::Display for ParenExpr {
 }
 
 impl Prettier for ParenExpr {
-    fn pretty(&self, level: usize) -> String {
-        if !self.needs_split() {
-            return Prettier::pretty(self, level);
-        }
+    fn format(&self, level: usize, max: usize) -> String {
         format!(
             "{}(\n{}\n{})",
             self.indent(level),
-            self.expr.pretty(level + 1),
+            self.expr.pretty(level + 1, max),
             self.indent(level)
         )
     }
@@ -540,10 +531,10 @@ impl fmt::Display for SubqueryExpr {
 }
 
 impl Prettier for SubqueryExpr {
-    fn pretty(&self, level: usize) -> String {
+    fn pretty(&self, level: usize, max: usize) -> String {
         format!(
             "{}{}",
-            self.expr.pretty(level + 1),
+            self.expr.pretty(level + 1, max),
             self.get_time_suffix_string()
         )
     }
@@ -590,7 +581,11 @@ impl fmt::Display for NumberLiteral {
     }
 }
 
-impl Prettier for NumberLiteral {}
+impl Prettier for NumberLiteral {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
@@ -603,7 +598,11 @@ impl fmt::Display for StringLiteral {
     }
 }
 
-impl Prettier for StringLiteral {}
+impl Prettier for StringLiteral {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorSelector {
@@ -699,7 +698,11 @@ impl fmt::Display for VectorSelector {
     }
 }
 
-impl Prettier for VectorSelector {}
+impl Prettier for VectorSelector {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSelector {
@@ -730,7 +733,11 @@ impl fmt::Display for MatrixSelector {
     }
 }
 
-impl Prettier for MatrixSelector {}
+impl Prettier for MatrixSelector {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
 
 /// Call represents Prometheus Function.
 /// Some functions have special cases:
@@ -784,16 +791,12 @@ impl fmt::Display for Call {
 }
 
 impl Prettier for Call {
-    fn pretty(&self, level: usize) -> String {
-        if !self.needs_split() {
-            return Prettier::pretty(self, level);
-        }
-
+    fn format(&self, level: usize, max: usize) -> String {
         format!(
             "{}{}(\n{}\n{})",
             self.indent(level),
             self.func.name,
-            self.args.pretty(level + 1),
+            self.args.pretty(level + 1, max),
             self.indent(level)
         )
     }
@@ -1068,7 +1071,7 @@ impl Expr {
     }
 
     pub fn prettify(&self) -> String {
-        self.pretty(0)
+        self.pretty(0, MAX_CHARACTERS_PER_LINE)
     }
 }
 
@@ -1143,18 +1146,18 @@ impl fmt::Display for Expr {
 }
 
 impl Prettier for Expr {
-    fn pretty(&self, level: usize) -> String {
+    fn pretty(&self, level: usize, max: usize) -> String {
         match self {
-            Expr::Aggregate(ex) => ex.pretty(level),
-            Expr::Unary(ex) => ex.pretty(level),
-            Expr::Binary(ex) => ex.pretty(level),
-            Expr::Paren(ex) => ex.pretty(level),
-            Expr::Subquery(ex) => ex.pretty(level),
-            Expr::NumberLiteral(ex) => ex.pretty(level),
-            Expr::StringLiteral(ex) => ex.pretty(level),
-            Expr::VectorSelector(ex) => ex.pretty(level),
-            Expr::MatrixSelector(ex) => ex.pretty(level),
-            Expr::Call(ex) => ex.pretty(level),
+            Expr::Aggregate(ex) => ex.pretty(level, max),
+            Expr::Unary(ex) => ex.pretty(level, max),
+            Expr::Binary(ex) => ex.pretty(level, max),
+            Expr::Paren(ex) => ex.pretty(level, max),
+            Expr::Subquery(ex) => ex.pretty(level, max),
+            Expr::NumberLiteral(ex) => ex.pretty(level, max),
+            Expr::StringLiteral(ex) => ex.pretty(level, max),
+            Expr::VectorSelector(ex) => ex.pretty(level, max),
+            Expr::MatrixSelector(ex) => ex.pretty(level, max),
+            Expr::Call(ex) => ex.pretty(level, max),
             Expr::Extension(ext) => format!("{ext:?}"),
         }
     }
@@ -1802,6 +1805,107 @@ mod tests {
 
         for (vs, expect) in cases {
             assert_eq!(expect, vs.to_string(), "{vs:?} does not match {expect}")
+        }
+    }
+
+    #[test]
+    fn test_aggregate_expr_pretty() {
+        let cases = vec![
+            ("sum(foo)", "sum(foo)"),
+            (
+                "sum by() (task:errors:rate10s{job=\"s\"})",
+                "sum(
+  task:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "sum without(job,foo) (task:errors:rate10s{job=\"s\"})",
+                "sum without (job, foo) (
+  task:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "sum(task:errors:rate10s{job=\"s\"}) without(job,foo)",
+                "sum without (job, foo) (
+  task:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "sum by(job,foo) (task:errors:rate10s{job=\"s\"})",
+                "sum by (job, foo) (
+  task:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "sum (task:errors:rate10s{job=\"s\"}) by(job,foo)",
+                "sum by (job, foo) (
+  task:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "topk(10, ask:errors:rate10s{job=\"s\"})",
+                "topk(
+  10,
+  ask:errors:rate10s{job=\"s\"}
+)",
+            ),
+            (
+                "sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job=\"s\"}))",
+                "sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job=\"s\"}
+  )
+)",
+            ),
+            (
+                "sum by(job,foo) (sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job=\"s\"})))",
+                "sum by (job, foo) (
+  sum by (job, foo) (
+    sum by (job, foo) (
+      task:errors:rate10s{job=\"s\"}
+    )
+  )
+)",
+            ),
+            (
+                "sum by(job,foo)
+(sum by(job,foo) (task:errors:rate10s{job=\"s\"}))",
+                 "sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job=\"s\"}
+  )
+)",
+            ),
+            (
+                "sum by(job,foo)
+(sum(task:errors:rate10s{job=\"s\"}) without(job,foo))",
+                "sum by (job, foo) (
+  sum without (job, foo) (
+    task:errors:rate10s{job=\"s\"}
+  )
+)",
+            ),
+            (
+            "sum by(job,foo) # Comment 1.
+(sum by(job,foo) ( # Comment 2.
+task:errors:rate10s{job=\"s\"}))",
+                 "sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job=\"s\"}
+  )
+)",
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(
+                expect,
+                expr.unwrap().pretty(0, 10),
+                "{} and {} does not match",
+                input,
+                expect
+            );
         }
     }
 }

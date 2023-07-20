@@ -69,16 +69,25 @@ const MAX_CHARACTERS_PER_LINE: usize = 100;
 /// its depth and increments the level by 1 before passing down the child.
 /// If the answer is NO, the current Node returns the normalized string value of itself.
 pub trait Prettier: std::fmt::Display {
-    /// default behavior of pretty if split isn't needed
-    fn pretty(&self, level: usize) -> String {
-        format!("{}{}", self.indent(level), self.to_string())
+    fn pretty(&self, level: usize, max: usize) -> String {
+        if self.needs_split(max) {
+            self.format(level, max)
+        } else {
+            format!("{}{self}", self.indent(level))
+        }
     }
 
     fn indent(&self, n: usize) -> String {
         INDENT_STR.repeat(n)
     }
 
-    fn needs_split(&self) -> bool {
-        self.to_string().len() > MAX_CHARACTERS_PER_LINE
+    /// override format if it needs pretty
+    fn format(&self, level: usize, _max: usize) -> String {
+        format!("{}{self}", self.indent(level))
+    }
+
+    /// override needs_split to return false to return the default format
+    fn needs_split(&self, max: usize) -> bool {
+        self.to_string().len() > max
     }
 }
