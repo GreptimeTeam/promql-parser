@@ -20,8 +20,7 @@ let promql = r#"http_requests_total{environment=~"staging|testing|development",m
 
 match parser::parse(promql) {
     Ok(expr) => {
-        println!("Prettify:\n{}", expr.prettify());
-        println!();
+        println!("Prettify:\n\n{}", expr.prettify());
         println!("AST:\n{expr:?}");
     }
     Err(info) => println!("Err: {info:?}"),
