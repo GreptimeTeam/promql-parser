@@ -91,3 +91,32 @@ pub trait Prettier: std::fmt::Display {
 fn indent(n: usize) -> String {
     INDENT_STR.repeat(n)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Pretty(String);
+
+    impl std::fmt::Display for Pretty {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Prettier for Pretty {}
+
+    #[test]
+    fn test_prettier_trait() {
+        let max = 10;
+        let level = 1;
+
+        let p = Pretty("demo".into());
+        assert!(!p.needs_split(max));
+        assert_eq!(p.format(level, max), p.pretty(level, max));
+
+        let p = Pretty("demo_again.".into());
+        assert!(p.needs_split(max));
+        assert_eq!(p.format(level, max), p.pretty(level, max));
+    }
+}
