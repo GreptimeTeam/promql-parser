@@ -17,7 +17,8 @@ use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
 use crate::parser::{
-    Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType, MAX_CHARACTERS_PER_LINE,
+    indent, Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType,
+    MAX_CHARACTERS_PER_LINE,
 };
 use crate::util::display_duration;
 use std::fmt::{self, Write};
@@ -365,12 +366,12 @@ impl fmt::Display for AggregateExpr {
 
 impl Prettier for AggregateExpr {
     fn format(&self, level: usize, max: usize) -> String {
-        let mut s = format!("{}{}(\n", self.indent(level), self.get_op_string());
+        let mut s = format!("{}{}(\n", indent(level), self.get_op_string());
         if let Some(param) = &self.param {
             writeln!(s, "{},", param.pretty(level + 1, max)).unwrap();
         }
         writeln!(s, "{}", self.expr.pretty(level + 1, max)).unwrap();
-        write!(s, "{})", self.indent(level)).unwrap();
+        write!(s, "{})", indent(level)).unwrap();
         s
     }
 }
@@ -391,7 +392,7 @@ impl Prettier for UnaryExpr {
     fn pretty(&self, level: usize, max: usize) -> String {
         format!(
             "{}-{}",
-            self.indent(level),
+            indent(level),
             self.expr.pretty(level, max).trim_start()
         )
     }
@@ -466,7 +467,7 @@ impl Prettier for BinaryExpr {
         format!(
             "{}\n{}{}\n{}",
             self.lhs.pretty(level + 1, max),
-            self.indent(level),
+            indent(level),
             self.get_op_matching_string(),
             self.rhs.pretty(level + 1, max)
         )
@@ -488,9 +489,9 @@ impl Prettier for ParenExpr {
     fn format(&self, level: usize, max: usize) -> String {
         format!(
             "{}(\n{}\n{})",
-            self.indent(level),
+            indent(level),
             self.expr.pretty(level + 1, max),
-            self.indent(level)
+            indent(level)
         )
     }
 }
@@ -802,10 +803,10 @@ impl Prettier for Call {
     fn format(&self, level: usize, max: usize) -> String {
         format!(
             "{}{}(\n{}\n{})",
-            self.indent(level),
+            indent(level),
             self.func.name,
             self.args.pretty(level + 1, max),
-            self.indent(level)
+            indent(level)
         )
     }
 }
@@ -2416,6 +2417,25 @@ or
         for (input, expect) in cases {
             let expr = crate::parser::parse(&input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_call_expr_prettify() {
+        let cases = vec![
+            ("vector_selector", "vector_selector"),
+            (
+                r#"vector_selector{fooooooooooooooooo="barrrrrrrrrrrrrrrrrrr",barrrrrrrrrrrrrrrrrrr="fooooooooooooooooo",process_name="alertmanager"}"#,
+                r#"vector_selector{barrrrrrrrrrrrrrrrrrr="fooooooooooooooooo",fooooooooooooooooo="barrrrrrrrrrrrrrrrrrr",process_name="alertmanager"}"#,
+            ),
+            (
+                r#"matrix_selector{fooooooooooooooooo="barrrrrrrrrrrrrrrrrrr",barrrrrrrrrrrrrrrrrrr="fooooooooooooooooo",process_name="alertmanager"}[1y2w3d]"#,
+                r#"matrix_selector{barrrrrrrrrrrrrrrrrrr="fooooooooooooooooo",fooooooooooooooooo="barrrrrrrrrrrrrrrrrrr",process_name="alertmanager"}[382d]"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            assert_eq!(expect, crate::parser::parse(&input).unwrap().prettify());
         }
     }
 }

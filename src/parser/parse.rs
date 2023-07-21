@@ -82,11 +82,7 @@ mod tests {
 
     fn assert_cases(cases: Vec<Case>) {
         for Case { input, expected } in cases {
-            assert_eq!(
-                crate::parser::parse(&input),
-                expected,
-                "\n<parse> <{input}> does not match"
-            );
+            assert_eq!(expected, crate::parser::parse(&input));
         }
     }
 
