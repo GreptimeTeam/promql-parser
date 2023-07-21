@@ -65,15 +65,16 @@ const MAX_CHARACTERS_PER_LINE: usize = 100;
 /// will be ([level/depth of current Node] * "  ").
 ///
 /// The answer to 2 is YES if the normalized length of the current Node exceeds
-/// the maxCharactersPerLine limit. Hence, it applies the indentation equal to
+/// the [MAX_CHARACTERS_PER_LINE] limit. Hence, it applies the indentation equal to
 /// its depth and increments the level by 1 before passing down the child.
 /// If the answer is NO, the current Node returns the normalized string value of itself.
 pub trait Prettier: std::fmt::Display {
+    /// max param is short for max_characters_per_line.
     fn pretty(&self, level: usize, max: usize) -> String {
         if self.needs_split(max) {
             self.format(level, max)
         } else {
-            format!("{}{self}", self.indent(level))
+            self.default_format(level)
         }
     }
 
@@ -81,9 +82,14 @@ pub trait Prettier: std::fmt::Display {
         INDENT_STR.repeat(n)
     }
 
+    /// default_format is designed not for override
+    fn default_format(&self, level: usize) -> String {
+        format!("{}{self}", self.indent(level))
+    }
+
     /// override format if expr needs to be splited into multiple lines
     fn format(&self, level: usize, _max: usize) -> String {
-        format!("{}{self}", self.indent(level))
+        self.default_format(level)
     }
 
     /// override needs_split to return false, in order not to split multiple lines

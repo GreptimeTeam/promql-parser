@@ -20,7 +20,7 @@ use crate::parser::{
     Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType, MAX_CHARACTERS_PER_LINE,
 };
 use crate::util::display_duration;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -116,17 +116,15 @@ impl fmt::Display for BinModifier {
 
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(ls) => s.push_str(&format!("on ({ls}) ")),
-                LabelModifier::Exclude(ls) if !ls.is_empty() => {
-                    s.push_str(&format!("ignoring ({ls}) "))
-                }
+                LabelModifier::Include(ls) => write!(s, "on ({ls}) ")?,
+                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(s, "ignoring ({ls}) ")?,
                 _ => (),
             }
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(ls) => s.push_str(&format!("group_left ({ls}) ")),
-            VectorMatchCardinality::OneToMany(ls) => s.push_str(&format!("group_right ({ls}) ")),
+            VectorMatchCardinality::ManyToOne(ls) => write!(s, "group_left ({ls}) ")?,
+            VectorMatchCardinality::OneToMany(ls) => write!(s, "group_right ({ls}) ")?,
             _ => (),
         }
 
@@ -342,8 +340,8 @@ impl AggregateExpr {
 
         if let Some(modifier) = &self.modifier {
             match modifier {
-                LabelModifier::Exclude(ls) => s.push_str(&format!(" without ({ls}) ")),
-                LabelModifier::Include(ls) if !ls.is_empty() => s.push_str(&format!(" by ({ls}) ")),
+                LabelModifier::Exclude(ls) => write!(s, " without ({ls}) ").unwrap(),
+                LabelModifier::Include(ls) if !ls.is_empty() => write!(s, " by ({ls}) ").unwrap(),
                 _ => (),
             }
         }
@@ -369,10 +367,10 @@ impl Prettier for AggregateExpr {
     fn format(&self, level: usize, max: usize) -> String {
         let mut s = format!("{}{}(\n", self.indent(level), self.get_op_string());
         if let Some(param) = &self.param {
-            s.push_str(&format!("{},\n", param.pretty(level + 1, max)));
+            writeln!(s, "{},", param.pretty(level + 1, max)).unwrap();
         }
-        s.push_str(&format!("{}\n", self.expr.pretty(level + 1, max),));
-        s.push_str(&format!("{})", self.indent(level)));
+        writeln!(s, "{}", self.expr.pretty(level + 1, max)).unwrap();
+        write!(s, "{})", self.indent(level)).unwrap();
         s
     }
 }
@@ -522,11 +520,11 @@ impl SubqueryExpr {
         let mut s = format!("[{range}:{step}]");
 
         if let Some(at) = &self.at {
-            s.push_str(&format!(" {at}"));
+            write!(s, " {at}").unwrap();
         }
 
         if let Some(offset) = &self.offset {
-            s.push_str(&format!(" offset {offset}"));
+            write!(s, " offset {offset}").unwrap();
         }
         s
     }
