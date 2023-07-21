@@ -121,11 +121,7 @@ mod tests {
             let lb2 = Labels::new(lb2);
             let intersection: HashSet<_> = lb1.intersect(&lb2).labels.into_iter().collect();
             let expect: HashSet<_> = common.iter().map(|s| s.to_string()).collect();
-            assert_eq!(
-                expect, intersection,
-                "{:?} intersect {:?} does not eq {:?}",
-                lb1, lb2, common
-            )
+            assert_eq!(expect, intersection)
         }
     }
 }

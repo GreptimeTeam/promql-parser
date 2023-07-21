@@ -41,8 +41,7 @@ pub use token::{Token, TokenId, TokenType};
 pub use value::{Value, ValueType};
 
 // FIXME: show more helpful error message to some invalid promql queries.
-pub const INVALID_QUERY_INFO: &str = "invalid promql query";
-
+const INVALID_QUERY_INFO: &str = "invalid promql query";
 const INDENT_STR: &str = "  ";
 const MAX_CHARACTERS_PER_LINE: usize = 100;
 
@@ -74,26 +73,50 @@ pub trait Prettier: std::fmt::Display {
         if self.needs_split(max) {
             self.format(level, max)
         } else {
-            self.default_format(level)
+            format!("{}{self}", indent(level))
         }
-    }
-
-    fn indent(&self, n: usize) -> String {
-        INDENT_STR.repeat(n)
-    }
-
-    /// default_format is designed not for override
-    fn default_format(&self, level: usize) -> String {
-        format!("{}{self}", self.indent(level))
     }
 
     /// override format if expr needs to be splited into multiple lines
     fn format(&self, level: usize, _max: usize) -> String {
-        self.default_format(level)
+        format!("{}{self}", indent(level))
     }
 
     /// override needs_split to return false, in order not to split multiple lines
     fn needs_split(&self, max: usize) -> bool {
         self.to_string().len() > max
+    }
+}
+
+fn indent(n: usize) -> String {
+    INDENT_STR.repeat(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Pretty(String);
+
+    impl std::fmt::Display for Pretty {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Prettier for Pretty {}
+
+    #[test]
+    fn test_prettier_trait() {
+        let max = 10;
+        let level = 1;
+
+        let p = Pretty("demo".into());
+        assert!(!p.needs_split(max));
+        assert_eq!(p.format(level, max), p.pretty(level, max));
+
+        let p = Pretty("demo_again.".into());
+        assert!(p.needs_split(max));
+        assert_eq!(p.format(level, max), p.pretty(level, max));
     }
 }
