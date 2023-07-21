@@ -14,6 +14,7 @@
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fmt;
 
 lrlex::lrlex_mod!("token_map");
 pub use token_map::*;
@@ -215,6 +216,12 @@ impl TokenType {
 
     pub fn is_operator(&self) -> bool {
         self.0 > T_OPERATORS_START && self.0 < T_OPERATORS_END
+    }
+}
+
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", token_display(self.id()))
     }
 }
 

@@ -16,9 +16,11 @@ use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
-use crate::parser::{Function, FunctionArgs, Token, TokenId, TokenType, ValueType};
+use crate::parser::{
+    Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType, MAX_CHARACTERS_PER_LINE,
+};
 use crate::util::display_duration;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::ops::Neg;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -110,21 +112,27 @@ pub struct BinModifier {
 
 impl fmt::Display for BinModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.bool_str())?;
+        let mut s = String::from(self.bool_str());
+
         if let Some(matching) = &self.matching {
             match matching {
-                LabelModifier::Include(ls) => write!(f, "on ({ls}) ")?,
-                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(f, "ignoring ({ls}) ")?,
+                LabelModifier::Include(ls) => write!(s, "on ({ls}) ")?,
+                LabelModifier::Exclude(ls) if !ls.is_empty() => write!(s, "ignoring ({ls}) ")?,
                 _ => (),
             }
         }
 
         match &self.card {
-            VectorMatchCardinality::ManyToOne(ls) => write!(f, "group_left ({ls}) ")?,
-            VectorMatchCardinality::OneToMany(ls) => write!(f, "group_right ({ls}) ")?,
+            VectorMatchCardinality::ManyToOne(ls) => write!(s, "group_left ({ls}) ")?,
+            VectorMatchCardinality::OneToMany(ls) => write!(s, "group_right ({ls}) ")?,
             _ => (),
         }
-        Ok(())
+
+        if s.trim().is_empty() {
+            write!(f, "")
+        } else {
+            write!(f, " {}", s.trim_end()) // there is a leading space here
+        }
     }
 }
 
@@ -326,20 +334,25 @@ pub struct AggregateExpr {
     pub modifier: Option<LabelModifier>,
 }
 
-impl fmt::Display for AggregateExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", token_display(self.op.id()))?;
+impl AggregateExpr {
+    fn get_op_string(&self) -> String {
+        let mut s = self.op.to_string();
 
-        // modifier
         if let Some(modifier) = &self.modifier {
             match modifier {
-                LabelModifier::Exclude(ls) => write!(f, " without ({ls}) ")?,
-                LabelModifier::Include(ls) if !ls.is_empty() => write!(f, " by ({ls}) ")?,
+                LabelModifier::Exclude(ls) => write!(s, " without ({ls}) ").unwrap(),
+                LabelModifier::Include(ls) if !ls.is_empty() => write!(s, " by ({ls}) ").unwrap(),
                 _ => (),
             }
         }
+        s
+    }
+}
 
-        // body
+impl fmt::Display for AggregateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.get_op_string())?;
+
         write!(f, "(")?;
         if let Some(param) = &self.param {
             write!(f, "{param}, ")?;
@@ -347,6 +360,18 @@ impl fmt::Display for AggregateExpr {
         write!(f, "{})", self.expr)?;
 
         Ok(())
+    }
+}
+
+impl Prettier for AggregateExpr {
+    fn format(&self, level: usize, max: usize) -> String {
+        let mut s = format!("{}{}(\n", self.indent(level), self.get_op_string());
+        if let Some(param) = &self.param {
+            writeln!(s, "{},", param.pretty(level + 1, max)).unwrap();
+        }
+        writeln!(s, "{}", self.expr.pretty(level + 1, max)).unwrap();
+        write!(s, "{})", self.indent(level)).unwrap();
+        s
     }
 }
 
@@ -358,7 +383,17 @@ pub struct UnaryExpr {
 
 impl fmt::Display for UnaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "- {}", self.expr)
+        write!(f, "-{}", self.expr)
+    }
+}
+
+impl Prettier for UnaryExpr {
+    fn pretty(&self, level: usize, max: usize) -> String {
+        format!(
+            "{}-{}",
+            self.indent(level),
+            self.expr.pretty(level, max).trim_start()
+        )
     }
 }
 
@@ -405,15 +440,36 @@ impl BinaryExpr {
             .as_ref()
             .and_then(|modifier| modifier.intersect_labels())
     }
+
+    fn get_op_matching_string(&self) -> String {
+        match &self.modifier {
+            Some(modifier) => format!("{}{modifier}", self.op),
+            None => self.op.to_string(),
+        }
+    }
 }
 
 impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let op = token_display(self.op.id());
-        match &self.modifier {
-            Some(modifier) => write!(f, "{} {} {}{}", self.lhs, op, modifier, self.rhs),
-            None => write!(f, "{} {} {}", self.lhs, op, self.rhs),
-        }
+        write!(
+            f,
+            "{} {} {}",
+            self.lhs,
+            self.get_op_matching_string(),
+            self.rhs
+        )
+    }
+}
+
+impl Prettier for BinaryExpr {
+    fn format(&self, level: usize, max: usize) -> String {
+        format!(
+            "{}\n{}{}\n{}",
+            self.lhs.pretty(level + 1, max),
+            self.indent(level),
+            self.get_op_matching_string(),
+            self.rhs.pretty(level + 1, max)
+        )
     }
 }
 
@@ -425,6 +481,17 @@ pub struct ParenExpr {
 impl fmt::Display for ParenExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({})", self.expr)
+    }
+}
+
+impl Prettier for ParenExpr {
+    fn format(&self, level: usize, max: usize) -> String {
+        format!(
+            "{}(\n{}\n{})",
+            self.indent(level),
+            self.expr.pretty(level + 1, max),
+            self.indent(level)
+        )
     }
 }
 
@@ -442,23 +509,40 @@ pub struct SubqueryExpr {
     pub step: Option<Duration>,
 }
 
-impl fmt::Display for SubqueryExpr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl SubqueryExpr {
+    fn get_time_suffix_string(&self) -> String {
         let step = match &self.step {
             Some(step) => display_duration(step),
             None => String::from(""),
         };
         let range = display_duration(&self.range);
-        write!(f, "{}[{range}:{step}]", self.expr)?;
+
+        let mut s = format!("[{range}:{step}]");
+
+        if let Some(at) = &self.at {
+            write!(s, " {at}").unwrap();
+        }
 
         if let Some(offset) = &self.offset {
-            write!(f, " offset {offset}")?;
+            write!(s, " offset {offset}").unwrap();
         }
-        if let Some(at) = &self.at {
-            write!(f, " {at}")?;
-        }
+        s
+    }
+}
 
-        Ok(())
+impl fmt::Display for SubqueryExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.expr, self.get_time_suffix_string())
+    }
+}
+
+impl Prettier for SubqueryExpr {
+    fn pretty(&self, level: usize, max: usize) -> String {
+        format!(
+            "{}{}",
+            self.expr.pretty(level, max),
+            self.get_time_suffix_string()
+        )
     }
 }
 
@@ -503,6 +587,12 @@ impl fmt::Display for NumberLiteral {
     }
 }
 
+impl Prettier for NumberLiteral {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringLiteral {
     pub val: String,
@@ -511,6 +601,12 @@ pub struct StringLiteral {
 impl fmt::Display for StringLiteral {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "\"{}\"", self.val)
+    }
+}
+
+impl Prettier for StringLiteral {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
     }
 }
 
@@ -598,13 +694,19 @@ impl fmt::Display for VectorSelector {
         if !matchers.is_empty() {
             write!(f, "{{{matchers}}}")?;
         }
-        if let Some(offset) = &self.offset {
-            write!(f, " offset {offset}")?;
-        }
         if let Some(at) = &self.at {
             write!(f, " {at}")?;
         }
+        if let Some(offset) = &self.offset {
+            write!(f, " offset {offset}")?;
+        }
         Ok(())
+    }
+}
+
+impl Prettier for VectorSelector {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
     }
 }
 
@@ -627,13 +729,21 @@ impl fmt::Display for MatrixSelector {
 
         write!(f, "[{}]", display_duration(&self.range))?;
 
-        if let Some(offset) = &self.vs.offset {
-            write!(f, " offset {offset}")?;
-        }
         if let Some(at) = &self.vs.at {
             write!(f, " {at}")?;
         }
+
+        if let Some(offset) = &self.vs.offset {
+            write!(f, " offset {offset}")?;
+        }
+
         Ok(())
+    }
+}
+
+impl Prettier for MatrixSelector {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
     }
 }
 
@@ -685,6 +795,18 @@ pub struct Call {
 impl fmt::Display for Call {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.func.name, self.args)
+    }
+}
+
+impl Prettier for Call {
+    fn format(&self, level: usize, max: usize) -> String {
+        format!(
+            "{}{}(\n{}\n{})",
+            self.indent(level),
+            self.func.name,
+            self.args.pretty(level + 1, max),
+            self.indent(level)
+        )
     }
 }
 
@@ -892,9 +1014,8 @@ impl Expr {
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
         if args.is_empty() {
-            let op_display = token_display(op.id());
             return Err(format!(
-                "no arguments for aggregate expression '{op_display}' provided"
+                "no arguments for aggregate expression '{op}' provided"
             ));
         }
         let mut desired_args_count = 1;
@@ -955,6 +1076,10 @@ impl Expr {
             Expr::NumberLiteral(nl) => Some(nl.val),
             _ => None,
         }
+    }
+
+    pub fn prettify(&self) -> String {
+        self.pretty(0, MAX_CHARACTERS_PER_LINE)
     }
 }
 
@@ -1028,6 +1153,24 @@ impl fmt::Display for Expr {
     }
 }
 
+impl Prettier for Expr {
+    fn pretty(&self, level: usize, max: usize) -> String {
+        match self {
+            Expr::Aggregate(ex) => ex.pretty(level, max),
+            Expr::Unary(ex) => ex.pretty(level, max),
+            Expr::Binary(ex) => ex.pretty(level, max),
+            Expr::Paren(ex) => ex.pretty(level, max),
+            Expr::Subquery(ex) => ex.pretty(level, max),
+            Expr::NumberLiteral(ex) => ex.pretty(level, max),
+            Expr::StringLiteral(ex) => ex.pretty(level, max),
+            Expr::VectorSelector(ex) => ex.pretty(level, max),
+            Expr::MatrixSelector(ex) => ex.pretty(level, max),
+            Expr::Call(ex) => ex.pretty(level, max),
+            Expr::Extension(ext) => format!("{ext:?}"),
+        }
+    }
+}
+
 /// check_ast checks the validity of the provided AST. This includes type checking.
 /// Recursively check correct typing for child nodes and raise errors in case of bad typing.
 pub fn check_ast(expr: Expr) -> Result<Expr, String> {
@@ -1068,11 +1211,10 @@ fn expect_type(
 /// the original logic is redundant in prometheus, and the following coding blocks
 /// have been optimized for readability, but all logic SHOULD be covered.
 fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
-    let op_display = token_display(ex.op.id());
-
     if !ex.op.is_operator() {
         return Err(format!(
-            "binary expression does not support operator '{op_display}'"
+            "binary expression does not support operator '{}'",
+            ex.op
         ));
     }
 
@@ -1103,7 +1245,8 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
     if ex.op.is_set_operator() {
         if ex.lhs.value_type() == ValueType::Scalar || ex.rhs.value_type() == ValueType::Scalar {
             return Err(format!(
-                "set operator '{op_display}' not allowed in binary scalar expression"
+                "set operator '{}' not allowed in binary scalar expression",
+                ex.op
             ));
         }
 
@@ -1112,7 +1255,7 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
                 if matches!(modifier.card, VectorMatchCardinality::OneToMany(_))
                     || matches!(modifier.card, VectorMatchCardinality::ManyToOne(_))
                 {
-                    return Err(format!("no grouping allowed for '{op_display}' operation"));
+                    return Err(format!("no grouping allowed for '{}' operation", ex.op));
                 }
             };
         }
@@ -1148,9 +1291,9 @@ fn check_ast_for_binary_expr(mut ex: BinaryExpr) -> Result<Expr, String> {
 
 fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
     if !ex.op.is_aggregator() {
-        let op_display = token_display(ex.op.id());
         return Err(format!(
-            "aggregation operator expected in aggregation expression but got '{op_display}'"
+            "aggregation operator expected in aggregation expression but got '{}'",
+            ex.op
         ));
     }
 
@@ -1469,10 +1612,12 @@ mod tests {
     fn test_expr_to_string() {
         let mut cases = vec![
             ("1", "1"),
+            ("- 1", "-1"),
+            ("+ 1", "1"),
             ("Inf", "Inf"),
             ("inf", "Inf"),
             ("+Inf", "Inf"),
-            ("-Inf", "-Inf"),
+            ("- Inf", "-Inf"),
             (".5", "0.5"),
             ("5.", "5"),
             ("123.4567", "123.4567"),
@@ -1485,11 +1630,15 @@ mod tests {
             ("-0755", "-493"),
             ("NaN", "NaN"),
             ("NAN", "NaN"),
-            ("- 1^2", "- 1 ^ 2"),
+            ("- 1^2", "-1 ^ 2"),
             ("+1 + -2 * 1", "1 + -2 * 1"),
             ("1 + 2/(3*1)", "1 + 2 / (3 * 1)"),
             ("foo*sum", "foo * sum"),
             ("foo * on(test,blub) bar", "foo * on (test, blub) bar"),
+            (
+                r#"up{job="hi", instance="in"} offset 5m @ 100"#,
+                r#"up{instance="in",job="hi"} @ 100.000 offset 5m"#,
+            ),
             (
                 r#"up{job="hi", instance="in"}"#,
                 r#"up{instance="in",job="hi"}"#,
@@ -1498,6 +1647,10 @@ mod tests {
             (
                 "foo / on(test,blub) group_left(bar) bar",
                 "foo / on (test, blub) group_left (bar) bar",
+            ),
+            (
+                "foo / on(test,blub) group_right(bar) bar",
+                "foo / on (test, blub) group_right (bar) bar",
             ),
             (
                 r#"foo{a="b",foo!="bar",test=~"test",bar!~"baz"}"#,
@@ -1510,6 +1663,10 @@ mod tests {
             (
                 r#"test{a="b"}[5y] OFFSET 3d"#,
                 r#"test{a="b"}[5y] offset 3d"#,
+            ),
+            (
+                r#"{a="b"}[5y] OFFSET 3d"#,
+                r#"{a="b"}[5y] offset 3d"#,
             ),
             (
                 "sum(some_metric) without(and, by, avg, count, alert, annotations)",
@@ -1540,6 +1697,10 @@ mod tests {
             (
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
                 r#"label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", "src2", "src3")"#,
+            ),
+            (
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s] @ 100"#,
+                r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s] @ 100.000"#,
             ),
             (
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:])[4m:3s]"#,
@@ -1611,11 +1772,7 @@ mod tests {
         cases.append(&mut cases1);
         for (input, expected) in cases {
             let expr = crate::parser::parse(input).unwrap();
-            assert_eq!(
-                expected,
-                expr.to_string(),
-                "{input} and {expected} do not match"
-            )
+            assert_eq!(expected, expr.to_string())
         }
     }
 
@@ -1653,7 +1810,612 @@ mod tests {
         ];
 
         for (vs, expect) in cases {
-            assert_eq!(expect, vs.to_string(), "{vs:?} does not match {expect}")
+            assert_eq!(expect, vs.to_string())
+        }
+    }
+
+    #[test]
+    fn test_aggregate_expr_pretty() {
+        let cases = vec![
+            ("sum(foo)", "sum(foo)"),
+            (
+                r#"sum by() (task:errors:rate10s{job="s"})"#,
+                r#"sum(
+  task:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"sum without(job,foo) (task:errors:rate10s{job="s"})"#,
+                r#"sum without (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"sum(task:errors:rate10s{job="s"}) without(job,foo)"#,
+                r#"sum without (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"sum by(job,foo) (task:errors:rate10s{job="s"})"#,
+                r#"sum by (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"sum (task:errors:rate10s{job="s"}) by(job,foo)"#,
+                r#"sum by (job, foo) (
+  task:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"topk(10, ask:errors:rate10s{job="s"})"#,
+                r#"topk(
+  10,
+  ask:errors:rate10s{job="s"}
+)"#,
+            ),
+            (
+                r#"sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job="s"}
+  )
+)"#,
+            ),
+            (
+                r#"sum by(job,foo) (sum by(job,foo) (sum by(job,foo) (task:errors:rate10s{job="s"})))"#,
+                r#"sum by (job, foo) (
+  sum by (job, foo) (
+    sum by (job, foo) (
+      task:errors:rate10s{job="s"}
+    )
+  )
+)"#,
+            ),
+            (
+                r#"sum by(job,foo)
+(sum by(job,foo) (task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job="s"}
+  )
+)"#,
+            ),
+            (
+                r#"sum by(job,foo)
+(sum(task:errors:rate10s{job="s"}) without(job,foo))"#,
+                r#"sum by (job, foo) (
+  sum without (job, foo) (
+    task:errors:rate10s{job="s"}
+  )
+)"#,
+            ),
+            (
+                r#"sum by(job,foo) # Comment 1.
+(sum by(job,foo) ( # Comment 2.
+task:errors:rate10s{job="s"}))"#,
+                r#"sum by (job, foo) (
+  sum by (job, foo) (
+    task:errors:rate10s{job="s"}
+  )
+)"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_binary_expr_pretty() {
+        let cases = vec![
+            ("a+b", "a + b"),
+            (
+                "a == bool 1",
+                "  a
+== bool
+  1",
+            ),
+            (
+                "a == 1024000",
+                "  a
+==
+  1024000",
+            ),
+            (
+                "a + ignoring(job) b",
+                "  a
++ ignoring (job)
+  b",
+            ),
+            (
+                "foo_1 + foo_2",
+                "  foo_1
++
+  foo_2",
+            ),
+            (
+                "foo_1 + foo_2 + foo_3",
+                "    foo_1
+  +
+    foo_2
++
+  foo_3",
+            ),
+            (
+                "foo + baar + foo_3",
+                "  foo + baar
++
+  foo_3",
+            ),
+            (
+                "foo_1 + foo_2 + foo_3 + foo_4",
+                "      foo_1
+    +
+      foo_2
+  +
+    foo_3
++
+  foo_4",
+            ),
+            (
+                "foo_1 + ignoring(foo) foo_2 + ignoring(job) group_left foo_3 + on(instance) group_right foo_4",
+
+                 "      foo_1
+    + ignoring (foo)
+      foo_2
+  + ignoring (job) group_left ()
+    foo_3
++ on (instance) group_right ()
+  foo_4",
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_call_expr_pretty() {
+        let cases = vec![
+            (
+                "rate(foo[1m])",
+                "rate(
+  foo[1m]
+)",
+            ),
+            (
+                "sum_over_time(foo[1m])",
+                "sum_over_time(
+  foo[1m]
+)",
+            ),
+            (
+                "rate(long_vector_selector[10m:1m] @ start() offset 1m)",
+                "rate(
+  long_vector_selector[10m:1m] @ start() offset 1m
+)",
+            ),
+            (
+                "histogram_quantile(0.9, rate(foo[1m]))",
+                "histogram_quantile(
+  0.9,
+  rate(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                "histogram_quantile(0.9, rate(foo[1m] @ start()))",
+                "histogram_quantile(
+  0.9,
+  rate(
+    foo[1m] @ start()
+  )
+)",
+            ),
+            (
+                "max_over_time(rate(demo_api_request_duration_seconds_count[1m])[1m:] @ start() offset 1m)",
+                "max_over_time(
+  rate(
+    demo_api_request_duration_seconds_count[1m]
+  )[1m:] @ start() offset 1m
+)",
+            ),
+            (
+                r#"label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")"#,
+                r#"label_replace(
+  up{job="api-server",service="a:c"},
+  "foo",
+  "$1",
+  "service",
+  "(.*):.*"
+)"#,
+            ),
+            (
+                r#"label_replace(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*")"#,
+                r#"label_replace(
+  label_replace(
+    up{job="api-server",service="a:c"},
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  ),
+  "foo",
+  "$1",
+  "service",
+  "(.*):.*"
+)"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_paren_expr_pretty() {
+        let cases = vec![
+            ("(foo)", "(foo)"),
+            (
+                "(_foo_long_)",
+                "(
+  _foo_long_
+)",
+            ),
+            (
+                "((foo_long))",
+                "(
+  (foo_long)
+)",
+            ),
+            (
+                "((_foo_long_))",
+                "(
+  (
+    _foo_long_
+  )
+)",
+            ),
+            (
+                "(((foo_long)))",
+                "(
+  (
+    (foo_long)
+  )
+)",
+            ),
+            ("(1 + 2)", "(1 + 2)"),
+            (
+                "(foo + bar)",
+                "(
+  foo + bar
+)",
+            ),
+            (
+                "(foo_long + bar_long)",
+                "(
+    foo_long
+  +
+    bar_long
+)",
+            ),
+            (
+                "(foo_long + bar_long + bar_2_long)",
+                "(
+      foo_long
+    +
+      bar_long
+  +
+    bar_2_long
+)",
+            ),
+            (
+                "((foo_long + bar_long) + bar_2_long)",
+                "(
+    (
+        foo_long
+      +
+        bar_long
+    )
+  +
+    bar_2_long
+)",
+            ),
+            (
+                "(1111 + 2222)",
+                "(
+    1111
+  +
+    2222
+)",
+            ),
+            (
+                "(sum_over_time(foo[1m]))",
+                "(
+  sum_over_time(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                r#"(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    up{job="api-server",service="a:c"},
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+            (
+                r#"(label_replace(label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    label_replace(
+      up{job="api-server",service="a:c"},
+      "foo",
+      "$1",
+      "service",
+      "(.*):.*"
+    ),
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+            (
+                r#"(label_replace(label_replace((up{job="api-server",service="a:c"}), "foo", "$1", "service", "(.*):.*"), "foo", "$1", "service", "(.*):.*"))"#,
+                r#"(
+  label_replace(
+    label_replace(
+      (
+        up{job="api-server",service="a:c"}
+      ),
+      "foo",
+      "$1",
+      "service",
+      "(.*):.*"
+    ),
+    "foo",
+    "$1",
+    "service",
+    "(.*):.*"
+  )
+)"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_unary_expr_pretty() {
+        let cases = vec![
+            ("-1", "-1"),
+            ("-vector_selector", "-vector_selector"),
+            (
+                "(-vector_selector)",
+                "(
+  -vector_selector
+)",
+            ),
+            (
+                "-histogram_quantile(0.9,rate(foo[1m]))",
+                "-histogram_quantile(
+  0.9,
+  rate(
+    foo[1m]
+  )
+)",
+            ),
+            (
+                "-histogram_quantile(0.99, sum by (le) (rate(foo[1m])))",
+                "-histogram_quantile(
+  0.99,
+  sum by (le) (
+    rate(
+      foo[1m]
+    )
+  )
+)",
+            ),
+            (
+                "-histogram_quantile(0.9, -rate(foo[1m] @ start()))",
+                "-histogram_quantile(
+  0.9,
+  -rate(
+    foo[1m] @ start()
+  )
+)",
+            ),
+            (
+                "(-histogram_quantile(0.9, -rate(foo[1m] @ start())))",
+                "(
+  -histogram_quantile(
+    0.9,
+    -rate(
+      foo[1m] @ start()
+    )
+  )
+)",
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_expr_pretty() {
+        // Following queries have been taken from https://monitoring.mixins.dev/
+        let cases = vec![
+            (
+                r#"(node_filesystem_avail_bytes{job="node",fstype!=""} / node_filesystem_size_bytes{job="node",fstype!=""} * 100 < 40 and predict_linear(node_filesystem_avail_bytes{job="node",fstype!=""}[6h], 24*60*60) < 0 and node_filesystem_readonly{job="node",fstype!=""} == 0)"#,
+                r#"(
+            node_filesystem_avail_bytes{fstype!="",job="node"}
+          /
+            node_filesystem_size_bytes{fstype!="",job="node"}
+        *
+          100
+      <
+        40
+    and
+        predict_linear(
+          node_filesystem_avail_bytes{fstype!="",job="node"}[6h],
+            24 * 60
+          *
+            60
+        )
+      <
+        0
+  and
+      node_filesystem_readonly{fstype!="",job="node"}
+    ==
+      0
+)"#,
+            ),
+            (
+                r#"(node_filesystem_avail_bytes{job="node",fstype!=""} / node_filesystem_size_bytes{job="node",fstype!=""} * 100 < 20 and predict_linear(node_filesystem_avail_bytes{job="node",fstype!=""}[6h], 4*60*60) < 0 and node_filesystem_readonly{job="node",fstype!=""} == 0)"#,
+                r#"(
+            node_filesystem_avail_bytes{fstype!="",job="node"}
+          /
+            node_filesystem_size_bytes{fstype!="",job="node"}
+        *
+          100
+      <
+        20
+    and
+        predict_linear(
+          node_filesystem_avail_bytes{fstype!="",job="node"}[6h],
+            4 * 60
+          *
+            60
+        )
+      <
+        0
+  and
+      node_filesystem_readonly{fstype!="",job="node"}
+    ==
+      0
+)"#,
+            ),
+            (
+                r#"(node_timex_offset_seconds > 0.05 and deriv(node_timex_offset_seconds[5m]) >= 0) or (node_timex_offset_seconds < -0.05 and deriv(node_timex_offset_seconds[5m]) <= 0)"#,
+                r#"  (
+        node_timex_offset_seconds
+      >
+        0.05
+    and
+        deriv(
+          node_timex_offset_seconds[5m]
+        )
+      >=
+        0
+  )
+or
+  (
+        node_timex_offset_seconds
+      <
+        -0.05
+    and
+        deriv(
+          node_timex_offset_seconds[5m]
+        )
+      <=
+        0
+  )"#,
+            ),
+            (
+                r#"1 - ((node_memory_MemAvailable_bytes{job="node"} or (node_memory_Buffers_bytes{job="node"} + node_memory_Cached_bytes{job="node"} + node_memory_MemFree_bytes{job="node"} + node_memory_Slab_bytes{job="node"}) ) / node_memory_MemTotal_bytes{job="node"})"#,
+                r#"  1
+-
+  (
+      (
+          node_memory_MemAvailable_bytes{job="node"}
+        or
+          (
+                  node_memory_Buffers_bytes{job="node"}
+                +
+                  node_memory_Cached_bytes{job="node"}
+              +
+                node_memory_MemFree_bytes{job="node"}
+            +
+              node_memory_Slab_bytes{job="node"}
+          )
+      )
+    /
+      node_memory_MemTotal_bytes{job="node"}
+  )"#,
+            ),
+            (
+                r#"min by (job, integration) (rate(alertmanager_notifications_failed_total{job="alertmanager", integration=~".*"}[5m]) / rate(alertmanager_notifications_total{job="alertmanager", integration="~.*"}[5m])) > 0.01"#,
+                r#"  min by (job, integration) (
+      rate(
+        alertmanager_notifications_failed_total{integration=~".*",job="alertmanager"}[5m]
+      )
+    /
+      rate(
+        alertmanager_notifications_total{integration="~.*",job="alertmanager"}[5m]
+      )
+  )
+>
+  0.01"#,
+            ),
+            (
+                r#"(count by (job) (changes(process_start_time_seconds{job="alertmanager"}[10m]) > 4) / count by (job) (up{job="alertmanager"})) >= 0.5"#,
+                r#"  (
+      count by (job) (
+          changes(
+            process_start_time_seconds{job="alertmanager"}[10m]
+          )
+        >
+          4
+      )
+    /
+      count by (job) (
+        up{job="alertmanager"}
+      )
+  )
+>=
+  0.5"#,
+            ),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
+        }
+    }
+
+    #[test]
+    fn test_step_invariant_pretty() {
+        let cases = vec![
+            ("a @ 1", "a @ 1.000"),
+            ("a @ start()", "a @ start()"),
+            ("vector_selector @ start()", "vector_selector @ start()"),
+        ];
+
+        for (input, expect) in cases {
+            let expr = crate::parser::parse(&input);
+            assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
 }

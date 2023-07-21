@@ -16,11 +16,14 @@ To parse a simple instant vector selector expression:
 ``` rust
 use promql_parser::parser;
 
-let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
+let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
 
 match parser::parse(promql) {
-    Ok(ast) => println!("AST: {:?}", ast),
-    Err(info) => println!("Err: {:?}", info),
+    Ok(expr) => {
+        println!("Prettify:\n\n{}", expr.prettify());
+        println!("AST:\n{expr:?}");
+    }
+    Err(info) => println!("Err: {info:?}"),
 }
 ```
 
@@ -33,7 +36,11 @@ cargo run --example parser
 This outputs:
 
 ```rust
-AST: VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: {Matcher { op: NotEqual, name: "method", value: "GET" }, Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: Equal, name: "__name__", value: "http_requests_total" }} }, offset: Some(Pos(300s)), at: Some(At(SystemTime { tv_sec: 1609746000, tv_nsec: 0 })) })
+Prettify:
+http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m
+
+AST:
+VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: [Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: NotEqual, name: "method", value: "GET" }] }, offset: Some(Pos(300s)), at: None })
 ```
 
 ## PromQL compliance

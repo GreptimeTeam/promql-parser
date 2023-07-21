@@ -15,10 +15,13 @@
 use promql_parser::parser;
 
 fn main() {
-    let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
+    let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
 
     match parser::parse(promql) {
-        Ok(ast) => println!("AST: {:?}", ast),
-        Err(info) => println!("Err: {:?}", info),
+        Ok(expr) => {
+            println!("Prettify:\n\n{}", expr.prettify());
+            println!("AST:\n{expr:?}");
+        }
+        Err(info) => println!("Err: {info:?}"),
     }
 }
