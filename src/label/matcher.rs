@@ -149,14 +149,24 @@ impl Matchers {
         self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
     }
 
-    /// find the matcher's value whose name equals the specified name.
-    pub fn find_matcher(&self, name: &str) -> Option<String> {
+    /// find the matcher's value whose name equals the specified name. This function
+    /// is designed to prepare error message of invalid promql expression.
+    pub fn find_matcher_value(&self, name: &str) -> Option<String> {
         for m in &self.matchers {
             if m.name.eq(name) {
                 return Some(m.value.clone());
             }
         }
         None
+    }
+
+    /// find matchers whose name equals the specified name
+    pub fn find_matchers(&self, name: &str) -> Vec<Matcher> {
+        self.matchers
+            .iter()
+            .filter(|m| m.name.eq(name))
+            .cloned()
+            .collect()
     }
 }
 
@@ -440,5 +450,19 @@ mod tests {
                     "\\d+"
                 ))
         );
+    }
+
+    #[test]
+    fn test_find_matchers() {
+        let matchers = Matchers::empty()
+            .append(Matcher::new(MatchOp::Equal, "foo", "bar"))
+            .append(Matcher::new(MatchOp::NotEqual, "foo", "bar"))
+            .append(Matcher::new_matcher(T_EQL_REGEX, "foo".into(), "bar".into()).unwrap())
+            .append(Matcher::new_matcher(T_NEQ_REGEX, "foo".into(), "bar".into()).unwrap())
+            .append(Matcher::new(MatchOp::Equal, "FOO", "bar"))
+            .append(Matcher::new(MatchOp::NotEqual, "bar", "bar"));
+
+        let ms = matchers.find_matchers("foo");
+        assert_eq!(4, ms.len());
     }
 }

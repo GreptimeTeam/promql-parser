@@ -1405,7 +1405,7 @@ fn check_ast_for_subquery(ex: SubqueryExpr) -> Result<Expr, String> {
 
 fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
     match ex.name {
-        Some(ref name) => match ex.matchers.find_matcher(METRIC_NAME) {
+        Some(ref name) => match ex.matchers.find_matcher_value(METRIC_NAME) {
             Some(val) => Err(format!(
                 "metric name must not be set twice: '{}' or '{}'",
                 name, val
