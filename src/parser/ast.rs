@@ -16,10 +16,9 @@ use crate::label::{Labels, Matchers, METRIC_NAME};
 use crate::parser::token::{
     self, token_display, T_BOTTOMK, T_COUNT_VALUES, T_END, T_QUANTILE, T_START, T_TOPK,
 };
-use crate::parser::{
-    indent, Function, FunctionArgs, Prettier, Token, TokenId, TokenType, ValueType,
-    MAX_CHARACTERS_PER_LINE,
-};
+use crate::parser::token::{Token, TokenId, TokenType};
+use crate::parser::value::ValueType;
+use crate::parser::{indent, Function, FunctionArgs, Prettier, MAX_CHARACTERS_PER_LINE};
 use crate::util::display_duration;
 use std::fmt::{self, Write};
 use std::ops::Neg;
@@ -876,12 +875,15 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn new_vector_selector(name: Option<String>, matchers: Matchers) -> Result<Self, String> {
+    pub(crate) fn new_vector_selector(
+        name: Option<String>,
+        matchers: Matchers,
+    ) -> Result<Self, String> {
         let vs = VectorSelector::new(name, matchers);
         Ok(Self::VectorSelector(vs))
     }
 
-    pub fn new_unary_expr(expr: Expr) -> Result<Self, String> {
+    pub(crate) fn new_unary_expr(expr: Expr) -> Result<Self, String> {
         match expr {
             Expr::StringLiteral(_) => Err("unary expression only allowed on expressions of type scalar or vector, got: string".into()),
             Expr::MatrixSelector(_) => Err("unary expression only allowed on expressions of type scalar or vector, got: matrix".into()),
@@ -889,7 +891,7 @@ impl Expr {
         }
     }
 
-    pub fn new_subquery_expr(
+    pub(crate) fn new_subquery_expr(
         expr: Expr,
         range: Duration,
         step: Option<Duration>,
@@ -904,7 +906,7 @@ impl Expr {
         Ok(se)
     }
 
-    pub fn new_paren_expr(expr: Expr) -> Result<Self, String> {
+    pub(crate) fn new_paren_expr(expr: Expr) -> Result<Self, String> {
         let ex = Expr::Paren(ParenExpr {
             expr: Box::new(expr),
         });
@@ -912,7 +914,7 @@ impl Expr {
     }
 
     /// NOTE: @ and offset is not set here.
-    pub fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
+    pub(crate) fn new_matrix_selector(expr: Expr, range: Duration) -> Result<Self, String> {
         match expr {
             Expr::VectorSelector(VectorSelector {
                 offset: Some(_), ..
@@ -928,7 +930,7 @@ impl Expr {
         }
     }
 
-    pub fn at_expr(self, at: AtModifier) -> Result<Self, String> {
+    pub(crate) fn at_expr(self, at: AtModifier) -> Result<Self, String> {
         let already_set_err = Err("@ <timestamp> may not be set multiple times".into());
         match self {
             Expr::VectorSelector(mut vs) => match vs.at {
@@ -959,7 +961,7 @@ impl Expr {
     }
 
     /// set offset field for specified Expr, but CAN ONLY be set once.
-    pub fn offset_expr(self, offset: Offset) -> Result<Self, String> {
+    pub(crate) fn offset_expr(self, offset: Offset) -> Result<Self, String> {
         let already_set_err = Err("offset may not be set multiple times".into());
         match self {
             Expr::VectorSelector(mut vs) => match vs.offset {
@@ -989,11 +991,11 @@ impl Expr {
         }
     }
 
-    pub fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
+    pub(crate) fn new_call(func: Function, args: FunctionArgs) -> Result<Expr, String> {
         Ok(Expr::Call(Call { func, args }))
     }
 
-    pub fn new_binary_expr(
+    pub(crate) fn new_binary_expr(
         lhs: Expr,
         op: TokenId,
         modifier: Option<BinModifier>,
@@ -1008,7 +1010,7 @@ impl Expr {
         Ok(Expr::Binary(ex))
     }
 
-    pub fn new_aggregate_expr(
+    pub(crate) fn new_aggregate_expr(
         op: TokenId,
         modifier: Option<LabelModifier>,
         args: FunctionArgs,
@@ -1072,7 +1074,7 @@ impl Expr {
     }
 
     /// only Some if expr is [Expr::NumberLiteral]
-    pub fn scalar_value(&self) -> Option<f64> {
+    pub(crate) fn scalar_value(&self) -> Option<f64> {
         match self {
             Expr::NumberLiteral(nl) => Some(nl.val),
             _ => None,
@@ -1113,9 +1115,9 @@ impl From<f64> for Expr {
 /// use promql_parser::parser::{Expr, VectorSelector};
 ///
 /// let name = String::from("foo");
-/// let vs = Expr::new_vector_selector(Some(name), Matchers::empty());
+/// let vs = VectorSelector::new(Some(name), Matchers::empty());
 ///
-/// assert_eq!(Expr::from(VectorSelector::from("foo")), vs.unwrap());
+/// assert_eq!(Expr::VectorSelector(vs), Expr::from(VectorSelector::from("foo")));
 /// ```
 impl From<VectorSelector> for Expr {
     fn from(vs: VectorSelector) -> Self {
@@ -1174,7 +1176,7 @@ impl Prettier for Expr {
 
 /// check_ast checks the validity of the provided AST. This includes type checking.
 /// Recursively check correct typing for child nodes and raise errors in case of bad typing.
-pub fn check_ast(expr: Expr) -> Result<Expr, String> {
+pub(crate) fn check_ast(expr: Expr) -> Result<Expr, String> {
     match expr {
         Expr::Binary(ex) => check_ast_for_binary_expr(ex),
         Expr::Aggregate(ex) => check_ast_for_aggregate_expr(ex),

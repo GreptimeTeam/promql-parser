@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::parser::{LexemeType, Token, TokenId};
+use crate::parser::lex::LexemeType;
+use crate::parser::token::{Token, TokenId};
 use lrpar::{Lexeme, NonStreamingLexer, Span};
 
 /// caller MUST pay attention to the index out of bounds issue

@@ -20,7 +20,7 @@ use std::fmt::Debug;
 const ESCAPE_SYMBOLS: &str = r#"abfnrtv\01234567xuU"#;
 const STRING_SYMBOLS: &str = r#"'"`"#;
 
-pub type LexemeType = DefaultLexeme<TokenId>;
+pub(crate) type LexemeType = DefaultLexeme<TokenId>;
 
 pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenId>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).collect();
@@ -674,7 +674,7 @@ fn is_alpha(ch: char) -> bool {
     ch == '_' || ch.is_ascii_alphabetic()
 }
 
-pub fn is_label(s: &str) -> bool {
+pub(crate) fn is_label(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }

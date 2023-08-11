@@ -17,7 +17,8 @@ use std::fmt;
 
 use lazy_static::lazy_static;
 
-use crate::parser::{Expr, Prettier, ValueType};
+use crate::parser::value::ValueType;
+use crate::parser::{Expr, Prettier};
 use crate::util::join_vector;
 
 /// called by func in Call
