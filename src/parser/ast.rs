@@ -2421,7 +2421,7 @@ or
     }
 
     #[test]
-    fn test_call_expr_prettify() {
+    fn test_prettify() {
         let cases = vec![
             ("vector_selector", "vector_selector"),
             (
