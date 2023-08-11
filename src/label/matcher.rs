@@ -151,7 +151,7 @@ impl Matchers {
 
     /// find the matcher's value whose name equals the specified name. This function
     /// is designed to prepare error message of invalid promql expression.
-    pub fn find_matcher_value(&self, name: &str) -> Option<String> {
+    pub(crate) fn find_matcher_value(&self, name: &str) -> Option<String> {
         for m in &self.matchers {
             if m.name.eq(name) {
                 return Some(m.value.clone());

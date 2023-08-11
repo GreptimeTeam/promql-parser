@@ -567,14 +567,12 @@ maybe_duration -> Result<Option<Duration>, String>:
 
 use std::time::Duration;
 use crate::label::{Labels, Matcher, Matchers};
-use crate::parser::{
-    AtModifier, BinModifier, Expr, FunctionArgs, LabelModifier,
-    Offset, Token, VectorMatchCardinality,
-};
-use crate::parser::function::get_function;
+use crate::parser::{AtModifier, BinModifier, Expr, FunctionArgs, LabelModifier, Offset, VectorMatchCardinality};
 use crate::parser::ast::check_ast;
+use crate::parser::function::get_function;
 use crate::parser::lex::is_label;
 use crate::parser::production::{lexeme_to_string, lexeme_to_token, span_to_string};
+use crate::parser::token::Token;
 use crate::util::{parse_duration, parse_str_radix};
 
 fn update_optional_matching(

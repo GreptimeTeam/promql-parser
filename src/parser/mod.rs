@@ -24,7 +24,7 @@ pub mod ast;
 pub mod function;
 pub mod lex;
 pub mod parse;
-pub mod production;
+pub(crate) mod production;
 pub mod token;
 pub mod value;
 
@@ -33,12 +33,9 @@ pub use ast::{
     LabelModifier, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr,
     UnaryExpr, VectorMatchCardinality, VectorSelector,
 };
-
 pub use function::{Function, FunctionArgs};
-pub use lex::{lexer, LexemeType};
+pub use lex::lexer;
 pub use parse::parse;
-pub use token::{Token, TokenId, TokenType};
-pub use value::{Value, ValueType};
 
 // FIXME: show more helpful error message to some invalid promql queries.
 const INVALID_QUERY_INFO: &str = "invalid promql query";

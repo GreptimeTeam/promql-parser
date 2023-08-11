@@ -26,11 +26,14 @@
 //! ``` rust
 //! use promql_parser::parser;
 //!
-//! let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} @ 1609746000 offset 5m"#;
+//! let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
 //!
 //! match parser::parse(promql) {
-//!     Ok(ast) => println!("AST: {:?}", ast),
-//!     Err(info) => println!("Err: {:?}", info),
+//!     Ok(expr) => {
+//!         println!("Prettify:\n\n{}", expr.prettify());
+//!         println!("AST:\n{expr:?}");
+//!     }
+//!     Err(info) => println!("Err: {info:?}"),
 //! }
 //! ```
 //!
@@ -43,15 +46,18 @@
 //! This outputs:
 //!
 //! ```rust, ignore
-//! AST: VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: {Matcher { op: NotEqual, name: "method", value: "GET" }, Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: Equal, name: "__name__", value: "http_requests_total" }} }, offset: Some(Pos(300s)), at: Some(At(SystemTime { tv_sec: 1609746000, tv_nsec: 0 })) })
+//! Prettify:
+//! http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m
+//!
+//! AST:
+//! VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Matchers { matchers: [Matcher { op: Re(staging|testing|development), name: "environment", value: "staging|testing|development" }, Matcher { op: NotEqual, name: "method", value: "GET" }] }, offset: Some(Pos(300s)), at: None })
 //! ```
 //! ## PromQL compliance
 //!
-//! This crate declares compatible with [prometheus 0372e25][prom-0372e25], which is
-//! prometheus release v2.40 at Nov 29, 2022. Any revision on PromQL after this
-//! commit is not guaranteed.
+//! This crate declares compatible with [prometheus v2.45.0][prom-v2.45.0], which is
+//! released at 2023-06-23. Any revision on PromQL after this commit is not guaranteed.
 //!
-//! [prom-0372e25]: https://github.com/prometheus/prometheus/tree/0372e259baf014bbade3134fd79bcdfd8cbdef2c
+//! [prom-v2.45.0]: https://github.com/prometheus/prometheus/tree/v2.45.0
 //! [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/
 
 #![allow(clippy::let_unit_value)]
