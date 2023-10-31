@@ -17,7 +17,7 @@ use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::Lexeme;
 use std::fmt::Debug;
 
-const ESCAPE_SYMBOLS: &str = r#"abfnrtv\01234567xuU"#;
+const ESCAPE_SYMBOLS: &str = r"abfnrtv\01234567xuU";
 const STRING_SYMBOLS: &str = r#"'"`"#;
 
 pub(crate) type LexemeType = DefaultLexeme<TokenId>;

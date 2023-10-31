@@ -89,11 +89,9 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
                 .and_then(|cap| cap.as_str().parse::<u32>().ok())
                 .and_then(|v| duration.checked_mul(v))
         })
-        .fold(Ok(Duration::ZERO), |acc, x| {
-            acc.and_then(|d| {
-                d.checked_add(x.unwrap_or(Duration::ZERO))
-                    .ok_or_else(|| "duration overflowed".into())
-            })
+        .try_fold(Duration::ZERO, |acc, x| {
+            acc.checked_add(x.unwrap_or(Duration::ZERO))
+                .ok_or_else(|| "duration overflowed".into())
         });
 
     if matches!(dur, Ok(d) if d == Duration::ZERO) {
