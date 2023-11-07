@@ -896,6 +896,22 @@ mod tests {
                 ]);
                 Expr::new_vector_selector(None, matchers)
             }),
+            (r#"foo:bar{a=~"bc{9}"}"#, {
+                let matchers = Matchers::one(Matcher::new(
+                    MatchOp::Re(Regex::new("bc{9}").unwrap()),
+                    "a",
+                    "bc{9}",
+                ));
+                Expr::new_vector_selector(Some(String::from("foo:bar")), matchers)
+            }),
+            (r#"foo:bar{a=~"bc{abc}"}"#, {
+                let matchers = Matchers::one(Matcher::new(
+                    MatchOp::Re(Regex::new("bc\\{abc}").unwrap()),
+                    "a",
+                    "bc{abc}",
+                ));
+                Expr::new_vector_selector(Some(String::from("foo:bar")), matchers)
+            }),
         ];
         assert_cases(Case::new_result_cases(cases));
 

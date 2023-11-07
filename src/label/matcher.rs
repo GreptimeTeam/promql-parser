@@ -91,15 +91,80 @@ impl Matcher {
         }
     }
 
+    // Go and Rust handle the repeat pattern differently
+    // in Go the following is valid: `aaa{bbb}ccc`
+    // in Rust {bbb} is seen as an invalid repeat and must be ecaped \{bbb}
+    // This escapes the opening { if its not followed by valid repeat pattern (e.g. 4,6).
+    fn convert_re(re: &str) -> String {
+        // (true, string) if its a valid repeat pattern (e.g. 1,2 or 2,)
+        fn is_repeat(chars: &mut std::str::Chars<'_>) -> (bool, String) {
+            let mut buf = String::new();
+            let mut comma = false;
+            for c in chars.by_ref() {
+                buf.push(c);
+
+                if c == ',' {
+                    // two commas or {, are both invalid
+                    if comma || buf == "," {
+                        return (false, buf);
+                    } else {
+                        comma = true;
+                    }
+                } else if c.is_ascii_digit() {
+                    continue;
+                } else if c == '}' {
+                    if buf == "}" {
+                        return (false, buf);
+                    } else {
+                        return (true, buf);
+                    }
+                } else {
+                    return (false, buf);
+                }
+            }
+            (false, buf)
+        }
+
+        let mut result = String::new();
+        let mut chars = re.chars();
+
+        while let Some(c) = chars.next() {
+            if c != '{' {
+                result.push(c);
+            }
+
+            // if escaping, just push the next char as well
+            if c == '\\' {
+                if let Some(c) = chars.next() {
+                    result.push(c);
+                }
+            } else if c == '{' {
+                match is_repeat(&mut chars) {
+                    (true, s) => {
+                        result.push('{');
+                        result.push_str(&s);
+                    }
+                    (false, s) => {
+                        result.push_str(r"\{");
+                        result.push_str(&s);
+                    }
+                }
+            }
+        }
+        result
+    }
+
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
         let op = match id {
             T_EQL => Ok(MatchOp::Equal),
             T_NEQ => Ok(MatchOp::NotEqual),
             T_EQL_REGEX => {
+                let value = Matcher::convert_re(&value);
                 let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
                 Ok(MatchOp::Re(re))
             }
             T_NEQ_REGEX => {
+                let value = Matcher::convert_re(&value);
                 let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
                 Ok(MatchOp::NotRe(re))
             }
@@ -464,5 +529,24 @@ mod tests {
 
         let ms = matchers.find_matchers("foo");
         assert_eq!(4, ms.len());
+    }
+
+    #[test]
+    fn test_convert_re() {
+        let convert = |s: &str| Matcher::convert_re(s);
+        assert_eq!(convert("abc{}"), r#"abc\{}"#);
+        assert_eq!(convert("abc{def}"), r#"abc\{def}"#);
+        assert_eq!(convert("abc{def"), r#"abc\{def"#);
+        assert_eq!(convert("abc{1}"), "abc{1}");
+        assert_eq!(convert("abc{1,}"), "abc{1,}");
+        assert_eq!(convert("abc{1,2}"), "abc{1,2}");
+        assert_eq!(convert("abc{,2}"), r#"abc\{,2}"#);
+        assert_eq!(convert("abc{{1,2}}"), r#"abc\{{1,2}}"#);
+        assert_eq!(convert(r#"abc\{abc"#), r#"abc\{abc"#);
+        assert_eq!(convert("abc{1a}"), r#"abc\{1a}"#);
+        assert_eq!(convert("abc{1,a}"), r#"abc\{1,a}"#);
+        assert_eq!(convert("abc{1,2a}"), r#"abc\{1,2a}"#);
+        assert_eq!(convert("abc{1,2,3}"), r#"abc\{1,2,3}"#);
+        assert_eq!(convert("abc{1,,2}"), r#"abc\{1,,2}"#);
     }
 }
