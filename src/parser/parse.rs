@@ -127,8 +127,8 @@ mod tests {
                 Expr::from(r#"double-quoted string \" with escaped quote"#),
             ),
             (
-                r#"'single-quoted string \' with escaped quote'"#,
-                Expr::from(r#"single-quoted string \' with escaped quote"#),
+                r"'single-quoted string \' with escaped quote'",
+                Expr::from(r"single-quoted string \' with escaped quote"),
             ),
             (
                 "`backtick-quoted string`",
@@ -139,18 +139,18 @@ mod tests {
                 Expr::from(r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#),
             ),
             (
-                r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
-                Expr::from(r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#),
+                r"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'",
+                Expr::from(r"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"),
             ),
             (
-                r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
-                Expr::from(r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#),
+                r"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`",
+                Expr::from(r"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"),
             ),
         ];
         assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
-            (r#"`\\``"#, "unterminated quoted string `"),
+            (r"`\\``", "unterminated quoted string `"),
             (r#""\"#, "escape sequence not terminated"),
             (r#""\c""#, "unknown escape sequence 'c'"),
             // (r#""\x.""#, ""),

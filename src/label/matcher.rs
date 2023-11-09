@@ -530,19 +530,19 @@ mod tests {
 
     #[test]
     fn test_convert_re() {
-        assert_eq!(try_escape_for_repeat_re("abc{}"), r#"abc\{}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{def}"), r#"abc\{def}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{def"), r#"abc\{def"#);
+        assert_eq!(try_escape_for_repeat_re("abc{}"), r"abc\{}");
+        assert_eq!(try_escape_for_repeat_re("abc{def}"), r"abc\{def}");
+        assert_eq!(try_escape_for_repeat_re("abc{def"), r"abc\{def");
         assert_eq!(try_escape_for_repeat_re("abc{1}"), "abc{1}");
         assert_eq!(try_escape_for_repeat_re("abc{1,}"), "abc{1,}");
         assert_eq!(try_escape_for_repeat_re("abc{1,2}"), "abc{1,2}");
-        assert_eq!(try_escape_for_repeat_re("abc{,2}"), r#"abc\{,2}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{{1,2}}"), r#"abc\{{1,2}}"#);
-        assert_eq!(try_escape_for_repeat_re(r#"abc\{abc"#), r#"abc\{abc"#);
-        assert_eq!(try_escape_for_repeat_re("abc{1a}"), r#"abc\{1a}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{1,a}"), r#"abc\{1,a}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{1,2a}"), r#"abc\{1,2a}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{1,2,3}"), r#"abc\{1,2,3}"#);
-        assert_eq!(try_escape_for_repeat_re("abc{1,,2}"), r#"abc\{1,,2}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{,2}"), r"abc\{,2}");
+        assert_eq!(try_escape_for_repeat_re("abc{{1,2}}"), r"abc\{{1,2}}");
+        assert_eq!(try_escape_for_repeat_re(r"abc\{abc"), r"abc\{abc");
+        assert_eq!(try_escape_for_repeat_re("abc{1a}"), r"abc\{1a}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,a}"), r"abc\{1,a}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,2a}"), r"abc\{1,2a}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,2,3}"), r"abc\{1,2,3}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,,2}"), r"abc\{1,,2}");
     }
 }
