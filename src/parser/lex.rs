@@ -703,12 +703,14 @@ mod tests {
     /// - MatchTuple.2 is the Err info if the input is invalid PromQL query
     type MatchTuple = (&'static str, Vec<LexemeTuple>, Option<&'static str>);
 
+    type Case = (
+        &'static str,
+        Vec<Result<LexemeType, String>>,
+        Vec<Result<LexemeType, String>>,
+    );
+
     fn assert_matches(v: Vec<MatchTuple>) {
-        let cases: Vec<(
-            &str,
-            Vec<Result<LexemeType, String>>,
-            Vec<Result<LexemeType, String>>,
-        )> = v
+        let cases: Vec<Case> = v
             .into_iter()
             .map(|(input, lexemes, err)| {
                 let mut expected: Vec<Result<LexemeType, String>> = lexemes
@@ -716,12 +718,11 @@ mod tests {
                     .map(|(token_id, start, len)| Ok(LexemeType::new(token_id, start, len)))
                     .collect();
 
-                if err.is_some() {
-                    expected.push(Err(err.unwrap().to_string()));
+                if let Some(s) = err {
+                    expected.push(Err(s.to_string()));
                 }
 
                 let actual: Vec<Result<LexemeType, String>> = Lexer::new(input)
-                    .into_iter()
                     // in lex test cases, we don't compare the EOF token
                     .filter(|r| !matches!(r, Ok(l) if l.tok_id() == T_EOF))
                     .collect();

@@ -17,7 +17,7 @@ use std::hash::{Hash, Hasher};
 
 use regex::Regex;
 
-use crate::parser::token::{TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
+use crate::parser::token::{token_display, TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use crate::util::join_vector;
 
 #[derive(Debug, Clone)]
@@ -95,80 +95,19 @@ impl Matcher {
     // in Go the following is valid: `aaa{bbb}ccc`
     // in Rust {bbb} is seen as an invalid repeat and must be ecaped \{bbb}
     // This escapes the opening { if its not followed by valid repeat pattern (e.g. 4,6).
-    fn convert_re(re: &str) -> String {
-        // (true, string) if its a valid repeat pattern (e.g. 1,2 or 2,)
-        fn is_repeat(chars: &mut std::str::Chars<'_>) -> (bool, String) {
-            let mut buf = String::new();
-            let mut comma = false;
-            for c in chars.by_ref() {
-                buf.push(c);
-
-                if c == ',' {
-                    // two commas or {, are both invalid
-                    if comma || buf == "," {
-                        return (false, buf);
-                    } else {
-                        comma = true;
-                    }
-                } else if c.is_ascii_digit() {
-                    continue;
-                } else if c == '}' {
-                    if buf == "}" {
-                        return (false, buf);
-                    } else {
-                        return (true, buf);
-                    }
-                } else {
-                    return (false, buf);
-                }
-            }
-            (false, buf)
-        }
-
-        let mut result = String::new();
-        let mut chars = re.chars();
-
-        while let Some(c) = chars.next() {
-            if c != '{' {
-                result.push(c);
-            }
-
-            // if escaping, just push the next char as well
-            if c == '\\' {
-                if let Some(c) = chars.next() {
-                    result.push(c);
-                }
-            } else if c == '{' {
-                match is_repeat(&mut chars) {
-                    (true, s) => {
-                        result.push('{');
-                        result.push_str(&s);
-                    }
-                    (false, s) => {
-                        result.push_str(r"\{");
-                        result.push_str(&s);
-                    }
-                }
-            }
-        }
-        result
+    fn try_parse_re(re: &str) -> Result<Regex, String> {
+        Regex::new(re)
+            .or_else(|_| Regex::new(&try_escape_for_repeat_re(re)))
+            .map_err(|_| format!("illegal regex for {re}",))
     }
 
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
         let op = match id {
             T_EQL => Ok(MatchOp::Equal),
             T_NEQ => Ok(MatchOp::NotEqual),
-            T_EQL_REGEX => {
-                let value = Matcher::convert_re(&value);
-                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-                Ok(MatchOp::Re(re))
-            }
-            T_NEQ_REGEX => {
-                let value = Matcher::convert_re(&value);
-                let re = Regex::new(&value).map_err(|_| format!("illegal regex for {}", &value))?;
-                Ok(MatchOp::NotRe(re))
-            }
-            _ => Err(format!("invalid match op {id}")),
+            T_EQL_REGEX => Ok(MatchOp::Re(Matcher::try_parse_re(&value)?)),
+            T_NEQ_REGEX => Ok(MatchOp::NotRe(Matcher::try_parse_re(&value)?)),
+            _ => Err(format!("invalid match op {}", token_display(id))),
         };
 
         op.map(|op| Matcher { op, name, value })
@@ -179,6 +118,64 @@ impl fmt::Display for Matcher {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}\"{}\"", self.name, self.op, self.value)
     }
+}
+
+// Go and Rust handle the repeat pattern differently
+// in Go the following is valid: `aaa{bbb}ccc`
+// in Rust {bbb} is seen as an invalid repeat and must be ecaped \{bbb}
+// This escapes the opening { if its not followed by valid repeat pattern (e.g. 4,6).
+fn try_escape_for_repeat_re(re: &str) -> String {
+    fn is_repeat(chars: &mut std::str::Chars<'_>) -> (bool, String) {
+        let mut buf = String::new();
+        let mut comma_seen = false;
+        for c in chars.by_ref() {
+            buf.push(c);
+            match c {
+                ',' if comma_seen => {
+                    return (false, buf); // ,, is invalid
+                }
+                ',' if buf == "," => {
+                    return (false, buf); // {, is invalid
+                }
+                ',' if !comma_seen => comma_seen = true,
+                '}' if buf == "}" => {
+                    return (false, buf); // {} is invalid
+                }
+                '}' => {
+                    return (true, buf);
+                }
+                _ if c.is_ascii_digit() => continue,
+                _ => {
+                    return (false, buf); // false if visit non-digit char
+                }
+            }
+        }
+        (false, buf) // not ended with }
+    }
+
+    let mut result = String::with_capacity(re.len() + 1);
+    let mut chars = re.chars();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                if let Some(cc) = chars.next() {
+                    result.push(c);
+                    result.push(cc);
+                }
+            }
+            '{' => {
+                let (is, s) = is_repeat(&mut chars);
+                if !is {
+                    result.push('\\');
+                }
+                result.push(c);
+                result.push_str(&s);
+            }
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,7 +257,7 @@ mod tests {
     fn test_new_matcher() {
         assert_eq!(
             Matcher::new_matcher(token::T_ADD, "".into(), "".into()),
-            Err(format!("invalid match op {}", token::T_ADD))
+            Err(format!("invalid match op {}", token_display(token::T_ADD)))
         )
     }
 
@@ -386,7 +383,7 @@ mod tests {
     #[test]
     fn test_matcher_re() {
         let value = "api/v1/.*";
-        let re = Regex::new(&value).unwrap();
+        let re = Regex::new(value).unwrap();
         let op = MatchOp::Re(re);
         let matcher = Matcher::new(op, "name", value);
         assert!(matcher.is_match("api/v1/query"));
@@ -533,20 +530,19 @@ mod tests {
 
     #[test]
     fn test_convert_re() {
-        let convert = |s: &str| Matcher::convert_re(s);
-        assert_eq!(convert("abc{}"), r#"abc\{}"#);
-        assert_eq!(convert("abc{def}"), r#"abc\{def}"#);
-        assert_eq!(convert("abc{def"), r#"abc\{def"#);
-        assert_eq!(convert("abc{1}"), "abc{1}");
-        assert_eq!(convert("abc{1,}"), "abc{1,}");
-        assert_eq!(convert("abc{1,2}"), "abc{1,2}");
-        assert_eq!(convert("abc{,2}"), r#"abc\{,2}"#);
-        assert_eq!(convert("abc{{1,2}}"), r#"abc\{{1,2}}"#);
-        assert_eq!(convert(r#"abc\{abc"#), r#"abc\{abc"#);
-        assert_eq!(convert("abc{1a}"), r#"abc\{1a}"#);
-        assert_eq!(convert("abc{1,a}"), r#"abc\{1,a}"#);
-        assert_eq!(convert("abc{1,2a}"), r#"abc\{1,2a}"#);
-        assert_eq!(convert("abc{1,2,3}"), r#"abc\{1,2,3}"#);
-        assert_eq!(convert("abc{1,,2}"), r#"abc\{1,,2}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{}"), r#"abc\{}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{def}"), r#"abc\{def}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{def"), r#"abc\{def"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1}"), "abc{1}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,}"), "abc{1,}");
+        assert_eq!(try_escape_for_repeat_re("abc{1,2}"), "abc{1,2}");
+        assert_eq!(try_escape_for_repeat_re("abc{,2}"), r#"abc\{,2}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{{1,2}}"), r#"abc\{{1,2}}"#);
+        assert_eq!(try_escape_for_repeat_re(r#"abc\{abc"#), r#"abc\{abc"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1a}"), r#"abc\{1a}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1,a}"), r#"abc\{1,a}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1,2a}"), r#"abc\{1,2a}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1,2,3}"), r#"abc\{1,2,3}"#);
+        assert_eq!(try_escape_for_repeat_re("abc{1,,2}"), r#"abc\{1,,2}"#);
     }
 }

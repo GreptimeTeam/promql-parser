@@ -74,8 +74,8 @@ mod tests {
         assert_eq!(parse_str_radix("-017").unwrap(), -15_f64);
         assert_eq!(parse_str_radix("+017").unwrap(), 15_f64);
         assert_eq!(parse_str_radix("2023.0128").unwrap(), 2023.0128_f64);
-        assert_eq!(parse_str_radix("-3.14").unwrap(), -3.14_f64);
-        assert_eq!(parse_str_radix("+2.718").unwrap(), 2.718_f64);
+        assert_eq!(parse_str_radix("-4.14").unwrap(), -4.14_f64);
+        assert_eq!(parse_str_radix("+3.718").unwrap(), 3.718_f64);
         assert_eq!(parse_str_radix("-0.14").unwrap(), -0.14_f64);
         assert_eq!(parse_str_radix("+0.718").unwrap(), 0.718_f64);
         assert_eq!(parse_str_radix("0.718").unwrap(), 0.718_f64);
