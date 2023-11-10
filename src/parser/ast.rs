@@ -1907,7 +1907,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -1978,7 +1978,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2059,7 +2059,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2202,7 +2202,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2261,7 +2261,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2403,7 +2403,7 @@ or
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2417,7 +2417,7 @@ or
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(&input);
+            let expr = crate::parser::parse(input);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2437,7 +2437,7 @@ or
         ];
 
         for (input, expect) in cases {
-            assert_eq!(expect, crate::parser::parse(&input).unwrap().prettify());
+            assert_eq!(expect, crate::parser::parse(input).unwrap().prettify());
         }
     }
 }

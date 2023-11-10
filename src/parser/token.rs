@@ -353,8 +353,8 @@ mod tests {
         assert!(matches!(get_keyword_token("nan"), Some(T_NUMBER)));
 
         // not keywords
-        assert!(matches!(get_keyword_token("at"), None));
-        assert!(matches!(get_keyword_token("unknown"), None));
+        assert!(get_keyword_token("at").is_none());
+        assert!(get_keyword_token("unknown").is_none());
     }
 
     #[test]

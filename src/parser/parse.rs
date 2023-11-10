@@ -127,8 +127,8 @@ mod tests {
                 Expr::from(r#"double-quoted string \" with escaped quote"#),
             ),
             (
-                r#"'single-quoted string \' with escaped quote'"#,
-                Expr::from(r#"single-quoted string \' with escaped quote"#),
+                r"'single-quoted string \' with escaped quote'",
+                Expr::from(r"single-quoted string \' with escaped quote"),
             ),
             (
                 "`backtick-quoted string`",
@@ -139,18 +139,18 @@ mod tests {
                 Expr::from(r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#),
             ),
             (
-                r#"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'"#,
-                Expr::from(r#"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"#),
+                r"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'",
+                Expr::from(r"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"),
             ),
             (
-                r#"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`"#,
-                Expr::from(r#"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"#),
+                r"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`",
+                Expr::from(r"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"),
             ),
         ];
         assert_cases(Case::new_expr_cases(cases));
 
         let fail_cases = vec![
-            (r#"`\\``"#, "unterminated quoted string `"),
+            (r"`\\``", "unterminated quoted string `"),
             (r#""\"#, "escape sequence not terminated"),
             (r#""\c""#, "unknown escape sequence 'c'"),
             // (r#""\x.""#, ""),
@@ -385,7 +385,7 @@ mod tests {
                 )
                 .and_then(|ex| {
                     Expr::new_binary_expr(
-                        Expr::from(ex),
+                        ex,
                         token::T_LUNLESS,
                         Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         Expr::from(VectorSelector::from("baz")),
@@ -393,7 +393,7 @@ mod tests {
                 })
                 .and_then(|ex| {
                     Expr::new_binary_expr(
-                        Expr::from(ex),
+                        ex,
                         token::T_LOR,
                         Some(BinModifier::default().with_card(VectorMatchCardinality::ManyToMany)),
                         Expr::from(VectorSelector::from("qux")),
@@ -1925,7 +1925,7 @@ mod tests {
                     None,
                     Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
-                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(Expr::new_paren_expr)
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
             }),
             (r#"(foo + bar{nm="val"})[5m:] offset 10m"#, {
@@ -1936,7 +1936,7 @@ mod tests {
                     None,
                     Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
-                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(Expr::new_paren_expr)
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION * 10)))
             }),
@@ -1952,7 +1952,7 @@ mod tests {
                     None,
                     rhs,
                 )
-                .and_then(|ex| Expr::new_paren_expr(ex))
+                .and_then(Expr::new_paren_expr)
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
                 .and_then(|ex| ex.at_expr(At::try_from(1603775019_f64).unwrap()))
             }),
