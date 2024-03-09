@@ -1,5 +1,4 @@
 // Copyright 2019 The Prometheus Authors
-// Copyright 2023 Greptime Team
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Diff with promql's generated_parser.y
+// This file is deriven from generated_parser.y at [1] with the following differences:
 //
 // - no empty rule
 // - no series descriptions rule
+//
+// [1] https://github.com/prometheus/prometheus/blob/v2.45.0/promql/parser/generated_parser.y
 
 %token EQL
 BLANK

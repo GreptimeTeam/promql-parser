@@ -85,5 +85,5 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 licensed as above, without any additional terms or conditions.
 
-[prom-v2.45.0]: https://github.com/prometheus/prometheus/tree/v2.45.0
+[prom-v2.45.0]: https://github.com/prometheus/prometheus/blob/v2.45.0/promql/
 [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/
