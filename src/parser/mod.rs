@@ -74,7 +74,7 @@ pub trait Prettier: std::fmt::Display {
         }
     }
 
-    /// override format if expr needs to be splited into multiple lines
+    /// override format if expr needs to be split into multiple lines
     fn format(&self, level: usize, _max: usize) -> String {
         format!("{}{self}", indent(level))
     }

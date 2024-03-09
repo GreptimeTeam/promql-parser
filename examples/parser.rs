@@ -15,7 +15,12 @@
 use promql_parser::parser;
 
 fn main() {
-    let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
+    let promql = r#"
+        http_requests_total{
+            environment=~"staging|testing|development",
+            method!="GET"
+        } offset 5m
+    "#;
 
     match parser::parse(promql) {
         Ok(expr) => {

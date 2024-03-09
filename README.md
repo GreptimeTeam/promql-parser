@@ -16,7 +16,12 @@ To parse a simple instant vector selector expression:
 ``` rust
 use promql_parser::parser;
 
-let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
+let promql = r#"
+    http_requests_total{
+        environment=~"staging|testing|development",
+        method!="GET"
+    } offset 5m
+"#;
 
 match parser::parse(promql) {
     Ok(expr) => {
