@@ -31,7 +31,7 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 ///
 /// - all cases SHOULD be covered, and the same literal float and literal
 ///   string SHOULD be the same with the original prometheus.
-/// - all cases will be splitted into different blocks based on the type of parsed Expr.
+/// - all cases will be split into different blocks based on the type of parsed Expr.
 #[cfg(test)]
 mod tests {
     use regex::Regex;

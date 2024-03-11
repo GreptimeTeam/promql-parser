@@ -16,7 +16,12 @@ To parse a simple instant vector selector expression:
 ``` rust
 use promql_parser::parser;
 
-let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
+let promql = r#"
+    http_requests_total{
+        environment=~"staging|testing|development",
+        method!="GET"
+    } offset 5m
+"#;
 
 match parser::parse(promql) {
     Ok(expr) => {
@@ -80,5 +85,5 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 licensed as above, without any additional terms or conditions.
 
-[prom-v2.45.0]: https://github.com/prometheus/prometheus/tree/v2.45.0
+[prom-v2.45.0]: https://github.com/prometheus/prometheus/blob/v2.45.0/promql/
 [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/

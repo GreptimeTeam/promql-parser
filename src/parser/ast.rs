@@ -870,7 +870,7 @@ pub enum Expr {
     Call(Call),
 
     /// Extension represents an extension expression. It is for user to attach additional
-    /// informations to the AST. This parser won't generate Extension node.
+    /// information to the AST. This parser won't generate Extension node.
     Extension(Extension),
 }
 
@@ -1427,7 +1427,7 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::label::{MatchOp, Matcher, Matchers};
+    use crate::label::{MatchOp, Matcher};
 
     #[test]
     fn test_valid_at_modifier() {
