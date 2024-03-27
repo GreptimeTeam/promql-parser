@@ -67,6 +67,7 @@ provide integrations with other systems.
 Here are some of the projects known to use promql-parser:
 
 - [GreptimeDB](https://github.com/GreptimeTeam/greptimedb) Open Source & Cloud Native Distributed Time Series Database
+- [OpenObserve](https://github.com/openobserve/openobserve) High performance, petabyte scale Elasticsearch/Splunk/Datadog alternative for (logs, metrics, traces, RUM, Error tracking, Session replay)
 
 If your project is using promql-parser, feel free to make a PR to add it to this list.
 
