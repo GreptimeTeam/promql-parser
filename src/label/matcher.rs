@@ -70,6 +70,7 @@ pub struct Matcher {
     pub op: MatchOp,
     pub name: String,
     pub value: String,
+    pub is_or: bool,
 }
 
 impl Matcher {
@@ -78,6 +79,16 @@ impl Matcher {
             op,
             name: name.into(),
             value: value.into(),
+            is_or: false,
+        }
+    }
+
+    pub fn new_or(op: MatchOp, name: &str, value: &str) -> Self {
+        Self {
+            op,
+            name: name.into(),
+            value: value.into(),
+            is_or: true,
         }
     }
 
@@ -102,15 +113,24 @@ impl Matcher {
     }
 
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
+        let op = Self::find_matcher_op(id, &value)?;
+        op.map(|op| Matcher::new(op, name.as_str(), value.as_str()))
+    }
+
+    pub fn new_matcher_or(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
+        let op = Self::find_matcher_op(id, &value)?;
+        op.map(|op| Matcher::new_or(op, name.as_str(), value.as_str()))
+    }
+
+    fn find_matcher_op(id: TokenId, value: &str) -> Result<Result<MatchOp, String>, String> {
         let op = match id {
             T_EQL => Ok(MatchOp::Equal),
             T_NEQ => Ok(MatchOp::NotEqual),
-            T_EQL_REGEX => Ok(MatchOp::Re(Matcher::try_parse_re(&value)?)),
-            T_NEQ_REGEX => Ok(MatchOp::NotRe(Matcher::try_parse_re(&value)?)),
+            T_EQL_REGEX => Ok(MatchOp::Re(Matcher::try_parse_re(value)?)),
+            T_NEQ_REGEX => Ok(MatchOp::NotRe(Matcher::try_parse_re(value)?)),
             _ => Err(format!("invalid match op {}", token_display(id))),
         };
-
-        op.map(|op| Matcher { op, name, value })
+        Ok(op)
     }
 }
 
@@ -234,7 +254,23 @@ impl Matchers {
 
 impl fmt::Display for Matchers {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", join_vector(&self.matchers, ",", true))
+        let not_contains_or = &self.matchers.iter().all(|matcher| !matcher.is_or);
+        if *not_contains_or {
+            write!(f, "{}", join_vector(&self.matchers, ",", true))
+        } else {
+            let matchers_str = self
+                .matchers
+                .iter()
+                .map(|matcher| {
+                    if matcher.is_or {
+                        format!(" or {}", matcher)
+                    } else {
+                        format!(",{}", matcher)
+                    }
+                })
+                .collect::<String>();
+            write!(f, "{}", matchers_str.trim_start_matches(','))
+        }
     }
 }
 

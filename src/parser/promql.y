@@ -407,6 +407,7 @@ label_matchers -> Result<Matchers, String>:
 
 label_match_list -> Result<Matchers, String>:
                 label_match_list COMMA label_matcher { Ok($1?.append($3?)) }
+        |       label_match_list LOR label_matcher_or { Ok($1?.append($3?)) }
         |       label_matcher { Ok(Matchers::empty().append($1?)) }
 ;
 
@@ -416,6 +417,43 @@ label_matcher -> Result<Matcher, String>:
                         let name = lexeme_to_string($lexer, &$1)?;
                         let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2?.id(), name, value)
+                }
+        |       IDENTIFIER match_op match_op
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       IDENTIFIER match_op match_op STRING
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       IDENTIFIER match_op match_op IDENTIFIER
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       IDENTIFIER match_op IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$3)?;
+                        Err(format!("unexpected identifier '{id}' in label matching, expected string"))
+                }
+        |       IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$1)?;
+                        Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
+                }
+;
+
+label_matcher_or -> Result<Matcher, String>:
+                IDENTIFIER match_op STRING
+                {
+                        let name = lexeme_to_string($lexer, &$1)?;
+                        let value = lexeme_to_string($lexer, &$3)?;
+                        Matcher::new_matcher_or($2?.id(), name, value)
                 }
         |       IDENTIFIER match_op match_op
                 {
