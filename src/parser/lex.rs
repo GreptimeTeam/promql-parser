@@ -564,12 +564,17 @@ impl Lexer {
         match self.pop() {
             Some('#') => State::LineComment,
             Some(',') => State::Lexeme(T_COMMA),
-            Some('o') => match self.peek() {
-                Some('r') => {
+            Some('o') =>  {
+                if let Some('r') =  self.peek() {
                     self.pop();
-                    State::Lexeme(T_LOR)
+                    if let Some(' ') = self.peek() {
+                        State::Lexeme(T_LOR)
+                    }  else {
+                        State::Identifier
+                    }
+                } else {
+                    State::Identifier
                 }
-                _ => State::Identifier,
             },
             Some(ch) if ch.is_ascii_whitespace() => State::Space,
             Some(ch) if is_alpha(ch) => State::Identifier,
