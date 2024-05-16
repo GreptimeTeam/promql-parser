@@ -186,6 +186,13 @@ fn try_escape_for_repeat_re(re: &str) -> String {
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
     pub or_matchers: Vec<Vec<Matcher>>,
+    pub last_filter_action: FilterActionType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilterActionType {
+    AND,
+    OR,
 }
 
 impl Matchers {
@@ -193,6 +200,7 @@ impl Matchers {
         Self {
             matchers: vec![],
             or_matchers: vec![],
+            last_filter_action: FilterActionType::AND,
         }
     }
 
@@ -201,6 +209,7 @@ impl Matchers {
         Self {
             matchers,
             or_matchers: vec![],
+            last_filter_action: FilterActionType::AND,
         }
     }
 
@@ -208,33 +217,38 @@ impl Matchers {
         Self {
             matchers,
             or_matchers: vec![],
+            last_filter_action: FilterActionType::AND,
         }
     }
 
-    pub fn new_or(or_matchers: Vec<Vec<Matcher>>) -> Self {
-        Self {
-            matchers: vec![],
-            or_matchers,
-        }
-    }
-
-    pub fn new_mixed(matchers: Vec<Matcher>, or_matchers: Vec<Vec<Matcher>>) -> Self {
-        Self {
-            matchers,
-            or_matchers,
-        }
+    pub fn with_or_matchers(mut self, or_matchers: Vec<Vec<Matcher>>) -> Self {
+        self.or_matchers = or_matchers;
+        self
     }
 
     pub fn append(mut self, matcher: Matcher) -> Self {
         self.matchers.push(matcher);
+        self.last_filter_action = FilterActionType::AND;
         self
     }
 
     pub fn append_or(mut self, matcher: Matcher) -> Self {
         let latest_or_matchers = self.or_matchers.pop();
         if let Some(mut latest_or_matchers) = latest_or_matchers {
-            latest_or_matchers.push(matcher);
-            self.or_matchers.push(latest_or_matchers);
+            match self.last_filter_action {
+                FilterActionType::AND => {
+                    self.or_matchers.push(latest_or_matchers);
+                    let latest_matcher = self.matchers.pop();
+                    if let Some(latest_matcher) = latest_matcher {
+                        let or_matcher_pair = vec![latest_matcher, matcher];
+                        self.or_matchers.push(or_matcher_pair);
+                    }
+                }
+                FilterActionType::OR => {
+                    latest_or_matchers.push(matcher);
+                    self.or_matchers.push(latest_or_matchers);
+                }
+            }
         } else {
             let latest_matcher = self.matchers.pop();
             if let Some(latest_matcher) = latest_matcher {
@@ -242,6 +256,7 @@ impl Matchers {
                 self.or_matchers.push(or_matcher_pair);
             }
         }
+        self.last_filter_action = FilterActionType::OR;
         self
     }
 
@@ -287,20 +302,26 @@ impl fmt::Display for Matchers {
         if or_matchers.is_empty() {
             write!(f, "{}", join_vector(simple_matchers, ",", true))
         } else {
-            let or_matchers_str = self.or_matchers.iter().fold(String::new(), |_, pair| {
-                format!("{},", join_vector(pair, " or ", true))
-            });
+            let or_matchers_str =
+                self.or_matchers
+                    .iter()
+                    .fold(String::new(), |or_matchers_str, pair| {
+                        format!("{}, {}", or_matchers_str, join_vector(pair, " or ", true))
+                    });
             let or_matchers_str = or_matchers_str
                 .trim_start_matches(',')
-                .trim_end_matches(',');
+                .trim_end_matches(',')
+                .trim();
             let simple_matchers_str = join_vector(simple_matchers, ",", true).to_string();
             let simple_matchers_str = simple_matchers_str
                 .trim_start_matches(',')
-                .trim_end_matches(',');
+                .trim_end_matches(',')
+                .trim();
             let last_matchers_str = format!("{},{}", simple_matchers_str, or_matchers_str);
             let last_matchers_str = last_matchers_str
                 .trim_start_matches(',')
-                .trim_end_matches(',');
+                .trim_end_matches(',')
+                .trim();
             write!(f, "{}", last_matchers_str)
         }
     }
