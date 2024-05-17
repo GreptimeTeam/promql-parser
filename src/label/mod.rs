@@ -18,7 +18,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 mod matcher;
-pub use matcher::{FilterActionType, MatchOp, Matcher, Matchers};
+pub use matcher::{MatchOp, Matcher, Matchers};
 
 /// "__name__"
 pub const METRIC_NAME: &str = "__name__";

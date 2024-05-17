@@ -186,13 +186,6 @@ fn try_escape_for_repeat_re(re: &str) -> String {
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
     pub or_matchers: Vec<Vec<Matcher>>,
-    pub last_filter_action: FilterActionType,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilterActionType {
-    AND,
-    OR,
 }
 
 impl Matchers {
@@ -200,7 +193,6 @@ impl Matchers {
         Self {
             matchers: vec![],
             or_matchers: vec![],
-            last_filter_action: FilterActionType::AND,
         }
     }
 
@@ -209,7 +201,6 @@ impl Matchers {
         Self {
             matchers,
             or_matchers: vec![],
-            last_filter_action: FilterActionType::AND,
         }
     }
 
@@ -217,7 +208,6 @@ impl Matchers {
         Self {
             matchers,
             or_matchers: vec![],
-            last_filter_action: FilterActionType::AND,
         }
     }
 
@@ -227,36 +217,26 @@ impl Matchers {
     }
 
     pub fn append(mut self, matcher: Matcher) -> Self {
-        self.matchers.push(matcher);
-        self.last_filter_action = FilterActionType::AND;
+        // Check the latest or_matcher group. If it is not empty,
+        // we need to add the current matcher to this group.
+        let last_or_matcher = self.or_matchers.last_mut();
+        if let Some(last_or_matcher) = last_or_matcher {
+            last_or_matcher.push(matcher);
+        } else {
+            self.matchers.push(matcher);
+        }
         self
     }
 
     pub fn append_or(mut self, matcher: Matcher) -> Self {
-        let latest_or_matchers = self.or_matchers.pop();
-        if let Some(mut latest_or_matchers) = latest_or_matchers {
-            match self.last_filter_action {
-                FilterActionType::AND => {
-                    self.or_matchers.push(latest_or_matchers);
-                    let latest_matcher = self.matchers.pop();
-                    if let Some(latest_matcher) = latest_matcher {
-                        let or_matcher_pair = vec![latest_matcher, matcher];
-                        self.or_matchers.push(or_matcher_pair);
-                    }
-                }
-                FilterActionType::OR => {
-                    latest_or_matchers.push(matcher);
-                    self.or_matchers.push(latest_or_matchers);
-                }
-            }
-        } else {
-            let latest_matcher = self.matchers.pop();
-            if let Some(latest_matcher) = latest_matcher {
-                let or_matcher_pair = vec![latest_matcher, matcher];
-                self.or_matchers.push(or_matcher_pair);
-            }
+        if !self.matchers.is_empty() {
+            // Be careful not to move ownership here, because it
+            // will be used by the subsequent append method.
+            let last_matchers = std::mem::take(&mut self.matchers);
+            self.or_matchers.push(last_matchers);
         }
-        self.last_filter_action = FilterActionType::OR;
+        let new_or_matchers = vec![matcher];
+        self.or_matchers.push(new_or_matchers);
         self
     }
 
@@ -302,27 +282,14 @@ impl fmt::Display for Matchers {
         if or_matchers.is_empty() {
             write!(f, "{}", join_vector(simple_matchers, ",", true))
         } else {
-            let or_matchers_str =
+            let or_matchers_string =
                 self.or_matchers
                     .iter()
                     .fold(String::new(), |or_matchers_str, pair| {
-                        format!("{}, {}", or_matchers_str, join_vector(pair, " or ", true))
+                        format!("{} or {}", or_matchers_str, join_vector(pair, ", ", false))
                     });
-            let or_matchers_str = or_matchers_str
-                .trim_start_matches(',')
-                .trim_end_matches(',')
-                .trim();
-            let simple_matchers_str = join_vector(simple_matchers, ",", true).to_string();
-            let simple_matchers_str = simple_matchers_str
-                .trim_start_matches(',')
-                .trim_end_matches(',')
-                .trim();
-            let last_matchers_str = format!("{},{}", simple_matchers_str, or_matchers_str);
-            let last_matchers_str = last_matchers_str
-                .trim_start_matches(',')
-                .trim_end_matches(',')
-                .trim();
-            write!(f, "{}", last_matchers_str)
+            let or_matchers_string = or_matchers_string.trim_start_matches(" or").trim();
+            write!(f, "{}", or_matchers_string)
         }
     }
 }
