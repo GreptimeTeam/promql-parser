@@ -2179,29 +2179,24 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let promql = r#"a{label1="1"}"#;
-        let expected = r#"a{label1="1"}"#;
         let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), expected);
+        assert_eq!(expr.to_string(), promql);
 
         let promql = r#"a{label1="1" or label2="2"}"#;
-        let expected = r#"a{label1="1" or label2="2"}"#;
         let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), expected);
+        assert_eq!(expr.to_string(), promql);
 
         let promql = r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#;
-        let expected = r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#;
         let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), expected);
+        assert_eq!(expr.to_string(), promql);
 
         let promql = r#"a{label1="1", label2="2" or label3="3" or label4="4"}"#;
-        let expected = r#"a{label1="1", label2="2" or label3="3" or label4="4"}"#;
         let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), expected);
+        assert_eq!(expr.to_string(), promql);
 
         let promql = r#"a{label1="1", label2="2" or label3="3", label4="4"}"#;
-        let expected = r#"a{label1="1", label2="2" or label3="3", label4="4"}"#;
         let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), expected);
+        assert_eq!(expr.to_string(), promql);
 
         let fail_cases = vec![
             (
