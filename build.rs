@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use cfgrammar::yacc::YaccKind;
-use lrlex::{ct_token_map, DefaultLexeme};
+use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ctp = CTParserBuilder::<DefaultLexeme<u8>, u8>::new()
+    let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
+        .warnings_are_errors(false)
         .yacckind(YaccKind::Grmtools)
         .recoverer(lrpar::RecoveryKind::None)
         .grammar_in_src_dir("parser/promql.y")?
