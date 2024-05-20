@@ -564,6 +564,18 @@ impl Lexer {
         match self.pop() {
             Some('#') => State::LineComment,
             Some(',') => State::Lexeme(T_COMMA),
+            Some('o') | Some('O') => {
+                if let Some('r') | Some('R') = self.peek() {
+                    self.pop();
+                    if let Some(' ') = self.peek() {
+                        State::Lexeme(T_LOR)
+                    } else {
+                        State::Identifier
+                    }
+                } else {
+                    State::Identifier
+                }
+            }
             Some(ch) if ch.is_ascii_whitespace() => State::Space,
             Some(ch) if is_alpha(ch) => State::Identifier,
             Some(ch) if STRING_SYMBOLS.contains(ch) => State::String(ch),

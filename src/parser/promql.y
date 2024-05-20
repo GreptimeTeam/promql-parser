@@ -407,6 +407,7 @@ label_matchers -> Result<Matchers, String>:
 
 label_match_list -> Result<Matchers, String>:
                 label_match_list COMMA label_matcher { Ok($1?.append($3?)) }
+        |       label_match_list LOR label_matcher { Ok($1?.append_or($3?)) }
         |       label_matcher { Ok(Matchers::empty().append($1?)) }
 ;
 

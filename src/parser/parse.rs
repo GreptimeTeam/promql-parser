@@ -37,6 +37,7 @@ mod tests {
     use regex::Regex;
 
     use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
+    use crate::parser;
     use crate::parser::function::get_function;
     use crate::parser::{
         token, AtModifier as At, BinModifier, Expr, FunctionArgs, LabelModifier, Offset,
@@ -44,6 +45,7 @@ mod tests {
     };
     use crate::util::duration;
     use std::time::Duration;
+    use std::vec;
 
     struct Case {
         input: String,
@@ -2114,5 +2116,123 @@ mod tests {
             },
         ];
         assert_cases(fail_cases);
+    }
+
+    #[test]
+    fn test_or_filters() {
+        let cases = vec![
+            (r#"foo{label1="1" or label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" OR label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" Or label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" oR label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" or or="or"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "or", "or")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (
+                r#"foo{label1="1" or label1="2" or label1="3" or label1="4"}"#,
+                {
+                    let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                        vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "3")],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "4")],
+                    ]);
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
+                },
+            ),
+            (
+                r#"foo{label1="1" or label1="2" or label1="3", label2="4"}"#,
+                {
+                    let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                        vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                        vec![
+                            Matcher::new(MatchOp::Equal, "label1", "3"),
+                            Matcher::new(MatchOp::Equal, "label2", "4"),
+                        ],
+                    ]);
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
+                },
+            ),
+            (
+                r#"foo{label1="1", label2="2" or label1="3" or label1="4"}"#,
+                {
+                    let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                        vec![
+                            Matcher::new(MatchOp::Equal, "label1", "1"),
+                            Matcher::new(MatchOp::Equal, "label2", "2"),
+                        ],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "3")],
+                        vec![Matcher::new(MatchOp::Equal, "label1", "4")],
+                    ]);
+                    Expr::new_vector_selector(Some(String::from("foo")), matchers)
+                },
+            ),
+        ];
+        assert_cases(Case::new_result_cases(cases));
+
+        let display_cases = [
+            r#"a{label1="1"}"#,
+            r#"a{label1="1" or label2="2"}"#,
+            r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#,
+            r#"a{label1="1", label2="2" or label3="3" or label4="4"}"#,
+            r#"a{label1="1", label2="2" or label3="3", label4="4"}"#,
+        ];
+        display_cases
+            .iter()
+            .for_each(|expr| assert_eq!(parser::parse(expr).unwrap().to_string(), *expr));
+
+        let or_insensitive_cases = [
+            r#"a{label1="1" or label2="2"}"#,
+            r#"a{label1="1" OR label2="2"}"#,
+            r#"a{label1="1" Or label2="2"}"#,
+            r#"a{label1="1" oR label2="2"}"#,
+        ];
+
+        or_insensitive_cases.iter().for_each(|expr| {
+            assert_eq!(
+                parser::parse(expr).unwrap().to_string(),
+                r#"a{label1="1" or label2="2"}"#
+            )
+        });
+
+        let fail_cases = vec![
+            (
+                r#"foo{or}"#,
+                r#"invalid label matcher, expected label matching operator after 'or'"#,
+            ),
+            (r#"foo{label1="1" or}"#, INVALID_QUERY_INFO),
+            (r#"foo{or label1="1"}"#, INVALID_QUERY_INFO),
+            (r#"foo{label1="1" or or label2="2"}"#, INVALID_QUERY_INFO),
+        ];
+        assert_cases(Case::new_fail_cases(fail_cases));
     }
 }

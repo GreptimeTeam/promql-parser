@@ -102,15 +102,19 @@ impl Matcher {
     }
 
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
+        let op = Self::find_matcher_op(id, &value)?;
+        op.map(|op| Matcher::new(op, name.as_str(), value.as_str()))
+    }
+
+    fn find_matcher_op(id: TokenId, value: &str) -> Result<Result<MatchOp, String>, String> {
         let op = match id {
             T_EQL => Ok(MatchOp::Equal),
             T_NEQ => Ok(MatchOp::NotEqual),
-            T_EQL_REGEX => Ok(MatchOp::Re(Matcher::try_parse_re(&value)?)),
-            T_NEQ_REGEX => Ok(MatchOp::NotRe(Matcher::try_parse_re(&value)?)),
+            T_EQL_REGEX => Ok(MatchOp::Re(Matcher::try_parse_re(value)?)),
+            T_NEQ_REGEX => Ok(MatchOp::NotRe(Matcher::try_parse_re(value)?)),
             _ => Err(format!("invalid match op {}", token_display(id))),
         };
-
-        op.map(|op| Matcher { op, name, value })
+        Ok(op)
     }
 }
 
@@ -181,24 +185,58 @@ fn try_escape_for_repeat_re(re: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
+    pub or_matchers: Vec<Vec<Matcher>>,
 }
 
 impl Matchers {
     pub fn empty() -> Self {
-        Self { matchers: vec![] }
+        Self {
+            matchers: vec![],
+            or_matchers: vec![],
+        }
     }
 
     pub fn one(matcher: Matcher) -> Self {
         let matchers = vec![matcher];
-        Self { matchers }
+        Self {
+            matchers,
+            or_matchers: vec![],
+        }
     }
 
     pub fn new(matchers: Vec<Matcher>) -> Self {
-        Self { matchers }
+        Self {
+            matchers,
+            or_matchers: vec![],
+        }
+    }
+
+    pub fn with_or_matchers(mut self, or_matchers: Vec<Vec<Matcher>>) -> Self {
+        self.or_matchers = or_matchers;
+        self
     }
 
     pub fn append(mut self, matcher: Matcher) -> Self {
-        self.matchers.push(matcher);
+        // Check the latest or_matcher group. If it is not empty,
+        // we need to add the current matcher to this group.
+        let last_or_matcher = self.or_matchers.last_mut();
+        if let Some(last_or_matcher) = last_or_matcher {
+            last_or_matcher.push(matcher);
+        } else {
+            self.matchers.push(matcher);
+        }
+        self
+    }
+
+    pub fn append_or(mut self, matcher: Matcher) -> Self {
+        if !self.matchers.is_empty() {
+            // Be careful not to move ownership here, because it
+            // will be used by the subsequent append method.
+            let last_matchers = std::mem::take(&mut self.matchers);
+            self.or_matchers.push(last_matchers);
+        }
+        let new_or_matchers = vec![matcher];
+        self.or_matchers.push(new_or_matchers);
         self
     }
 
@@ -208,24 +246,29 @@ impl Matchers {
     /// The following expression is illegal:
     /// {job=~".*"} # Bad!
     pub fn is_empty_matchers(&self) -> bool {
-        self.matchers.is_empty() || self.matchers.iter().all(|m| m.is_match(""))
+        (self.matchers.is_empty() && self.or_matchers.is_empty())
+            || self
+                .matchers
+                .iter()
+                .chain(self.or_matchers.iter().flatten())
+                .all(|m| m.is_match(""))
     }
 
     /// find the matcher's value whose name equals the specified name. This function
     /// is designed to prepare error message of invalid promql expression.
     pub(crate) fn find_matcher_value(&self, name: &str) -> Option<String> {
-        for m in &self.matchers {
-            if m.name.eq(name) {
-                return Some(m.value.clone());
-            }
-        }
-        None
+        self.matchers
+            .iter()
+            .chain(self.or_matchers.iter().flatten())
+            .find(|m| m.name.eq(name))
+            .map(|m| m.value.clone())
     }
 
     /// find matchers whose name equals the specified name
     pub fn find_matchers(&self, name: &str) -> Vec<Matcher> {
         self.matchers
             .iter()
+            .chain(self.or_matchers.iter().flatten())
             .filter(|m| m.name.eq(name))
             .cloned()
             .collect()
@@ -234,7 +277,20 @@ impl Matchers {
 
 impl fmt::Display for Matchers {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", join_vector(&self.matchers, ",", true))
+        let simple_matchers = &self.matchers;
+        let or_matchers = &self.or_matchers;
+        if or_matchers.is_empty() {
+            write!(f, "{}", join_vector(simple_matchers, ",", true))
+        } else {
+            let or_matchers_string =
+                self.or_matchers
+                    .iter()
+                    .fold(String::new(), |or_matchers_str, pair| {
+                        format!("{} or {}", or_matchers_str, join_vector(pair, ", ", false))
+                    });
+            let or_matchers_string = or_matchers_string.trim_start_matches(" or").trim();
+            write!(f, "{}", or_matchers_string)
+        }
     }
 }
 
