@@ -14,18 +14,19 @@
 
 use crate::parser::lex::LexemeType;
 use crate::parser::token::{Token, TokenId};
+use lrlex::DefaultLexerTypes;
 use lrpar::{Lexeme, NonStreamingLexer, Span};
 
 /// caller MUST pay attention to the index out of bounds issue
 pub(crate) fn span_to_string(
-    lexer: &dyn NonStreamingLexer<LexemeType, TokenId>,
+    lexer: &dyn NonStreamingLexer<DefaultLexerTypes<TokenId>>,
     span: Span,
 ) -> String {
     lexer.span_str(span).to_string()
 }
 
 pub(crate) fn lexeme_to_string(
-    lexer: &dyn NonStreamingLexer<LexemeType, TokenId>,
+    lexer: &dyn NonStreamingLexer<DefaultLexerTypes<TokenId>>,
     lexeme: &Result<LexemeType, LexemeType>,
 ) -> Result<String, String> {
     lexeme
@@ -34,7 +35,7 @@ pub(crate) fn lexeme_to_string(
 }
 
 pub(crate) fn lexeme_to_token(
-    lexer: &dyn NonStreamingLexer<LexemeType, TokenId>,
+    lexer: &dyn NonStreamingLexer<DefaultLexerTypes<TokenId>>,
     lexeme: Result<LexemeType, LexemeType>,
 ) -> Result<Token, String> {
     lexeme

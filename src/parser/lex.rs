@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use crate::parser::token::*;
-use lrlex::{DefaultLexeme, LRNonStreamingLexer};
+use cfgrammar::NewlineCache;
+use lrlex::{DefaultLexeme, DefaultLexerTypes, LRNonStreamingLexer};
 use lrpar::Lexeme;
 use std::fmt::Debug;
 
@@ -22,14 +23,14 @@ const STRING_SYMBOLS: &str = r#"'"`"#;
 
 pub(crate) type LexemeType = DefaultLexeme<TokenId>;
 
-pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<LexemeType, TokenId>, String> {
+pub fn lexer(s: &str) -> Result<LRNonStreamingLexer<DefaultLexerTypes<TokenId>>, String> {
     let lexemes: Vec<Result<LexemeType, String>> = Lexer::new(s).collect();
     match lexemes.last() {
         Some(Err(info)) => Err(info.into()),
         Some(Ok(_)) => {
             // TODO: use better error mechanism, instead of filtering the err.
             let lexemes = lexemes.into_iter().filter_map(|l| l.ok()).map(Ok).collect();
-            Ok(LRNonStreamingLexer::new(s, lexemes, Vec::new()))
+            Ok(LRNonStreamingLexer::new(s, lexemes, NewlineCache::new()))
         }
         None => Err(format!("no expression found in input: '{s}'")),
     }

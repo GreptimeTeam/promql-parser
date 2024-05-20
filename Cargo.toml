@@ -25,13 +25,13 @@ license = "Apache-2.0"
 categories = ["parser-implementations"]
 
 [dependencies]
-cfgrammar = "0.12"
+cfgrammar = "0.13.5"
 lazy_static = "1.4.0"
-lrlex = "0.12.0"
-lrpar = "0.12.0"
+lrlex = "0.13.5"
+lrpar = "0.13.5"
 regex = "1"
 
 [build-dependencies]
-cfgrammar = "0.12"
-lrlex = "0.12.0"
-lrpar = "0.12.0"
+cfgrammar = "0.13.5"
+lrlex = "0.13.5"
+lrpar = "0.13.5"
