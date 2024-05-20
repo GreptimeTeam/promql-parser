@@ -2199,7 +2199,7 @@ mod tests {
         ];
         assert_cases(Case::new_result_cases(cases));
 
-        let display_cases = vec![
+        let display_cases = [
             r#"a{label1="1"}"#,
             r#"a{label1="1" or label2="2"}"#,
             r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#,
@@ -2210,7 +2210,7 @@ mod tests {
             .iter()
             .for_each(|expr| assert_eq!(parser::parse(expr).unwrap().to_string(), *expr));
 
-        let or_insensitive_cases = vec![
+        let or_insensitive_cases = [
             r#"a{label1="1" or label2="2"}"#,
             r#"a{label1="1" OR label2="2"}"#,
             r#"a{label1="1" Or label2="2"}"#,
