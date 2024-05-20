@@ -2128,6 +2128,27 @@ mod tests {
                 ]);
                 Expr::new_vector_selector(Some(String::from("foo")), matchers)
             }),
+            (r#"foo{label1="1" OR label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" Or label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
+            (r#"foo{label1="1" oR label1="2"}"#, {
+                let matchers = Matchers::new(vec![]).with_or_matchers(vec![
+                    vec![Matcher::new(MatchOp::Equal, "label1", "1")],
+                    vec![Matcher::new(MatchOp::Equal, "label1", "2")],
+                ]);
+                Expr::new_vector_selector(Some(String::from("foo")), matchers)
+            }),
             (r#"foo{label1="1" or or="or"}"#, {
                 let matchers = Matchers::new(vec![]).with_or_matchers(vec![
                     vec![Matcher::new(MatchOp::Equal, "label1", "1")],
@@ -2178,25 +2199,16 @@ mod tests {
         ];
         assert_cases(Case::new_result_cases(cases));
 
-        let promql = r#"a{label1="1"}"#;
-        let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), promql);
-
-        let promql = r#"a{label1="1" or label2="2"}"#;
-        let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), promql);
-
-        let promql = r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#;
-        let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), promql);
-
-        let promql = r#"a{label1="1", label2="2" or label3="3" or label4="4"}"#;
-        let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), promql);
-
-        let promql = r#"a{label1="1", label2="2" or label3="3", label4="4"}"#;
-        let expr = parser::parse(promql).unwrap();
-        assert_eq!(expr.to_string(), promql);
+        let display_cases = vec![
+            r#"a{label1="1"}"#,
+            r#"a{label1="1" or label2="2"}"#,
+            r#"a{label1="1" or label2="2" or label3="3" or label4="4"}"#,
+            r#"a{label1="1", label2="2" or label3="3" or label4="4"}"#,
+            r#"a{label1="1", label2="2" or label3="3", label4="4"}"#,
+        ];
+        display_cases
+            .iter()
+            .for_each(|expr| assert_eq!(parser::parse(expr).unwrap().to_string(), *expr));
 
         let fail_cases = vec![
             (

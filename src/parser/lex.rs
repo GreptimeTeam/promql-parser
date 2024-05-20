@@ -564,8 +564,8 @@ impl Lexer {
         match self.pop() {
             Some('#') => State::LineComment,
             Some(',') => State::Lexeme(T_COMMA),
-            Some('o') => {
-                if let Some('r') = self.peek() {
+            Some('o') | Some('O') => {
+                if let Some('r') | Some('R') = self.peek() {
                     self.pop();
                     if let Some(' ') = self.peek() {
                         State::Lexeme(T_LOR)
