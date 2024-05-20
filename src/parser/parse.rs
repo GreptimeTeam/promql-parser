@@ -2210,6 +2210,20 @@ mod tests {
             .iter()
             .for_each(|expr| assert_eq!(parser::parse(expr).unwrap().to_string(), *expr));
 
+        let or_insensitive_cases = vec![
+            r#"a{label1="1" or label2="2"}"#,
+            r#"a{label1="1" OR label2="2"}"#,
+            r#"a{label1="1" Or label2="2"}"#,
+            r#"a{label1="1" oR label2="2"}"#,
+        ];
+
+        or_insensitive_cases.iter().for_each(|expr| {
+            assert_eq!(
+                parser::parse(expr).unwrap().to_string(),
+                r#"a{label1="1" or label2="2"}"#
+            )
+        });
+
         let fail_cases = vec![
             (
                 r#"foo{or}"#,
