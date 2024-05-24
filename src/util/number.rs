@@ -15,11 +15,13 @@
 /// parse str radix from golang format, but: if 8 or 9 is included
 /// in octal literal, it will be treated as decimal literal.
 /// This function panics if str is not dec, oct, hex format
+///
+/// Also accept format like
 pub fn parse_str_radix(s: &str) -> Result<f64, String> {
     let st: String = s
         .chars()
         .map(|c| c.to_ascii_lowercase())
-        .filter(|c| !c.is_whitespace())
+        .filter(|c| !c.is_whitespace() && *c != '_')
         .collect();
 
     let mut is_not_decimal = false;
@@ -57,8 +59,26 @@ pub fn parse_str_radix(s: &str) -> Result<f64, String> {
             .map(|x| x as f64)
             .map_err(|_| format!("ParseFloatError. {s} can't be parsed into i64"));
     }
-    st.parse()
-        .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
+    if let Some(s) = st.strip_suffix('k') {
+        s.parse().map(|s: f64| s * 1000_f64)
+    } else if let Some(s) = st.strip_suffix("ki") {
+        s.parse().map(|s: f64| s * 1024_f64)
+    } else if let Some(s) = st.strip_suffix('m') {
+        s.parse().map(|s: f64| s * 1000_f64.powi(2))
+    } else if let Some(s) = st.strip_suffix("mi") {
+        s.parse().map(|s: f64| s * 1024_f64.powi(2))
+    } else if let Some(s) = st.strip_suffix('g') {
+        s.parse().map(|s: f64| s * 1000_f64.powi(3))
+    } else if let Some(s) = st.strip_suffix("gi") {
+        s.parse().map(|s: f64| s * 1024_f64.powi(3))
+    } else if let Some(s) = st.strip_suffix('t') {
+        s.parse().map(|s: f64| s * 1000_f64.powi(4))
+    } else if let Some(s) = st.strip_suffix("ti") {
+        s.parse().map(|s: f64| s * 1024_f64.powi(4))
+    } else {
+        st.parse()
+    }
+    .map_err(|_| format!("ParseFloatError. {s} can't be parsed into f64"))
 }
 
 #[cfg(test)]
@@ -67,6 +87,15 @@ mod tests {
 
     #[test]
     fn test_parse_str_radix() {
+        assert_eq!(parse_str_radix("1K").unwrap(), 1000_f64);
+        assert_eq!(parse_str_radix("1Ki").unwrap(), 1024_f64);
+        assert_eq!(parse_str_radix("1M").unwrap(), 1000_f64.powi(2));
+        assert_eq!(parse_str_radix("1Mi").unwrap(), 1024_f64.powi(2));
+        assert_eq!(parse_str_radix("1G").unwrap(), 1000_f64.powi(3));
+        assert_eq!(parse_str_radix("1Gi").unwrap(), 1024_f64.powi(3));
+        assert_eq!(parse_str_radix("1T").unwrap(), 1000_f64.powi(4));
+        assert_eq!(parse_str_radix("1Ti").unwrap(), 1024_f64.powi(4));
+        assert_eq!(parse_str_radix("10_20_30.10_2").unwrap(), 102030.102_f64);
         assert_eq!(parse_str_radix("0x2f").unwrap(), 47_f64);
         assert_eq!(parse_str_radix("+0x2f").unwrap(), 47_f64);
         assert_eq!(parse_str_radix("- 0x2f ").unwrap(), -47_f64);
@@ -89,5 +118,6 @@ mod tests {
         assert!(parse_str_radix("rust").is_err());
         assert!(parse_str_radix("0xgolang").is_err());
         assert!(parse_str_radix("0clojure").is_err());
+        assert!(parse_str_radix("0x2024Ti").is_err());
     }
 }

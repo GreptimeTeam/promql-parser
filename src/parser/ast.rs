@@ -106,6 +106,10 @@ pub struct BinModifier {
     /// on/ignoring on labels.
     /// like a + b, no match modifier is needed.
     pub matching: Option<LabelModifier>,
+
+    /// MetricsQL Enhancement: for syntax like `kube_pod_info * on(namespace) group_left(*) prefix "ns_" kube_namespace_labels`
+    pub prefix: Option<String>,
+
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
 }
@@ -128,6 +132,10 @@ impl fmt::Display for BinModifier {
             _ => (),
         }
 
+        if let Some(prefix) = &self.prefix {
+            write!(f, "prefix \"{}\" ", prefix)?;
+        }
+
         if s.trim().is_empty() {
             write!(f, "")
         } else {
@@ -142,6 +150,7 @@ impl Default for BinModifier {
             card: VectorMatchCardinality::OneToOne,
             matching: None,
             return_bool: false,
+            prefix: None,
         }
     }
 }
@@ -154,6 +163,11 @@ impl BinModifier {
 
     pub fn with_matching(mut self, matching: Option<LabelModifier>) -> Self {
         self.matching = matching;
+        self
+    }
+
+    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
+        self.prefix = prefix;
         self
     }
 
@@ -332,6 +346,8 @@ pub struct AggregateExpr {
     pub param: Option<Box<Expr>>,
     /// modifier is optional for some aggregation operators, like sum.
     pub modifier: Option<LabelModifier>,
+    /// limit the restrict on output time series, MetricsQL Enhancement
+    pub limit: Option<Box<Expr>>,
 }
 
 impl AggregateExpr {
@@ -359,6 +375,10 @@ impl fmt::Display for AggregateExpr {
         }
         write!(f, "{})", self.expr)?;
 
+        if let Some(limit) = &self.limit {
+            write!(f, " limit {}", limit)?;
+        }
+
         Ok(())
     }
 }
@@ -371,6 +391,9 @@ impl Prettier for AggregateExpr {
         }
         writeln!(s, "{}", self.expr.pretty(level + 1, max)).unwrap();
         write!(s, "{})", indent(level)).unwrap();
+        if let Some(limit) = &self.limit {
+            write!(s, " limit {}", limit).unwrap();
+        }
         s
     }
 }
@@ -473,23 +496,30 @@ impl Prettier for BinaryExpr {
     }
 }
 
+/// MetricsQL Enhancement: A tuple like `(1, 2, 3)`, to support query like `q == (C1, ..., CN)`
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParenExpr {
-    pub expr: Box<Expr>,
+pub struct TupleExpr {
+    pub exprs: Vec<Expr>,
 }
 
-impl fmt::Display for ParenExpr {
+impl fmt::Display for TupleExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({})", self.expr)
+        let strs: Vec<_> = self.exprs.iter().map(|e| e.to_string()).collect();
+        write!(f, "({})", strs.join(", "))
     }
 }
 
-impl Prettier for ParenExpr {
+impl Prettier for TupleExpr {
     fn format(&self, level: usize, max: usize) -> String {
+        let strs: Vec<_> = self
+            .exprs
+            .iter()
+            .map(|e| e.pretty(level + 1, max))
+            .collect();
         format!(
             "{}(\n{}\n{})",
             indent(level),
-            self.expr.pretty(level + 1, max),
+            strs.join(",\n"),
             indent(level)
         )
     }
@@ -847,9 +877,9 @@ pub enum Expr {
     /// Binary represents a binary expression between two child expressions.
     Binary(BinaryExpr),
 
-    /// Paren wraps an expression so it cannot be disassembled as a consequence
+    /// Tuple wraps an expressions so it cannot be disassembled as a consequence
     /// of operator precedence.
-    Paren(ParenExpr),
+    Tuple(TupleExpr),
 
     /// SubqueryExpr represents a subquery.
     Subquery(SubqueryExpr),
@@ -906,10 +936,8 @@ impl Expr {
         Ok(se)
     }
 
-    pub(crate) fn new_paren_expr(expr: Expr) -> Result<Self, String> {
-        let ex = Expr::Paren(ParenExpr {
-            expr: Box::new(expr),
-        });
+    pub(crate) fn new_tuple_expr(exprs: Vec<Expr>) -> Result<Self, String> {
+        let ex = Expr::Tuple(TupleExpr { exprs });
         Ok(ex)
     }
 
@@ -1014,6 +1042,7 @@ impl Expr {
         op: TokenId,
         modifier: Option<LabelModifier>,
         args: FunctionArgs,
+        limit: Option<Expr>,
     ) -> Result<Expr, String> {
         let op = TokenType::new(op);
         if args.is_empty() {
@@ -1041,6 +1070,7 @@ impl Expr {
                 expr,
                 param,
                 modifier,
+                limit: limit.map(Box::new),
             })),
             None => Err(
                 "aggregate operation needs a single instant vector parameter, but found none"
@@ -1062,7 +1092,10 @@ impl Expr {
                     ValueType::Vector
                 }
             }
-            Expr::Paren(ex) => ex.expr.value_type(),
+            Expr::Tuple(TupleExpr { exprs }) => exprs
+                .first()
+                .map(|e| e.value_type())
+                .unwrap_or(ValueType::Scalar),
             Expr::Subquery(_) => ValueType::Matrix,
             Expr::NumberLiteral(_) => ValueType::Scalar,
             Expr::StringLiteral(_) => ValueType::String,
@@ -1144,7 +1177,7 @@ impl fmt::Display for Expr {
             Expr::Aggregate(ex) => write!(f, "{ex}"),
             Expr::Unary(ex) => write!(f, "{ex}"),
             Expr::Binary(ex) => write!(f, "{ex}"),
-            Expr::Paren(ex) => write!(f, "{ex}"),
+            Expr::Tuple(ex) => write!(f, "{ex}"),
             Expr::Subquery(ex) => write!(f, "{ex}"),
             Expr::NumberLiteral(ex) => write!(f, "{ex}"),
             Expr::StringLiteral(ex) => write!(f, "{ex}"),
@@ -1162,7 +1195,7 @@ impl Prettier for Expr {
             Expr::Aggregate(ex) => ex.pretty(level, max),
             Expr::Unary(ex) => ex.pretty(level, max),
             Expr::Binary(ex) => ex.pretty(level, max),
-            Expr::Paren(ex) => ex.pretty(level, max),
+            Expr::Tuple(ex) => ex.pretty(level, max),
             Expr::Subquery(ex) => ex.pretty(level, max),
             Expr::NumberLiteral(ex) => ex.pretty(level, max),
             Expr::StringLiteral(ex) => ex.pretty(level, max),
@@ -1184,7 +1217,12 @@ pub(crate) fn check_ast(expr: Expr) -> Result<Expr, String> {
         Expr::Unary(ex) => check_ast_for_unary(ex),
         Expr::Subquery(ex) => check_ast_for_subquery(ex),
         Expr::VectorSelector(ex) => check_ast_for_vector_selector(ex),
-        Expr::Paren(_) => Ok(expr),
+        Expr::Tuple(TupleExpr { exprs }) => Ok(Expr::Tuple(TupleExpr {
+            exprs: exprs
+                .into_iter()
+                .map(check_ast)
+                .collect::<Result<Vec<Expr>, String>>()?,
+        })),
         Expr::NumberLiteral(_) => Ok(expr),
         Expr::StringLiteral(_) => Ok(expr),
         Expr::MatrixSelector(_) => Ok(expr),
@@ -1774,7 +1812,7 @@ mod tests {
 
         cases.append(&mut cases1);
         for (input, expected) in cases {
-            let expr = crate::parser::parse(input).unwrap();
+            let expr = crate::parser::parse(input, None).unwrap();
             assert_eq!(expected, expr.to_string())
         }
     }
@@ -1907,7 +1945,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -1978,7 +2016,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2059,7 +2097,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2202,7 +2240,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2261,7 +2299,7 @@ task:errors:rate10s{job="s"}))"#,
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2403,7 +2441,7 @@ or
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2417,7 +2455,7 @@ or
         ];
 
         for (input, expect) in cases {
-            let expr = crate::parser::parse(input);
+            let expr = crate::parser::parse(input, None);
             assert_eq!(expect, expr.unwrap().pretty(0, 10));
         }
     }
@@ -2437,7 +2475,10 @@ or
         ];
 
         for (input, expect) in cases {
-            assert_eq!(expect, crate::parser::parse(input).unwrap().prettify());
+            assert_eq!(
+                expect,
+                crate::parser::parse(input, None).unwrap().prettify()
+            );
         }
     }
 }

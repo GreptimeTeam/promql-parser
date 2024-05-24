@@ -62,6 +62,9 @@ POW
 SUB
 AT
 ATAN2
+DEFAULT
+IF
+IFNOT
 %token OPERATORS_END
 
 // Aggregators.
@@ -90,6 +93,8 @@ IGNORING
 OFFSET
 ON
 WITHOUT
+LIMIT
+PREFIX
 %token KEYWORDS_END
 
 // Preprocessors.
@@ -120,6 +125,7 @@ START_METRIC_SELECTOR
 %left EQLC GTE GTR LSS LTE NEQ
 %left ADD SUB
 %left MUL DIV MOD ATAN2
+%left IF IFNOT DEFAULT
 %right POW
 
 // Offset and At modifiers do not have associativity.
@@ -132,6 +138,8 @@ START_METRIC_SELECTOR
 // left_paren has higher precedence than group_left/group_right, to fix the reduce/shift conflict.
 // if group_left/group_right is followed by left_paren, the parser will shift instead of reduce
 %right LEFT_PAREN
+
+%parse-param step: Option<Duration>
 
 %%
 start -> Result<Expr, String>:
@@ -160,17 +168,29 @@ expr -> Result<Expr, String>:
  * Aggregations.
  */
 aggregate_expr -> Result<Expr, String>:
-                aggregate_op aggregate_modifier function_call_body
+                aggregate_op aggregate_modifier function_call_body LIMIT number_literal
                 {
-                        Expr::new_aggregate_expr($1?.id(), Some($2?), $3?)
+                        Expr::new_aggregate_expr($1?.id(), Some($2?), $3?, Some($5?))
+                }
+        |       aggregate_op function_call_body aggregate_modifier LIMIT number_literal
+                {
+                        Expr::new_aggregate_expr($1?.id(), Some($3?), $2?, Some($5?))
+                }
+        |       aggregate_op function_call_body LIMIT number_literal
+                {
+                        Expr::new_aggregate_expr($1?.id(), None, $2?, Some($4?))
+                }
+        |       aggregate_op aggregate_modifier function_call_body
+                {
+                        Expr::new_aggregate_expr($1?.id(), Some($2?), $3?, None)
                 }
         |       aggregate_op function_call_body aggregate_modifier
                 {
-                        Expr::new_aggregate_expr($1?.id(), Some($3?), $2?)
+                        Expr::new_aggregate_expr($1?.id(), Some($3?), $2?, None)
                 }
         |       aggregate_op function_call_body
                 {
-                        Expr::new_aggregate_expr($1?.id(), None, $2?)
+                        Expr::new_aggregate_expr($1?.id(), None, $2?, None)
                 }
 ;
 
@@ -184,7 +204,7 @@ aggregate_modifier -> Result<LabelModifier, String>:
  */
 // Operator precedence only works if each of those is listed separately.
 binary_expr -> Result<Expr, String>:
-                expr ADD       bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+                expr ADD     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
         |       expr ATAN2   bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
         |       expr DIV     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
         |       expr EQLC    bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
@@ -200,6 +220,9 @@ binary_expr -> Result<Expr, String>:
         |       expr NEQ     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
         |       expr POW     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
         |       expr SUB     bin_modifier expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), $3?, $4?) }
+        |       expr IF      expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), None, $3?) }
+        |       expr IFNOT   expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), None, $3?) }
+        |       expr DEFAULT expr { Expr::new_binary_expr($1?, lexeme_to_token($lexer, $2)?.id(), None, $3?) }
 ;
 
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
@@ -233,19 +256,29 @@ group_modifiers -> Result<Option<BinModifier>, String>:
         |       on_or_ignoring { $1 }
         |       on_or_ignoring GROUP_LEFT grouping_labels
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne($3?)))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne($3?), None))
                 }
         |       on_or_ignoring GROUP_RIGHT grouping_labels
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?)))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany($3?), None))
                 }
         |       on_or_ignoring GROUP_LEFT
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(Labels::new(vec![]))))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(Labels::new(vec![])), None))
                 }
         |       on_or_ignoring GROUP_RIGHT
                 {
-                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(Labels::new(vec![]))))
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(Labels::new(vec![])), None))
+                }
+        |       on_or_ignoring GROUP_LEFT LEFT_PAREN MUL RIGHT_PAREN PREFIX STRING
+                {
+                        let value = lexeme_to_string($lexer, &$7)?;
+                        Ok(update_optional_card($1?, VectorMatchCardinality::ManyToOne(Labels::new(vec!["*"])), Some(value)))
+                }
+        |       on_or_ignoring GROUP_RIGHT LEFT_PAREN MUL RIGHT_PAREN PREFIX STRING
+                {
+                        let value = lexeme_to_string($lexer, &$7)?;
+                        Ok(update_optional_card($1?, VectorMatchCardinality::OneToMany(Labels::new(vec!["*"])), Some(value)))
                 }
         |       GROUP_LEFT grouping_labels { Err("unexpected <group_left>".into()) }
         |       GROUP_RIGHT grouping_labels { Err("unexpected <group_right>".into()) }
@@ -304,7 +337,19 @@ function_call_args -> Result<FunctionArgs, String>:
  * Expressions inside parentheses.
  */
 paren_expr -> Result<Expr, String>:
-                LEFT_PAREN expr RIGHT_PAREN { Expr::new_paren_expr($2?) }
+        LEFT_PAREN tuple_expr RIGHT_PAREN { Expr::new_tuple_expr($2?) }
+;
+
+tuple_expr -> Result<Vec<Expr>, String>:
+        tuple_expr COMMA expr
+                {
+                        let mut v = $1?;
+                        v.push($3?);
+                        Ok(v)
+                }
+        | expr {
+                Ok(vec![$1?])
+        }
 ;
 
 /*
@@ -360,7 +405,7 @@ at_modifier_preprocessors -> Result<Token, String>:
  * Subquery and range selectors.
  */
 matrix_selector -> Result<Expr, String>:
-                expr LEFT_BRACKET duration RIGHT_BRACKET
+                expr LEFT_BRACKET metrics_duration RIGHT_BRACKET
                 {
                         Expr::new_matrix_selector($1?, $3?)
                 }
@@ -560,7 +605,15 @@ string_literal -> Result<Expr, String>:
 ;
 
 duration -> Result<Duration, String>:
-                DURATION { parse_duration($lexer.span_str($span)) }
+                DURATION { parse_duration($lexer.span_str($span), step) }
+;
+
+metrics_duration -> Result<Duration, String>:
+                DURATION { parse_duration($lexer.span_str($span), step) }
+        |       NUMBER {
+                        let num = parse_str_radix($lexer.span_str($span))?;
+                        Ok(Duration::from_secs(num as u64))
+                }
 ;
 
 /*
@@ -597,10 +650,8 @@ fn update_optional_matching(
 fn update_optional_card(
     modifier: Option<BinModifier>,
     card: VectorMatchCardinality,
+    prefix: Option<String>
 ) -> Option<BinModifier> {
-    let modifier = match modifier {
-        Some(modifier) => modifier,
-        None => Default::default(),
-    };
-    Some(modifier.with_card(card))
+    let modifier = modifier.unwrap_or_default();
+    Some(modifier.with_card(card).with_prefix(prefix))
 }

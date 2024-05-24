@@ -382,17 +382,6 @@ impl Lexer {
     }
 
     /// the first number has been consumed, so first backup.
-    fn accept_duration(&mut self) -> State {
-        self.backup();
-        self.scan_number();
-        if !self.accept_remaining_duration() {
-            self.pop(); // this is to include the bad syntax
-            return State::Err(format!("bad duration syntax: {}", self.lexeme_string()));
-        }
-        State::Lexeme(T_DURATION)
-    }
-
-    /// the first number has been consumed, so first backup.
     fn accept_number_or_duration(&mut self) -> State {
         self.backup();
         if self.scan_number() {
@@ -402,6 +391,8 @@ impl Lexer {
         // Next two chars must be a valid unit and a non-alphanumeric.
         if self.accept_remaining_duration() {
             return State::Lexeme(T_DURATION);
+        } else if self.accept_number_suffix() {
+            return State::Lexeme(T_NUMBER);
         }
 
         // the next char is invalid, so it should be captured in the err info.
@@ -484,11 +475,12 @@ impl Lexer {
         if self.accept(|ch| ch == '0') && self.accept(|ch| ch == 'x' || ch == 'X') {
             hex_digit = true;
         }
+        // support underscore like 123_456.56
         let is_valid_digit = |ch: char| -> bool {
             if hex_digit {
                 ch.is_ascii_hexdigit()
             } else {
-                ch.is_ascii_digit()
+                ch.is_ascii_digit() || ch == '_'
             }
         };
 
@@ -511,7 +503,7 @@ impl Lexer {
     /// true only if the char after duration is not alphanumeric.
     fn accept_remaining_duration(&mut self) -> bool {
         // Next two char must be a valid duration.
-        if !self.accept(|ch| "smhdwy".contains(ch)) {
+        if !self.accept(|ch| "smhdwyi".contains(ch)) {
             return false;
         }
         // Support for ms. Bad units like hs, ys will be caught when we actually
@@ -530,6 +522,14 @@ impl Lexer {
             self.accept(|ch| ch == 's');
         }
 
+        !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
+    }
+
+    fn accept_number_suffix(&mut self) -> bool {
+        if !self.accept(|ch| "KMGT".contains(ch)) {
+            return false;
+        }
+        self.accept(|ch| ch == 'i');
         !matches!(self.peek(), Some(ch) if is_alpha_numeric(ch))
     }
 
@@ -644,7 +644,7 @@ impl Lexer {
                 self.set_colon_scanned();
                 State::Lexeme(T_COLON)
             }
-            Some(ch) if ch.is_ascii_digit() => self.accept_duration(),
+            Some(ch) if ch.is_ascii_digit() => self.accept_number_or_duration(),
             Some(']') => {
                 self.jump_outof_brackets();
                 self.reset_colon_scanned();
@@ -836,6 +836,10 @@ mod tests {
                 None,
             ),
             ("0x123", vec![(T_NUMBER, 0, 5)], None),
+            ("123_456", vec![(T_NUMBER, 0, 7)], None),
+            ("123_456.78_9", vec![(T_NUMBER, 0, 12)], None),
+            ("123_456K", vec![(T_NUMBER, 0, 8)], None),
+            ("123_456.78_9Ki", vec![(T_NUMBER, 0, 14)], None),
         ];
         assert_matches(cases);
     }
@@ -871,6 +875,7 @@ mod tests {
             ("1h", vec![(T_DURATION, 0, 2)], None),
             ("3w", vec![(T_DURATION, 0, 2)], None),
             ("1y", vec![(T_DURATION, 0, 2)], None),
+            ("1i", vec![(T_DURATION, 0, 2)], None),
         ];
         assert_matches(cases);
     }

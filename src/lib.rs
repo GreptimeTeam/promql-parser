@@ -28,7 +28,7 @@
 //!
 //! let promql = r#"http_requests_total{environment=~"staging|testing|development",method!="GET"} offset 5m"#;
 //!
-//! match parser::parse(promql) {
+//! match parser::parse(promql, None) {
 //!     Ok(expr) => {
 //!         println!("Prettify:\n\n{}", expr.prettify());
 //!         println!("AST:\n{expr:?}");

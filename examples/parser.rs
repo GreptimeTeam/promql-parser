@@ -22,7 +22,7 @@ fn main() {
         } offset 5m
     "#;
 
-    match parser::parse(promql) {
+    match parser::parse(promql, None) {
         Ok(expr) => {
             println!("Prettify:\n\n{}", expr.prettify());
             println!("AST:\n{expr:?}");

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::parser::{
-    AggregateExpr, BinaryExpr, Expr, Extension, ParenExpr, SubqueryExpr, UnaryExpr,
+    AggregateExpr, BinaryExpr, Expr, Extension, SubqueryExpr, TupleExpr, UnaryExpr,
 };
 
 /// Trait that implements the [Visitor pattern](https://en.wikipedia.org/wiki/Visitor_pattern)
@@ -49,7 +49,14 @@ pub fn walk_expr<V: ExprVisitor>(visitor: &mut V, expr: &Expr) -> Result<bool, V
         Expr::Binary(BinaryExpr { lhs, rhs, .. }) => {
             walk_expr(visitor, lhs)? || walk_expr(visitor, rhs)?
         }
-        Expr::Paren(ParenExpr { expr }) => walk_expr(visitor, expr)?,
+        Expr::Tuple(TupleExpr { exprs }) => {
+            for e in exprs {
+                if !walk_expr(visitor, e)? {
+                    return Ok(false);
+                }
+            }
+            true
+        }
         Expr::Subquery(SubqueryExpr { expr, .. }) => walk_expr(visitor, expr)?,
         Expr::Extension(Extension { expr }) => {
             for child in expr.children() {
@@ -141,7 +148,7 @@ mod tests {
     #[test]
     fn test_check_for_namespace_basic_query() {
         let expr = "pg_stat_activity_count{namespace=\"sample\"}";
-        let ast = parser::parse(expr).unwrap();
+        let ast = parser::parse(expr, None).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
@@ -151,7 +158,7 @@ mod tests {
     #[test]
     fn test_check_for_namespace_label_present() {
         let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
-        let ast = parser::parse(expr).unwrap();
+        let ast = parser::parse(expr, None).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
@@ -161,7 +168,7 @@ mod tests {
     #[test]
     fn test_check_for_namespace_label_wrong_namespace() {
         let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{namespace=\"sample\"}[1h])))";
-        let ast = parser::parse(expr).unwrap();
+        let ast = parser::parse(expr, None).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "foobar".to_string(),
         };
@@ -171,7 +178,7 @@ mod tests {
     #[test]
     fn test_check_for_namespace_label_missing_namespace() {
         let expr = "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1h])))";
-        let ast = parser::parse(expr).unwrap();
+        let ast = parser::parse(expr, None).unwrap();
         let mut visitor = NamespaceVisitor {
             namespace: "sample".to_string(),
         };
@@ -184,13 +191,13 @@ mod tests {
             namespace: "sample".to_string(),
         };
 
-        let ast = parser::parse("1").unwrap();
+        let ast = parser::parse("1", None).unwrap();
         assert!(!walk_expr(&mut visitor, &ast).unwrap());
 
-        let ast = parser::parse("1 + 1").unwrap();
+        let ast = parser::parse("1 + 1", None).unwrap();
         assert!(!walk_expr(&mut visitor, &ast).unwrap());
 
-        let ast = parser::parse(r#""1""#).unwrap();
+        let ast = parser::parse(r#""1""#, None).unwrap();
         assert!(!walk_expr(&mut visitor, &ast).unwrap());
     }
 }

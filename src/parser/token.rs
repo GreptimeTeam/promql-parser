@@ -32,6 +32,9 @@ lazy_static! {
             ("or", T_LOR),
             ("unless", T_LUNLESS),
             ("atan2", T_ATAN2),
+            ("if", T_IF),
+            ("ifnot", T_IFNOT),
+            ("default", T_DEFAULT),
 
             // Aggregators.
             ("sum", T_SUM),
@@ -56,6 +59,8 @@ lazy_static! {
             ("group_left", T_GROUP_LEFT),
             ("group_right", T_GROUP_RIGHT),
             ("bool", T_BOOL),
+            ("limit", T_LIMIT),
+            ("prefix", T_PREFIX),
 
             // Preprocessors.
             ("start", T_START),
@@ -115,6 +120,9 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_SUB => "-",
         T_AT => "@",
         T_ATAN2 => "atan2",
+        T_IF => "if",
+        T_IFNOT => "ifnot",
+        T_DEFAULT => "default",
         T_OPERATORS_END => "operators_end",
 
         // Aggregators.
@@ -143,6 +151,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_OFFSET => "offset",
         T_ON => "on",
         T_WITHOUT => "without",
+        T_LIMIT => "limit",
+        T_PREFIX => "prefix",
         T_KEYWORDS_END => "keywords_end",
 
         // Preprocessors.
@@ -272,6 +282,9 @@ mod tests {
         assert_eq!(token_display(T_SUB), "-");
         assert_eq!(token_display(T_AT), "@");
         assert_eq!(token_display(T_ATAN2), "atan2");
+        assert_eq!(token_display(T_IF), "if");
+        assert_eq!(token_display(T_IFNOT), "ifnot");
+        assert_eq!(token_display(T_DEFAULT), "default");
         assert_eq!(token_display(T_OPERATORS_END), "operators_end");
         assert_eq!(token_display(T_AGGREGATORS_START), "aggregators_start");
         assert_eq!(token_display(T_AVG), "avg");
@@ -296,6 +309,8 @@ mod tests {
         assert_eq!(token_display(T_OFFSET), "offset");
         assert_eq!(token_display(T_ON), "on");
         assert_eq!(token_display(T_WITHOUT), "without");
+        assert_eq!(token_display(T_LIMIT), "limit");
+        assert_eq!(token_display(T_PREFIX), "prefix");
         assert_eq!(token_display(T_KEYWORDS_END), "keywords_end");
         assert_eq!(token_display(T_PREPROCESSOR_START), "preprocessor_start");
         assert_eq!(token_display(T_START), "start");
@@ -303,11 +318,11 @@ mod tests {
         assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessor_end");
 
         // if new token added in promql.y, this has to be updated
-        for i in 70..=75 {
+        for i in 75..=80 {
             assert_eq!(token_display(i), "not used");
         }
 
-        for i in 76..=255 {
+        for i in 81..=255 {
             assert_eq!(token_display(i), "unknown token");
         }
     }
@@ -351,6 +366,8 @@ mod tests {
         assert!(matches!(get_keyword_token("end"), Some(T_END)));
         assert!(matches!(get_keyword_token("inf"), Some(T_NUMBER)));
         assert!(matches!(get_keyword_token("nan"), Some(T_NUMBER)));
+        assert!(matches!(get_keyword_token("limit"), Some(T_LIMIT)));
+        assert!(matches!(get_keyword_token("prefix"), Some(T_PREFIX)));
 
         // not keywords
         assert!(get_keyword_token("at").is_none());
@@ -414,6 +431,9 @@ mod tests {
         assert!(TokenType(T_SUB).is_operator());
         assert!(TokenType(T_AT).is_operator());
         assert!(TokenType(T_ATAN2).is_operator());
+        assert!(TokenType(T_IF).is_operator());
+        assert!(TokenType(T_IFNOT).is_operator());
+        assert!(TokenType(T_DEFAULT).is_operator());
 
         assert!(!TokenType(T_SUM).is_operator());
         assert!(!TokenType(T_OPERATORS_START).is_operator());

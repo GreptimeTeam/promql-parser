@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use crate::parser::{lex, Expr, INVALID_QUERY_INFO};
 
 /// Parse the given query literal to an AST (which is [`Expr`] in this crate).
-pub fn parse(input: &str) -> Result<Expr, String> {
+pub fn parse(input: &str, step: Option<Duration>) -> Result<Expr, String> {
     match lex::lexer(input) {
         Err(e) => Err(e),
         Ok(lexer) => {
             // NOTE: the errs is ignored so far.
-            let (res, _errs) = crate::promql_y::parse(&lexer);
+            let (res, _errs) = crate::promql_y::parse(&lexer, step);
             res.ok_or_else(|| String::from(INVALID_QUERY_INFO))?
         }
     }
@@ -82,9 +84,13 @@ mod tests {
         }
     }
 
+    /// set step to `10s`
     fn assert_cases(cases: Vec<Case>) {
         for Case { input, expected } in cases {
-            assert_eq!(expected, crate::parser::parse(&input));
+            assert_eq!(
+                expected,
+                crate::parser::parse(&input, Some(Duration::from_secs(10)))
+            );
         }
     }
 
@@ -263,7 +269,7 @@ mod tests {
             (
                 "1 + 2/(3*1)",
                 Expr::new_binary_expr(Expr::from(3.0), token::T_MUL, None, Expr::from(1.0))
-                    .and_then(Expr::new_paren_expr)
+                    .and_then(|ex| Expr::new_tuple_expr(vec![ex]))
                     .and_then(|ex| Expr::new_binary_expr(Expr::from(2.0), token::T_DIV, None, ex))
                     .and_then(|ex| Expr::new_binary_expr(Expr::from(1.0), token::T_ADD, None, ex)),
             ),
@@ -1074,19 +1080,15 @@ mod tests {
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            ("foo[5mm]", "bad duration syntax: 5mm"),
-            ("foo[5m1]", "bad duration syntax: 5m1]"),
-            ("foo[5m:1m1]", "bad duration syntax: 1m1]"),
-            ("foo[5y1hs]", "not a valid duration string: 5y1hs"),
-            ("foo[5m1h]", "not a valid duration string: 5m1h"),
-            ("foo[5m1m]", "not a valid duration string: 5m1m"),
+            ("foo[5mm]", "bad number or duration syntax: 5mm"),
+            ("foo[5m1]", "bad number or duration syntax: 5m1]"),
+            ("foo[5m:1m1]", "bad number or duration syntax: 1m1]"),
             ("foo[0m]", "duration must be greater than 0"),
             (
                 r#"foo["5m"]"#,
                 r#"unexpected character inside brackets: '"'"#,
             ),
             (r#"foo[]"#, "missing unit character in duration"),
-            (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
             (
                 "some_metric[5m] OFFSET 1",
                 "unexpected number '1' in offset, expected duration",
@@ -1129,31 +1131,56 @@ mod tests {
             ("sum by (foo) (some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let modifier = LabelModifier::include(vec!["foo"]);
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("avg by (foo)(some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let modifier = LabelModifier::include(vec!["foo"]);
-                Expr::new_aggregate_expr(token::T_AVG, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_AVG,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("max by (foo)(some_metric)", {
                 let modifier = LabelModifier::include(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_MAX, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_MAX,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("sum without (foo) (some_metric)", {
                 let modifier = LabelModifier::exclude(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("sum (some_metric) without (foo)", {
                 let modifier = LabelModifier::exclude(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("stddev(some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_STDDEV, None, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_STDDEV, None, FunctionArgs::new_args(ex), None)
             }),
             ("stdvar by (foo)(some_metric)", {
                 let modifier = LabelModifier::include(vec!["foo"]);
@@ -1162,34 +1189,50 @@ mod tests {
                     token::T_STDVAR,
                     Some(modifier),
                     FunctionArgs::new_args(ex),
+                    None,
                 )
             }),
             ("sum by ()(some_metric)", {
                 let modifier = LabelModifier::include(vec![]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("sum by (foo,bar,)(some_metric)", {
                 let modifier = LabelModifier::include(vec!["foo", "bar"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("sum by (foo,)(some_metric)", {
                 let modifier = LabelModifier::include(vec!["foo"]);
                 let ex = Expr::from(VectorSelector::from("some_metric"));
-                Expr::new_aggregate_expr(token::T_SUM, Some(modifier), FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    None,
+                )
             }),
             ("topk(5, some_metric)", {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from(5.0);
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_TOPK, None, args)
+                Expr::new_aggregate_expr(token::T_TOPK, None, args, None)
             }),
             (r#"count_values("value", some_metric)"#, {
                 let ex = Expr::from(VectorSelector::from("some_metric"));
                 let param = Expr::from("value");
                 let args = FunctionArgs::new_args(param).append_args(ex);
-                Expr::new_aggregate_expr(token::T_COUNT_VALUES, None, args)
+                Expr::new_aggregate_expr(token::T_COUNT_VALUES, None, args, None)
             }),
             (
                 "sum without(and, by, avg, count, alert, annotations)(some_metric)",
@@ -1207,12 +1250,13 @@ mod tests {
                         token::T_SUM,
                         Some(modifier),
                         FunctionArgs::new_args(ex),
+                        None,
                     )
                 },
             ),
             ("sum(sum)", {
                 let ex = Expr::from(VectorSelector::from("sum"));
-                Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
+                Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex), None)
             }),
         ];
         assert_cases(Case::new_result_cases(cases));
@@ -1310,7 +1354,12 @@ mod tests {
                 let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "myjob"));
                 Expr::new_vector_selector(Some(name), matchers)
                     .and_then(|ex| {
-                        Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
+                        Expr::new_aggregate_expr(
+                            token::T_SUM,
+                            None,
+                            FunctionArgs::new_args(ex),
+                            None,
+                        )
                     })
                     .and_then(|ex| {
                         Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
@@ -1443,6 +1492,7 @@ mod tests {
                         token::T_SUM,
                         Some(LabelModifier::include(vec!["job", "le"])),
                         FunctionArgs::new_args(ex),
+                        None,
                     )
                 })
                 .and_then(|ex| {
@@ -1849,6 +1899,7 @@ mod tests {
                             "annotations",
                         ])),
                         FunctionArgs::new_args(ex),
+                        None,
                     )
                     .and_then(|ex| {
                         Expr::new_subquery_expr(
@@ -1927,7 +1978,7 @@ mod tests {
                     None,
                     Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
-                .and_then(Expr::new_paren_expr)
+                .and_then(|ex| Expr::new_tuple_expr(vec![ex]))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
             }),
             (r#"(foo + bar{nm="val"})[5m:] offset 10m"#, {
@@ -1938,7 +1989,7 @@ mod tests {
                     None,
                     Expr::new_vector_selector(Some(String::from("bar")), matchers).unwrap(),
                 )
-                .and_then(Expr::new_paren_expr)
+                .and_then(|ex| Expr::new_tuple_expr(vec![ex]))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
                 .and_then(|ex| ex.offset_expr(Offset::Pos(duration::MINUTE_DURATION * 10)))
             }),
@@ -1954,7 +2005,7 @@ mod tests {
                     None,
                     rhs,
                 )
-                .and_then(Expr::new_paren_expr)
+                .and_then(|ex| Expr::new_tuple_expr(vec![ex]))
                 .and_then(|ex| Expr::new_subquery_expr(ex, duration::MINUTE_DURATION * 5, None))
                 .and_then(|ex| ex.at_expr(At::try_from(1603775019_f64).unwrap()))
             }),
@@ -2208,7 +2259,7 @@ mod tests {
         ];
         display_cases
             .iter()
-            .for_each(|expr| assert_eq!(parser::parse(expr).unwrap().to_string(), *expr));
+            .for_each(|expr| assert_eq!(parser::parse(expr, None).unwrap().to_string(), *expr));
 
         let or_insensitive_cases = [
             r#"a{label1="1" or label2="2"}"#,
@@ -2219,7 +2270,7 @@ mod tests {
 
         or_insensitive_cases.iter().for_each(|expr| {
             assert_eq!(
-                parser::parse(expr).unwrap().to_string(),
+                parser::parse(expr, None).unwrap().to_string(),
                 r#"a{label1="1" or label2="2"}"#
             )
         });
@@ -2234,5 +2285,120 @@ mod tests {
             (r#"foo{label1="1" or or label2="2"}"#, INVALID_QUERY_INFO),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
+    }
+
+    #[test]
+    fn test_metricsql_enhancement() {
+        let cases =
+            vec![
+            (r#"123_456"#, { Ok(Expr::from(123_456_f64)) }),
+            (r#"123_456K"#, { Ok(Expr::from((123_456 * 1000) as f64)) }),
+            (r#"123_456Ki"#, { Ok(Expr::from((123_456 * 1024) as f64)) }),
+            (r#"metric[10]"#, {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("metric")),
+                    duration::SECOND_DURATION * 10,
+                )
+            }),
+            (r#"metric[1.5i]"#, {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("metric")),
+                    duration::SECOND_DURATION * 15,
+                )
+            }),
+            (r#"metric[10i]"#, {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("metric")),
+                    duration::SECOND_DURATION * 100,
+                )
+            }),
+            (r#"q1 default q2"#, {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("q1")),
+                    token::T_DEFAULT,
+                    None,
+                    Expr::from(VectorSelector::from("q2")),
+                )
+            }),
+            (r#"q1 if q2"#, {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("q1")),
+                    token::T_IF,
+                    None,
+                    Expr::from(VectorSelector::from("q2")),
+                )
+            }),
+            (r#"q1 ifnot q2"#, {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("q1")),
+                    token::T_IFNOT,
+                    None,
+                    Expr::from(VectorSelector::from("q2")),
+                )
+            }),
+            (r#"avg(q) limit 10"#, {
+                Expr::new_aggregate_expr(
+                    token::T_AVG,
+                    None,
+                    FunctionArgs::new_args(Expr::from(VectorSelector::from("q"))),
+                    Some(Expr::from(10_f64)),
+                )
+            }),
+            ("sum by (foo) (some_metric) limit 10", {
+                let ex = Expr::from(VectorSelector::from("some_metric"));
+                let modifier = LabelModifier::include(vec!["foo"]);
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    Some(Expr::from(10_f64)),
+                )
+            }),
+            ("sum (some_metric) by (foo) limit 10", {
+                let ex = Expr::from(VectorSelector::from("some_metric"));
+                let modifier = LabelModifier::include(vec!["foo"]);
+                Expr::new_aggregate_expr(
+                    token::T_SUM,
+                    Some(modifier),
+                    FunctionArgs::new_args(ex),
+                    Some(Expr::from(10_f64)),
+                )
+            }),
+            ("some_metric == (1, 2)", {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    token::T_EQLC,
+                    None,
+                    Expr::new_tuple_expr(vec![Expr::from(1_f64), Expr::from(2_f64)]).unwrap(),
+                )
+            }),
+            ("kube_pod_info * on(namespace) group_left(*) prefix \"ns_\" kube_namespace_labels", {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("kube_pod_info")),
+                    token::T_MUL,
+                    Some(
+                        BinModifier::default()
+                            .with_card(VectorMatchCardinality::many_to_one(vec!["*"]))
+                            .with_prefix(Some("ns_".into()))
+                            .with_matching(Some(LabelModifier::include(vec!["namespace"])))
+                    ),
+                    Expr::from(VectorSelector::from("kube_namespace_labels")),
+                )
+            }),
+            ("kube_pod_info * on(namespace) group_right(*) prefix \"ns_\" kube_namespace_labels", {
+                Expr::new_binary_expr(
+                    Expr::from(VectorSelector::from("kube_pod_info")),
+                    token::T_MUL,
+                    Some(
+                        BinModifier::default()
+                            .with_card(VectorMatchCardinality::one_to_many(vec!["*"]))
+                            .with_prefix(Some("ns_".into()))
+                            .with_matching(Some(LabelModifier::include(vec!["namespace"])))
+                    ),
+                    Expr::from(VectorSelector::from("kube_namespace_labels")),
+                )
+            }),
+        ];
+        assert_cases(Case::new_result_cases(cases));
     }
 }

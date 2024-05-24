@@ -30,7 +30,7 @@ pub mod value;
 
 pub use ast::{
     AggregateExpr, AtModifier, BinModifier, BinaryExpr, Call, EvalStmt, Expr, Extension,
-    LabelModifier, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr,
+    LabelModifier, MatrixSelector, NumberLiteral, Offset, StringLiteral, SubqueryExpr, TupleExpr,
     UnaryExpr, VectorMatchCardinality, VectorSelector,
 };
 pub use function::{Function, FunctionArgs};
