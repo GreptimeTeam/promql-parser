@@ -47,7 +47,7 @@ pub fn walk_expr<V: ExprVisitor>(visitor: &mut V, expr: &Expr) -> Result<bool, V
         Expr::Aggregate(AggregateExpr { expr, .. }) => walk_expr(visitor, expr)?,
         Expr::Unary(UnaryExpr { expr }) => walk_expr(visitor, expr)?,
         Expr::Binary(BinaryExpr { lhs, rhs, .. }) => {
-            walk_expr(visitor, lhs)? || walk_expr(visitor, rhs)?
+            walk_expr(visitor, lhs)? && walk_expr(visitor, rhs)?
         }
         Expr::Paren(ParenExpr { expr }) => walk_expr(visitor, expr)?,
         Expr::Subquery(SubqueryExpr { expr, .. }) => walk_expr(visitor, expr)?,
