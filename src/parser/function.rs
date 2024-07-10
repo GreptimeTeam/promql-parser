@@ -202,6 +202,7 @@ lazy_static! {
         ("idelta", vec![ValueType::Matrix], ValueType::Vector),
         ("increase", vec![ValueType::Matrix], ValueType::Vector),
         ("irate", vec![ValueType::Matrix], ValueType::Vector),
+        ("detect_period", vec![ValueType::Matrix], ValueType::Vector),
         (
             "label_replace",
             vec![
