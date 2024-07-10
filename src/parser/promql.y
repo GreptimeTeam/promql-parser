@@ -587,10 +587,7 @@ fn update_optional_matching(
     modifier: Option<BinModifier>,
     matching: Option<LabelModifier>,
 ) -> Option<BinModifier> {
-    let modifier = match modifier {
-        Some(modifier) => modifier,
-        None => Default::default(),
-    };
+    let modifier = modifier.unwrap_or_default();
     Some(modifier.with_matching(matching))
 }
 
@@ -598,9 +595,6 @@ fn update_optional_card(
     modifier: Option<BinModifier>,
     card: VectorMatchCardinality,
 ) -> Option<BinModifier> {
-    let modifier = match modifier {
-        Some(modifier) => modifier,
-        None => Default::default(),
-    };
+    let modifier = modifier.unwrap_or_default();
     Some(modifier.with_card(card))
 }
