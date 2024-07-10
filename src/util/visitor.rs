@@ -200,10 +200,16 @@ mod tests {
             namespace: "sample".to_string(),
         };
 
-        let ast = parser::parse("pg_stat_activity_count{namespace=\"sample\"} + pg_stat_activity_count{}").unwrap();
+        let ast = parser::parse(
+            "pg_stat_activity_count{namespace=\"sample\"} + pg_stat_activity_count{}",
+        )
+        .unwrap();
         assert!(!walk_expr(&mut visitor, &ast).unwrap());
 
-        let ast = parser::parse("pg_stat_activity_count{} - pg_stat_activity_count{namespace=\"sample\"}").unwrap();
+        let ast = parser::parse(
+            "pg_stat_activity_count{} - pg_stat_activity_count{namespace=\"sample\"}",
+        )
+        .unwrap();
         assert!(!walk_expr(&mut visitor, &ast).unwrap());
 
         let ast = parser::parse("pg_stat_activity_count{} * pg_stat_activity_count{}").unwrap();
