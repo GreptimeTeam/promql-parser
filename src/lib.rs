@@ -30,7 +30,7 @@
 //!
 //! match parser::parse(promql) {
 //!     Ok(expr) => {
-//!         println!("Prettify:\n\n{}", expr.prettify());
+//!         println!("Prettify:\n{}\n", expr.prettify());
 //!         println!("AST:\n{expr:?}");
 //!     }
 //!     Err(info) => println!("Err: {info:?}"),
