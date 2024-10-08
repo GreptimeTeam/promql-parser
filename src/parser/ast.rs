@@ -36,9 +36,10 @@ use std::time::{Duration, SystemTime};
 /// # Vector Match Modifier
 ///
 /// - Exclude means `without` removes the listed labels from the result vector,
-/// while all other labels are preserved in the output.
+///   while all other labels are preserved in the output.
+///
 /// - Include means `by` does the opposite and drops labels that are not listed in the by clause,
-/// even if their label values are identical between all elements of the vector.
+///   even if their label values are identical between all elements of the vector.
 ///
 /// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
