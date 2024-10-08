@@ -20,6 +20,7 @@ use crate::parser::token::{Token, TokenId, TokenType};
 use crate::parser::value::ValueType;
 use crate::parser::{indent, Function, FunctionArgs, Prettier, MAX_CHARACTERS_PER_LINE};
 use crate::util::display_duration;
+use chrono::{DateTime, Utc};
 use std::fmt::{self, Write};
 use std::ops::Neg;
 use std::sync::Arc;
@@ -313,6 +314,19 @@ pub struct EvalStmt {
     pub interval: Duration,
     /// Lookback delta to use for this evaluation.
     pub lookback_delta: Duration,
+}
+
+impl fmt::Display for EvalStmt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "[{}] @ [{}, {}, {}]",
+            self.expr,
+            DateTime::<Utc>::from(self.start).to_rfc3339(),
+            DateTime::<Utc>::from(self.end).to_rfc3339(),
+            display_duration(&self.interval)
+        )
+    }
 }
 
 /// Grammar:
@@ -2439,5 +2453,29 @@ or
         for (input, expect) in cases {
             assert_eq!(expect, crate::parser::parse(input).unwrap().prettify());
         }
+    }
+
+    #[test]
+    fn test_eval_stmt_to_string() {
+        let query = r#"http_requests_total{job="apiserver", handler="/api/comments"}[5m]"#;
+        let start = "2024-10-08T07:15:00.022978+00:00";
+        let end = "2024-10-08T07:15:30.012978+00:00";
+        let expect = r#"[http_requests_total{handler="/api/comments",job="apiserver"}[5m]] @ [2024-10-08T07:15:00.022978+00:00, 2024-10-08T07:15:30.012978+00:00, 1m]"#;
+
+        let stmt = EvalStmt {
+            expr: crate::parser::parse(query).unwrap(),
+            start: DateTime::parse_from_rfc3339(start)
+                .unwrap()
+                .with_timezone(&Utc)
+                .into(),
+            end: DateTime::parse_from_rfc3339(end)
+                .unwrap()
+                .with_timezone(&Utc)
+                .into(),
+            interval: Duration::from_secs(60),
+            lookback_delta: Duration::from_secs(300),
+        };
+
+        assert_eq!(expect, stmt.to_string());
     }
 }
