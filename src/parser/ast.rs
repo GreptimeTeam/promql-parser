@@ -321,11 +321,12 @@ impl fmt::Display for EvalStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "[{}] @ [{}, {}, {}]",
+            "[{}] @ [{}, {}, {}, {}]",
             self.expr,
             DateTime::<Utc>::from(self.start).to_rfc3339(),
             DateTime::<Utc>::from(self.end).to_rfc3339(),
-            display_duration(&self.interval)
+            display_duration(&self.interval),
+            display_duration(&self.lookback_delta)
         )
     }
 }
@@ -2461,7 +2462,7 @@ or
         let query = r#"http_requests_total{job="apiserver", handler="/api/comments"}[5m]"#;
         let start = "2024-10-08T07:15:00.022978+00:00";
         let end = "2024-10-08T07:15:30.012978+00:00";
-        let expect = r#"[http_requests_total{handler="/api/comments",job="apiserver"}[5m]] @ [2024-10-08T07:15:00.022978+00:00, 2024-10-08T07:15:30.012978+00:00, 1m]"#;
+        let expect = r#"[http_requests_total{handler="/api/comments",job="apiserver"}[5m]] @ [2024-10-08T07:15:00.022978+00:00, 2024-10-08T07:15:30.012978+00:00, 1m, 5m]"#;
 
         let stmt = EvalStmt {
             expr: crate::parser::parse(query).unwrap(),
