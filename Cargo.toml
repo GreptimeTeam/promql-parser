@@ -26,6 +26,7 @@ categories = ["parser-implementations"]
 
 [dependencies]
 cfgrammar = "0.13.5"
+chrono = "0.4.38"
 lazy_static = "1.4.0"
 lrlex = "0.13.5"
 lrpar = "0.13.5"
