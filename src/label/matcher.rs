@@ -24,6 +24,7 @@ use crate::util::join_vector;
 pub enum MatchOp {
     Equal,
     NotEqual,
+    // TODO: do we need regex here?
     Re(Regex),
     NotRe(Regex),
 }
@@ -64,9 +65,26 @@ impl Hash for MatchOp {
     }
 }
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for MatchOp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            MatchOp::Equal => serializer.serialize_str("="),
+            MatchOp::NotEqual => serializer.serialize_str("=~"),
+            MatchOp::Re(_reg) => serializer.serialize_str("=~"),
+            MatchOp::NotRe(_reg) => serializer.serialize_str("!~"),
+        }
+    }
+}
+
 // Matcher models the matching of a label.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Matcher {
+    #[cfg_attr(feature = "ser", serde(rename = "type"))]
     pub op: MatchOp,
     pub name: String,
     pub value: String,
@@ -183,6 +201,7 @@ fn try_escape_for_repeat_re(re: &str) -> String {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
     pub or_matchers: Vec<Vec<Matcher>>,

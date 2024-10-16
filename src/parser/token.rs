@@ -22,6 +22,7 @@ pub use token_map::*;
 pub type TokenId = u8;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct TokenType(TokenId);
 
 lazy_static! {

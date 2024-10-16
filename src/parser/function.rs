@@ -23,6 +23,7 @@ use crate::util::join_vector;
 
 /// called by func in Call
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct FunctionArgs {
     pub args: Vec<Box<Expr>>,
 }
@@ -78,6 +79,7 @@ impl Prettier for FunctionArgs {
 
 /// Functions is a list of all functions supported by PromQL, including their types.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,

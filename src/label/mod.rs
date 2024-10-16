@@ -32,6 +32,7 @@ pub const INSTANCE_NAME: &str = "instance";
 pub type Label = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Labels {
     pub labels: Vec<Label>,
 }

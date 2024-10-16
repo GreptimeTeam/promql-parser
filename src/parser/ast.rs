@@ -43,6 +43,7 @@ use std::time::{Duration, SystemTime};
 ///
 /// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum LabelModifier {
     Include(Labels),
     Exclude(Labels),
@@ -72,6 +73,7 @@ impl LabelModifier {
 /// The label list provided with the group_left or group_right modifier contains
 /// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
@@ -100,6 +102,7 @@ impl VectorMatchCardinality {
 
 /// Binary Expr Modifier
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
@@ -211,7 +214,19 @@ impl fmt::Display for Offset {
         }
     }
 }
+
+#[cfg(feature = "ser")]
+impl serde::Serialize for Offset {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum AtModifier {
     Start,
     End,
@@ -339,6 +354,7 @@ impl fmt::Display for EvalStmt {
 ///
 /// parameter is only required for `count_values`, `quantile`, `topk` and `bottomk`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct AggregateExpr {
     /// The used aggregation operation.
     pub op: TokenType,
@@ -393,6 +409,7 @@ impl Prettier for AggregateExpr {
 
 /// UnaryExpr will negate the expr
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct UnaryExpr {
     pub expr: Box<Expr>,
 }
@@ -421,6 +438,7 @@ impl Prettier for UnaryExpr {
 /// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct BinaryExpr {
     /// The operation of the expression.
     pub op: TokenType,
@@ -490,6 +508,7 @@ impl Prettier for BinaryExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
@@ -516,6 +535,7 @@ impl Prettier for ParenExpr {
 /// <instant_query> '[' <range> ':' [<resolution>] ']' [ @ <float_literal> ] [ offset <duration> ]
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
     pub offset: Option<Offset>,
@@ -563,6 +583,7 @@ impl Prettier for SubqueryExpr {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct NumberLiteral {
     pub val: f64,
 }
@@ -610,6 +631,7 @@ impl Prettier for NumberLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct StringLiteral {
     pub val: String,
 }
@@ -627,10 +649,13 @@ impl Prettier for StringLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct VectorSelector {
     pub name: Option<String>,
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub matchers: Matchers,
     pub offset: Option<Offset>,
+    // TODO: special handling for ser
     pub at: Option<AtModifier>,
 }
 
@@ -727,6 +752,7 @@ impl Prettier for VectorSelector {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct MatrixSelector {
     pub vs: VectorSelector,
     pub range: Duration,
@@ -803,6 +829,7 @@ impl Prettier for MatrixSelector {
 ///  - tan()
 ///  - tanh()
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Call {
     pub func: Function,
     pub args: FunctionArgs,
@@ -852,6 +879,8 @@ impl PartialEq for Extension {
 impl Eq for Extension {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
     Aggregate(AggregateExpr),
@@ -887,6 +916,7 @@ pub enum Expr {
 
     /// Extension represents an extension expression. It is for user to attach additional
     /// information to the AST. This parser won't generate Extension node.
+    #[cfg_attr(feature = "ser", serde(skip))]
     Extension(Extension),
 }
 
