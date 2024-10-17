@@ -31,6 +31,12 @@ lazy_static = "1.4.0"
 lrlex = "0.13.5"
 lrpar = "0.13.5"
 regex = "1"
+serde = { version = "1", optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+default = []
+ser = ["serde", "serde_json"]
 
 [build-dependencies]
 cfgrammar = "0.13.5"
