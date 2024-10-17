@@ -32,7 +32,6 @@ pub const INSTANCE_NAME: &str = "instance";
 pub type Label = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Labels {
     pub labels: Vec<Label>,
 }
@@ -71,6 +70,23 @@ impl Labels {
 impl fmt::Display for Labels {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.labels.join(", "))
+    }
+}
+
+#[cfg(feature = "ser")]
+impl serde::Serialize for Labels {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.labels.len()))?;
+
+        for l in &self.labels {
+            seq.serialize_element(&l)?;
+        }
+
+        seq.end()
     }
 }
 

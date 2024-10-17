@@ -74,6 +74,7 @@ impl LabelModifier {
 /// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(rename_all = "kebab-case"))]
 pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
@@ -102,7 +103,6 @@ impl VectorMatchCardinality {
 
 /// Binary Expr Modifier
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
@@ -198,6 +198,63 @@ impl BinModifier {
             ""
         }
     }
+}
+
+#[cfg(feature = "ser")]
+pub(crate) fn serialize_bin_modifier<S>(
+    this: &Option<BinModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    use serde_json::json;
+
+    let mut map = serializer.serialize_map(Some(2))?;
+
+    map.serialize_entry(
+        "bool",
+        &this.as_ref().map(|t| t.return_bool).unwrap_or(false),
+    )?;
+    if let Some(t) = this {
+        if let Some(labels) = &t.matching {
+            map.serialize_key("matching")?;
+
+            match labels {
+                LabelModifier::Include(labels) => {
+                    let value = json!({
+                        "card": t.card,
+                        "include": [],
+                        "labels": labels,
+                        "on": true,
+                    });
+                    map.serialize_value(&value)?;
+                }
+                LabelModifier::Exclude(labels) => {
+                    let value = json!({
+                        "card": t.card,
+                        "include": [],
+                        "labels": labels,
+                        "on": false,
+                    });
+                    map.serialize_value(&value)?;
+                }
+            }
+        } else {
+            let value = json!({
+                "card": t.card,
+                "include": [],
+                "labels": [],
+                "on": false,
+            });
+            map.serialize_entry("matching", &value)?;
+        }
+    } else {
+        map.serialize_entry("matching", &None::<bool>)?;
+    }
+
+    map.end()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -450,7 +507,6 @@ impl Prettier for AggregateExpr {
 
 /// UnaryExpr will negate the expr
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct UnaryExpr {
     pub expr: Box<Expr>,
 }
@@ -471,6 +527,21 @@ impl Prettier for UnaryExpr {
     }
 }
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for UnaryExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("op", "-")?;
+        map.serialize_entry("expr", &self.expr)?;
+
+        map.end()
+    }
+}
+
 /// Grammar:
 /// ``` norust
 /// <vector expr> <bin-op> ignoring(<label list>) group_left(<label list>) <vector expr>
@@ -487,7 +558,8 @@ pub struct BinaryExpr {
     pub lhs: Box<Expr>,
     /// The operands on the right sides of the operator.
     pub rhs: Box<Expr>,
-
+    #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_bin_modifier"))]
     pub modifier: Option<BinModifier>,
 }
 
@@ -626,7 +698,6 @@ impl Prettier for SubqueryExpr {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct NumberLiteral {
     pub val: f64,
 }
@@ -664,6 +735,20 @@ impl fmt::Display for NumberLiteral {
         } else {
             write!(f, "{}", self.val)
         }
+    }
+}
+
+#[cfg(feature = "ser")]
+impl serde::Serialize for NumberLiteral {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(1))?;
+        map.serialize_entry("val", &self.to_string())?;
+
+        map.end()
     }
 }
 
@@ -933,20 +1018,25 @@ impl Eq for Extension {}
 #[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
+    #[cfg_attr(feature = "ser", serde(rename = "aggregateExpr"))]
     Aggregate(AggregateExpr),
 
     /// Unary represents a unary operation on another expression.
     /// Currently unary operations are only supported for Scalars.
+    #[cfg_attr(feature = "ser", serde(rename = "unaryExpr"))]
     Unary(UnaryExpr),
 
     /// Binary represents a binary expression between two child expressions.
+    #[cfg_attr(feature = "ser", serde(rename = "binaryExpr"))]
     Binary(BinaryExpr),
 
     /// Paren wraps an expression so it cannot be disassembled as a consequence
     /// of operator precedence.
+    #[cfg_attr(feature = "ser", serde(rename = "parenExpr"))]
     Paren(ParenExpr),
 
     /// SubqueryExpr represents a subquery.
+    #[cfg_attr(feature = "ser", serde(rename = "subqueryExpr"))]
     Subquery(SubqueryExpr),
 
     /// NumberLiteral represents a number.

@@ -20,8 +20,8 @@ macro_rules! assert_json_ser_eq {
     ($promql: literal, $json: tt) => {
         let ast = parse($promql).expect("Failed to parse");
         assert_eq!(
-            serde_json::json!($json),
-            serde_json::to_value(ast).expect("Failed to serialize")
+            serde_json::to_value(ast).expect("Failed to serialize"),
+            serde_json::json!($json)
         );
     };
 }
@@ -104,5 +104,178 @@ fn test_serialize() {
         "type": "call"
     }
 
+    );
+
+    assert_json_ser_eq!("\"yes\"",
+    {
+        "type": "stringLiteral",
+        "val": "yes"
+    }
+    );
+
+    assert_json_ser_eq!("1",
+    {
+        "type": "numberLiteral",
+        "val": "1"
+    }
+    );
+
+    assert_json_ser_eq!("1+1",
+    {
+        "bool": false,
+        "lhs": {
+            "type": "numberLiteral",
+            "val": "1"
+        },
+        "op": "+",
+        "matching": null,
+        "rhs": {
+            "type": "numberLiteral",
+            "val": "1"
+        },
+        "type": "binaryExpr"
+    }
+    );
+
+    assert_json_ser_eq!("- process_cpu_seconds_total",
+        {
+            "expr": {
+                "matchers": [],
+                "name": "process_cpu_seconds_total",
+                "offset": 0,
+                "type": "vectorSelector"
+            },
+            "op": "-",
+            "type": "unaryExpr"
+        }
+    );
+
+    assert_json_ser_eq!(r#"1 - ((node_memory_MemAvailable_bytes{job="node"} or (node_memory_Buffers_bytes{job="node"} + node_memory_Cached_bytes{job="node"} + node_memory_MemFree_bytes{job="node"} + node_memory_Slab_bytes{job="node"}) ) / node_memory_MemTotal_bytes{job="node"})"#,
+        {
+            "bool": false,
+            "lhs": {
+                "type": "numberLiteral",
+                "val": "1"
+            },
+            "op": "-",
+            "matching": null,
+            "rhs": {
+                "expr": {
+                    "bool": false,
+                    "lhs": {
+                        "expr": {
+                            "bool": false,
+                            "lhs": {
+                                "matchers": [
+                                    {
+                                        "name": "job",
+                                        "type": "=",
+                                        "value": "node"
+                                    }
+                                ],
+                                "name": "node_memory_MemAvailable_bytes",
+                                "offset": 0,
+                                "type": "vectorSelector"
+                            },
+                            "matching": {
+                                "card": "many-to-many",
+                                "include": [],
+                                "labels": [],
+                                "on": false
+                            },
+                            "op": "or",
+                            "rhs": {
+                                "expr": {
+                                    "bool": false,
+                                    "lhs": {
+                                        "bool": false,
+                                        "lhs": {
+                                            "bool": false,
+                                            "lhs": {
+                                                "matchers": [
+                                                    {
+                                                        "name": "job",
+                                                        "type": "=",
+                                                        "value": "node"
+                                                    }
+                                                ],
+                                                "name": "node_memory_Buffers_bytes",
+                                                "offset": 0,
+                                                "type": "vectorSelector"
+                                            },
+                                            "matching": null,
+                                            "op": "+",
+                                            "rhs": {
+                                                "matchers": [
+                                                    {
+                                                        "name": "job",
+                                                        "type": "=",
+                                                        "value": "node"
+                                                    }
+                                                ],
+                                                "name": "node_memory_Cached_bytes",
+                                                "offset": 0,
+                                                "type": "vectorSelector"
+                                            },
+                                            "type": "binaryExpr"
+                                        },
+                                        "matching": null,
+                                        "op": "+",
+                                        "rhs": {
+                                            "matchers": [
+                                                {
+                                                    "name": "job",
+                                                    "type": "=",
+                                                    "value": "node"
+                                                }
+                                            ],
+                                            "name": "node_memory_MemFree_bytes",
+                                            "offset": 0,
+                                            "type": "vectorSelector"
+                                        },
+                                        "type": "binaryExpr"
+                                    },
+                                    "matching": null,
+                                    "op": "+",
+                                    "rhs": {
+                                        "matchers": [
+                                            {
+                                                "name": "job",
+                                                "type": "=",
+                                                "value": "node"
+                                            }
+                                        ],
+                                        "name": "node_memory_Slab_bytes",
+                                        "offset": 0,
+                                        "type": "vectorSelector"
+                                    },
+                                    "type": "binaryExpr"
+                                },
+                                "type": "parenExpr"
+                            },
+                            "type": "binaryExpr"
+                        },
+                        "type": "parenExpr"
+                    },
+                    "matching": null,
+                    "op": "/",
+                    "rhs": {
+                        "matchers": [
+                            {
+                                "name": "job",
+                                "type": "=",
+                                "value": "node"
+                            }
+                        ],
+                        "name": "node_memory_MemTotal_bytes",
+                        "offset": 0,
+                        "type": "vectorSelector"
+                    },
+                    "type": "binaryExpr"
+                },
+                "type": "parenExpr"
+            },
+            "type": "binaryExpr"
+        }
     );
 }
