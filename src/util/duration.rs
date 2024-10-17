@@ -144,6 +144,18 @@ where
     serializer.serialize_u128(duration_millis)
 }
 
+#[cfg(feature = "ser")]
+pub fn serialize_duration_opt<S>(dur: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if let Some(dur) = dur {
+        serialize_duration(dur, serializer)
+    } else {
+        serializer.serialize_none()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

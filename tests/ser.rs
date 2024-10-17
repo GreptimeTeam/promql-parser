@@ -382,4 +382,47 @@ fn test_serialize() {
             "type": "binaryExpr"
         }
     );
+
+    assert_json_ser_eq!("min_over_time( rate(http_requests_total[5m])[30m:1m] )",
+        {
+            "args": [
+                {
+                    "expr": {
+                        "args": [
+                            {
+                                "matchers": [],
+                                "name": "http_requests_total",
+                                "offset": 0,
+                                "range": 300000,
+                                "type": "matrixSelector"
+                            }
+                        ],
+                        "func": {
+                            "argTypes": [
+                                "matrix"
+                            ],
+                            "name": "rate",
+                            "returnType": "vector",
+                            "variadic": 0
+                        },
+                        "type": "call"
+                    },
+                    "offset": 0,
+                    "range": 1800000,
+                    "step": 60000,
+                    "type": "subquery"
+                }
+            ],
+            "func": {
+                "argTypes": [
+                    "matrix"
+                ],
+                "name": "min_over_time",
+                "returnType": "vector",
+                "variadic": 0
+            },
+            "type": "call"
+
+    }
+        );
 }

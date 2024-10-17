@@ -655,8 +655,16 @@ pub struct SubqueryExpr {
     pub offset: Option<Offset>,
     #[cfg_attr(feature = "ser", serde(flatten))]
     pub at: Option<AtModifier>,
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration")
+    )]
     pub range: Duration,
     /// Default is the global evaluation interval.
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration_opt")
+    )]
     pub step: Option<Duration>,
 }
 
@@ -1036,7 +1044,6 @@ pub enum Expr {
     Paren(ParenExpr),
 
     /// SubqueryExpr represents a subquery.
-    #[cfg_attr(feature = "ser", serde(rename = "subqueryExpr"))]
     Subquery(SubqueryExpr),
 
     /// NumberLiteral represents a number.
