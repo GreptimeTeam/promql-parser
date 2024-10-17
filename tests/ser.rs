@@ -39,6 +39,55 @@ fn test_serialize() {
     });
 
     assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total{label != \"nice\"}",
+
+        {
+            "matchers": [
+                {
+                    "name": "label",
+                    "type": "!=",
+                    "value": "nice"
+                }
+            ],
+            "name": "prometheus_tsdb_wal_writes_failed_total",
+            "offset": 0,
+            "type": "vectorSelector"
+        }
+    );
+
+    assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total{label =~ \"nice\"}",
+
+    {
+        "matchers": [
+            {
+                "name": "label",
+                "type": "=~",
+                "value": "nice"
+            }
+        ],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": 0,
+        "type": "vectorSelector"
+    });
+
+    assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total{label !~ \"nice\"}",
+
+    {
+        "matchers": [
+            {
+                "name": "label",
+                "type": "!~",
+                "value": "nice"
+            }
+        ],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": 0,
+        "type": "vectorSelector"
+    });
+
+    assert_json_ser_eq!(
         "prometheus_tsdb_wal_writes_failed_total offset 2s @ start()",
 
     {
@@ -274,6 +323,61 @@ fn test_serialize() {
                     "type": "binaryExpr"
                 },
                 "type": "parenExpr"
+            },
+            "type": "binaryExpr"
+        }
+    );
+
+    assert_json_ser_eq!("foo * on(branch) bar ",
+    {
+        "bool": false,
+        "lhs": {
+            "matchers": [],
+            "name": "foo",
+            "offset": 0,
+            "type": "vectorSelector"
+        },
+        "matching": {
+            "card": "one-to-one",
+            "include": [],
+            "labels": [
+            "branch"
+            ],
+            "on": true
+        },
+        "op": "*",
+        "rhs": {
+            "matchers": [],
+            "name": "bar",
+            "offset": 0,
+            "type": "vectorSelector"
+        },
+        "type": "binaryExpr"
+    });
+
+    assert_json_ser_eq!("foo * ignoring(branch) bar ",
+        {
+            "bool": false,
+            "lhs": {
+                "matchers": [],
+                "name": "foo",
+                "offset": 0,
+                "type": "vectorSelector"
+            },
+            "matching": {
+                "card": "one-to-one",
+                "include": [],
+                "labels": [
+                    "branch"
+                ],
+                "on": false
+            },
+            "op": "*",
+            "rhs": {
+                "matchers": [],
+                "name": "bar",
+                "offset": 0,
+                "type": "vectorSelector"
             },
             "type": "binaryExpr"
         }

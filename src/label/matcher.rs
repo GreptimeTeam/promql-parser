@@ -71,12 +71,7 @@ impl serde::Serialize for MatchOp {
     where
         S: serde::Serializer,
     {
-        match self {
-            MatchOp::Equal => serializer.serialize_str("="),
-            MatchOp::NotEqual => serializer.serialize_str("=~"),
-            MatchOp::Re(_reg) => serializer.serialize_str("=~"),
-            MatchOp::NotRe(_reg) => serializer.serialize_str("!~"),
-        }
+        serializer.serialize_str(&self.to_string())
     }
 }
 
