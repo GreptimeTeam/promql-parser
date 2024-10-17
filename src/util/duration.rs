@@ -135,6 +135,15 @@ pub fn display_duration(duration: &Duration) -> String {
     ss
 }
 
+#[cfg(feature = "ser")]
+pub fn serialize_duration<S>(dur: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let duration_millis = dur.as_millis();
+    serializer.serialize_u128(duration_millis)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

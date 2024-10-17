@@ -204,6 +204,7 @@ fn try_escape_for_repeat_re(re: &str) -> String {
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Matchers {
     pub matchers: Vec<Matcher>,
+    #[cfg_attr(feature = "ser", serde(skip_serializing_if = "<[_]>::is_empty"))]
     pub or_matchers: Vec<Vec<Matcher>>,
 }
 

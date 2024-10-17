@@ -32,17 +32,53 @@ fn test_serialize() {
         "prometheus_tsdb_wal_writes_failed_total",
 
     {
-    "matchers": [
-      {
-        "name": "__name__",
-        "type": "=",
-        "value": "prometheus_tsdb_wal_writes_failed_total"
-      }
-    ],
-    "name": "prometheus_tsdb_wal_writes_failed_total",
-    "offset": 0,
-    "startOrEnd": null,
-    "timestamp": null,
-    "type": "vectorSelector"
+        "matchers": [],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": 0,
+        "type": "vectorSelector"
     });
+
+    assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total offset 2s @ start()",
+
+    {
+        "matchers": [],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": 2000,
+        "startOrEnd": "start",
+        "timestamp": null,
+        "type": "vectorSelector"
+    });
+
+    assert_json_ser_eq!(
+            "rate(prometheus_tsdb_wal_writes_failed_total{instance = \"localhost:9090\"}[1m])",
+
+    {
+        "args": [
+            {
+                "matchers": [
+                    {
+                        "name": "instance",
+                        "type": "=",
+                        "value": "localhost:9090"
+                    }
+                ],
+                "name": "prometheus_tsdb_wal_writes_failed_total",
+                "offset": 0,
+                "range": 60000,
+                "type": "matrixSelector"
+            }
+        ],
+        "func": {
+            "argTypes": [
+                "matrix"
+            ],
+            "name": "rate",
+            "returnType": "vector",
+            "variadic": 0
+        },
+        "type": "call"
+    }
+
+    );
 }
