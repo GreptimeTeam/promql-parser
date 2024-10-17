@@ -51,6 +51,30 @@ fn test_serialize() {
     });
 
     assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total offset -2s @ end()",
+
+    {
+        "matchers": [],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": -2000,
+        "startOrEnd": "end",
+        "timestamp": null,
+        "type": "vectorSelector"
+    });
+
+    assert_json_ser_eq!(
+        "prometheus_tsdb_wal_writes_failed_total @ 1000",
+
+    {
+        "matchers": [],
+        "name": "prometheus_tsdb_wal_writes_failed_total",
+        "offset": 0,
+        "startOrEnd": null,
+        "timestamp": 1000000,
+        "type": "vectorSelector"
+    });
+
+    assert_json_ser_eq!(
             "rate(prometheus_tsdb_wal_writes_failed_total{instance = \"localhost:9090\"}[1m])",
 
     {
