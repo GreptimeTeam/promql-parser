@@ -136,7 +136,7 @@ pub fn display_duration(duration: &Duration) -> String {
 }
 
 #[cfg(feature = "ser")]
-pub fn serialize_duration<S>(dur: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_duration<S>(dur: &Duration, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -145,7 +145,10 @@ where
 }
 
 #[cfg(feature = "ser")]
-pub fn serialize_duration_opt<S>(dur: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_duration_opt<S>(
+    dur: &Option<Duration>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {

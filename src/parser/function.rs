@@ -108,7 +108,7 @@ impl Function {
     }
 
     #[cfg(feature = "ser")]
-    pub fn serialize_variadic<S>(variadic: &bool, serializer: S) -> Result<S::Ok, S::Error>
+    pub(crate) fn serialize_variadic<S>(variadic: &bool, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {

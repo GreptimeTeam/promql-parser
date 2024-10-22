@@ -264,7 +264,8 @@ pub enum Offset {
 }
 
 impl Offset {
-    pub fn value_millis(&self) -> i128 {
+    #[cfg(feature = "ser")]
+    pub(crate) fn as_millis(&self) -> i128 {
         match self {
             Self::Pos(dur) => dur.as_millis() as i128,
             Self::Neg(dur) => -(dur.as_millis() as i128),
@@ -272,11 +273,14 @@ impl Offset {
     }
 
     #[cfg(feature = "ser")]
-    pub fn serialize_offset<S>(offset: &Option<Self>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(crate) fn serialize_offset<S>(
+        offset: &Option<Self>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let value = offset.as_ref().map(|o| o.value_millis()).unwrap_or(0);
+        let value = offset.as_ref().map(|o| o.as_millis()).unwrap_or(0);
         serializer.serialize_i128(value)
     }
 }
