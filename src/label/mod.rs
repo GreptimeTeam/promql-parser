@@ -73,6 +73,23 @@ impl fmt::Display for Labels {
     }
 }
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for Labels {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.labels.len()))?;
+
+        for l in &self.labels {
+            seq.serialize_element(&l)?;
+        }
+
+        seq.end()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

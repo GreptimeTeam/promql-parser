@@ -43,6 +43,7 @@ use std::time::{Duration, SystemTime};
 ///
 /// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum LabelModifier {
     Include(Labels),
     Exclude(Labels),
@@ -72,6 +73,8 @@ impl LabelModifier {
 /// The label list provided with the group_left or group_right modifier contains
 /// additional labels from the "one"-side to be included in the result metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(rename_all = "kebab-case"))]
 pub enum VectorMatchCardinality {
     OneToOne,
     ManyToOne(Labels),
@@ -197,10 +200,89 @@ impl BinModifier {
     }
 }
 
+#[cfg(feature = "ser")]
+pub(crate) fn serialize_bin_modifier<S>(
+    this: &Option<BinModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    use serde_json::json;
+
+    let mut map = serializer.serialize_map(Some(2))?;
+
+    map.serialize_entry(
+        "bool",
+        &this.as_ref().map(|t| t.return_bool).unwrap_or(false),
+    )?;
+    if let Some(t) = this {
+        if let Some(labels) = &t.matching {
+            map.serialize_key("matching")?;
+
+            match labels {
+                LabelModifier::Include(labels) => {
+                    let value = json!({
+                        "card": t.card,
+                        "include": [],
+                        "labels": labels,
+                        "on": true,
+                    });
+                    map.serialize_value(&value)?;
+                }
+                LabelModifier::Exclude(labels) => {
+                    let value = json!({
+                        "card": t.card,
+                        "include": [],
+                        "labels": labels,
+                        "on": false,
+                    });
+                    map.serialize_value(&value)?;
+                }
+            }
+        } else {
+            let value = json!({
+                "card": t.card,
+                "include": [],
+                "labels": [],
+                "on": false,
+            });
+            map.serialize_entry("matching", &value)?;
+        }
+    } else {
+        map.serialize_entry("matching", &None::<bool>)?;
+    }
+
+    map.end()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Offset {
     Pos(Duration),
     Neg(Duration),
+}
+
+impl Offset {
+    #[cfg(feature = "ser")]
+    pub(crate) fn as_millis(&self) -> i128 {
+        match self {
+            Self::Pos(dur) => dur.as_millis() as i128,
+            Self::Neg(dur) => -(dur.as_millis() as i128),
+        }
+    }
+
+    #[cfg(feature = "ser")]
+    pub(crate) fn serialize_offset<S>(
+        offset: &Option<Self>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value = offset.as_ref().map(|o| o.as_millis()).unwrap_or(0);
+        serializer.serialize_i128(value)
+    }
 }
 
 impl fmt::Display for Offset {
@@ -211,6 +293,7 @@ impl fmt::Display for Offset {
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AtModifier {
     Start,
@@ -233,6 +316,40 @@ impl fmt::Display for AtModifier {
         }
     }
 }
+
+#[cfg(feature = "ser")]
+impl serde::Serialize for AtModifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        match self {
+            AtModifier::Start => {
+                map.serialize_entry("startOrEnd", &Some("start"))?;
+                map.serialize_entry("timestamp", &None::<u128>)?;
+            }
+            AtModifier::End => {
+                map.serialize_entry("startOrEnd", &Some("end"))?;
+                map.serialize_entry("timestamp", &None::<u128>)?;
+            }
+            AtModifier::At(time) => {
+                map.serialize_entry("startOrEnd", &None::<&str>)?;
+                map.serialize_entry(
+                    "timestamp",
+                    &time
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap_or(Duration::ZERO)
+                        .as_millis(),
+                )?;
+            }
+        }
+
+        map.end()
+    }
+}
+
 impl TryFrom<TokenId> for AtModifier {
     type Error = String;
 
@@ -339,6 +456,7 @@ impl fmt::Display for EvalStmt {
 ///
 /// parameter is only required for `count_values`, `quantile`, `topk` and `bottomk`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct AggregateExpr {
     /// The used aggregation operation.
     pub op: TokenType,
@@ -413,6 +531,21 @@ impl Prettier for UnaryExpr {
     }
 }
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for UnaryExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("op", "-")?;
+        map.serialize_entry("expr", &self.expr)?;
+
+        map.end()
+    }
+}
+
 /// Grammar:
 /// ``` norust
 /// <vector expr> <bin-op> ignoring(<label list>) group_left(<label list>) <vector expr>
@@ -421,6 +554,7 @@ impl Prettier for UnaryExpr {
 /// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct BinaryExpr {
     /// The operation of the expression.
     pub op: TokenType,
@@ -428,7 +562,8 @@ pub struct BinaryExpr {
     pub lhs: Box<Expr>,
     /// The operands on the right sides of the operator.
     pub rhs: Box<Expr>,
-
+    #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_bin_modifier"))]
     pub modifier: Option<BinModifier>,
 }
 
@@ -490,6 +625,7 @@ impl Prettier for BinaryExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
 }
@@ -516,12 +652,23 @@ impl Prettier for ParenExpr {
 /// <instant_query> '[' <range> ':' [<resolution>] ']' [ @ <float_literal> ] [ offset <duration> ]
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
+    #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub at: Option<AtModifier>,
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration")
+    )]
     pub range: Duration,
     /// Default is the global evaluation interval.
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration_opt")
+    )]
     pub step: Option<Duration>,
 }
 
@@ -603,6 +750,20 @@ impl fmt::Display for NumberLiteral {
     }
 }
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for NumberLiteral {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(1))?;
+        map.serialize_entry("val", &self.to_string())?;
+
+        map.end()
+    }
+}
+
 impl Prettier for NumberLiteral {
     fn needs_split(&self, _max: usize) -> bool {
         false
@@ -610,6 +771,7 @@ impl Prettier for NumberLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct StringLiteral {
     pub val: String,
 }
@@ -627,10 +789,14 @@ impl Prettier for StringLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct VectorSelector {
     pub name: Option<String>,
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub matchers: Matchers,
+    #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub at: Option<AtModifier>,
 }
 
@@ -727,8 +893,14 @@ impl Prettier for VectorSelector {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct MatrixSelector {
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub vs: VectorSelector,
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration")
+    )]
     pub range: Duration,
 }
 
@@ -803,8 +975,10 @@ impl Prettier for MatrixSelector {
 ///  - tan()
 ///  - tanh()
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Call {
     pub func: Function,
+    #[cfg_attr(feature = "ser", serde(flatten))]
     pub args: FunctionArgs,
 }
 
@@ -852,19 +1026,25 @@ impl PartialEq for Extension {
 impl Eq for Extension {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
+    #[cfg_attr(feature = "ser", serde(rename = "aggregateExpr"))]
     Aggregate(AggregateExpr),
 
     /// Unary represents a unary operation on another expression.
     /// Currently unary operations are only supported for Scalars.
+    #[cfg_attr(feature = "ser", serde(rename = "unaryExpr"))]
     Unary(UnaryExpr),
 
     /// Binary represents a binary expression between two child expressions.
+    #[cfg_attr(feature = "ser", serde(rename = "binaryExpr"))]
     Binary(BinaryExpr),
 
     /// Paren wraps an expression so it cannot be disassembled as a consequence
     /// of operator precedence.
+    #[cfg_attr(feature = "ser", serde(rename = "parenExpr"))]
     Paren(ParenExpr),
 
     /// SubqueryExpr represents a subquery.
@@ -887,6 +1067,7 @@ pub enum Expr {
 
     /// Extension represents an extension expression. It is for user to attach additional
     /// information to the AST. This parser won't generate Extension node.
+    #[cfg_attr(feature = "ser", serde(skip))]
     Extension(Extension),
 }
 

@@ -23,6 +23,7 @@ use crate::util::join_vector;
 
 /// called by func in Call
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct FunctionArgs {
     pub args: Vec<Box<Expr>>,
 }
@@ -78,9 +79,15 @@ impl Prettier for FunctionArgs {
 
 /// Functions is a list of all functions supported by PromQL, including their types.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(rename_all = "camelCase"))]
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "Function::serialize_variadic")
+    )]
     pub variadic: bool,
     pub return_type: ValueType,
 }
@@ -97,6 +104,18 @@ impl Function {
             arg_types,
             variadic,
             return_type,
+        }
+    }
+
+    #[cfg(feature = "ser")]
+    pub(crate) fn serialize_variadic<S>(variadic: &bool, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if *variadic {
+            serializer.serialize_i8(1)
+        } else {
+            serializer.serialize_i8(0)
         }
     }
 }

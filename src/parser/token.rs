@@ -24,6 +24,16 @@ pub type TokenId = u8;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TokenType(TokenId);
 
+#[cfg(feature = "ser")]
+impl serde::Serialize for TokenType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(token_display(self.0))
+    }
+}
+
 lazy_static! {
     static ref KEYWORDS: HashMap<&'static str, TokenId> =
         [

@@ -15,6 +15,8 @@
 use std::fmt::{self, Display};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+#[cfg_attr(feature = "ser", serde(rename_all = "camelCase"))]
 pub enum ValueType {
     Vector,
     Scalar,
