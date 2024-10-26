@@ -454,4 +454,62 @@ fn test_serialize() {
         "type": "aggregation",
         "without": false
     });
+
+    assert_json_ser_eq!("sum by(host) (rate(http_requests_total[5m]))",
+    {
+        "expr": {
+        "args": [
+            {
+            "matchers": [],
+            "name": "http_requests_total",
+            "offset": 0,
+            "range": 300000,
+            "type": "matrixSelector"
+            }
+        ],
+        "func": {
+            "argTypes": [
+            "matrix"
+            ],
+            "name": "rate",
+            "returnType": "vector",
+            "variadic": 0
+        },
+        "type": "call"
+        },
+        "grouping": ["host"],
+        "op": "sum",
+        "param": null,
+        "type": "aggregation",
+        "without": false
+    });
+
+    assert_json_ser_eq!("sum without(host) (rate(http_requests_total[5m]))",
+    {
+        "expr": {
+        "args": [
+            {
+            "matchers": [],
+            "name": "http_requests_total",
+            "offset": 0,
+            "range": 300000,
+            "type": "matrixSelector"
+            }
+        ],
+        "func": {
+            "argTypes": [
+            "matrix"
+            ],
+            "name": "rate",
+            "returnType": "vector",
+            "variadic": 0
+        },
+        "type": "call"
+        },
+        "grouping": ["host"],
+        "op": "sum",
+        "param": null,
+        "type": "aggregation",
+        "without": true
+    });
 }
