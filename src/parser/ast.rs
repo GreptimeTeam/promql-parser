@@ -284,6 +284,44 @@ where
     map.end()
 }
 
+#[cfg(feature = "ser")]
+pub(crate) fn serialize_at_modifier<S>(
+    this: &Option<AtModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    match this {
+        Some(AtModifier::Start) => {
+            map.serialize_entry("startOrEnd", &Some("start"))?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
+        Some(AtModifier::End) => {
+            map.serialize_entry("startOrEnd", &Some("end"))?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
+        Some(AtModifier::At(time)) => {
+            map.serialize_entry("startOrEnd", &None::<&str>)?;
+            map.serialize_entry(
+                "timestamp",
+                &time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO)
+                    .as_millis(),
+            )?;
+        }
+        None => {
+            map.serialize_entry("startOrEnd", &None::<&str>)?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
+    }
+
+    map.end()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Offset {
     Pos(Duration),
@@ -341,39 +379,6 @@ impl fmt::Display for AtModifier {
                 write!(f, "@ {:.3}", d.as_secs() as f64)
             }
         }
-    }
-}
-
-#[cfg(feature = "ser")]
-impl serde::Serialize for AtModifier {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(Some(2))?;
-        match self {
-            AtModifier::Start => {
-                map.serialize_entry("startOrEnd", &Some("start"))?;
-                map.serialize_entry("timestamp", &None::<u128>)?;
-            }
-            AtModifier::End => {
-                map.serialize_entry("startOrEnd", &Some("end"))?;
-                map.serialize_entry("timestamp", &None::<u128>)?;
-            }
-            AtModifier::At(time) => {
-                map.serialize_entry("startOrEnd", &None::<&str>)?;
-                map.serialize_entry(
-                    "timestamp",
-                    &time
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap_or(Duration::ZERO)
-                        .as_millis(),
-                )?;
-            }
-        }
-
-        map.end()
     }
 }
 
@@ -687,6 +692,7 @@ pub struct SubqueryExpr {
     #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
     #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_at_modifier"))]
     pub at: Option<AtModifier>,
     #[cfg_attr(
         feature = "ser",
@@ -826,6 +832,7 @@ pub struct VectorSelector {
     #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
     #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_at_modifier"))]
     pub at: Option<AtModifier>,
 }
 

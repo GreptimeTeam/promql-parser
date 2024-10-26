@@ -35,7 +35,9 @@ fn test_serialize() {
         "matchers": [],
         "name": "prometheus_tsdb_wal_writes_failed_total",
         "offset": 0,
-        "type": "vectorSelector"
+        "type": "vectorSelector",
+        "startOrEnd": null,
+        "timestamp": null
     });
 
     assert_json_ser_eq!(
@@ -51,7 +53,9 @@ fn test_serialize() {
             ],
             "name": "prometheus_tsdb_wal_writes_failed_total",
             "offset": 0,
-            "type": "vectorSelector"
+            "type": "vectorSelector",
+            "startOrEnd": null,
+            "timestamp": null
         }
     );
 
@@ -68,7 +72,9 @@ fn test_serialize() {
         ],
         "name": "prometheus_tsdb_wal_writes_failed_total",
         "offset": 0,
-        "type": "vectorSelector"
+        "type": "vectorSelector",
+        "startOrEnd": null,
+        "timestamp": null
     });
 
     assert_json_ser_eq!(
@@ -84,7 +90,9 @@ fn test_serialize() {
         ],
         "name": "prometheus_tsdb_wal_writes_failed_total",
         "offset": 0,
-        "type": "vectorSelector"
+        "type": "vectorSelector",
+        "startOrEnd": null,
+        "timestamp": null
     });
 
     assert_json_ser_eq!(
@@ -139,7 +147,9 @@ fn test_serialize() {
                 "name": "prometheus_tsdb_wal_writes_failed_total",
                 "offset": 0,
                 "range": 60000,
-                "type": "matrixSelector"
+                "type": "matrixSelector",
+                "startOrEnd": null,
+                "timestamp": null
             }
         ],
         "func": {
@@ -192,7 +202,9 @@ fn test_serialize() {
                 "matchers": [],
                 "name": "process_cpu_seconds_total",
                 "offset": 0,
-                "type": "vectorSelector"
+                "type": "vectorSelector",
+                "startOrEnd": null,
+                "timestamp": null
             },
             "op": "-",
             "type": "unaryExpr"
@@ -224,7 +236,9 @@ fn test_serialize() {
                                 ],
                                 "name": "node_memory_MemAvailable_bytes",
                                 "offset": 0,
-                                "type": "vectorSelector"
+                                "type": "vectorSelector",
+                                "startOrEnd": null,
+                                "timestamp": null
                             },
                             "matching": {
                                 "card": "many-to-many",
@@ -250,7 +264,9 @@ fn test_serialize() {
                                                 ],
                                                 "name": "node_memory_Buffers_bytes",
                                                 "offset": 0,
-                                                "type": "vectorSelector"
+                                                "type": "vectorSelector",
+                                                "startOrEnd": null,
+                                                "timestamp": null
                                             },
                                             "matching": null,
                                             "op": "+",
@@ -264,7 +280,9 @@ fn test_serialize() {
                                                 ],
                                                 "name": "node_memory_Cached_bytes",
                                                 "offset": 0,
-                                                "type": "vectorSelector"
+                                                "type": "vectorSelector",
+                                                "startOrEnd": null,
+                                                "timestamp": null
                                             },
                                             "type": "binaryExpr"
                                         },
@@ -280,7 +298,9 @@ fn test_serialize() {
                                             ],
                                             "name": "node_memory_MemFree_bytes",
                                             "offset": 0,
-                                            "type": "vectorSelector"
+                                            "type": "vectorSelector",
+                                            "startOrEnd": null,
+                                            "timestamp": null
                                         },
                                         "type": "binaryExpr"
                                     },
@@ -296,7 +316,9 @@ fn test_serialize() {
                                         ],
                                         "name": "node_memory_Slab_bytes",
                                         "offset": 0,
-                                        "type": "vectorSelector"
+                                        "type": "vectorSelector",
+                                        "startOrEnd": null,
+                                        "timestamp": null
                                     },
                                     "type": "binaryExpr"
                                 },
@@ -318,7 +340,9 @@ fn test_serialize() {
                         ],
                         "name": "node_memory_MemTotal_bytes",
                         "offset": 0,
-                        "type": "vectorSelector"
+                        "type": "vectorSelector",
+                        "startOrEnd": null,
+                        "timestamp": null
                     },
                     "type": "binaryExpr"
                 },
@@ -335,7 +359,9 @@ fn test_serialize() {
             "matchers": [],
             "name": "foo",
             "offset": 0,
-            "type": "vectorSelector"
+            "type": "vectorSelector",
+            "startOrEnd": null,
+            "timestamp": null
         },
         "matching": {
             "card": "one-to-one",
@@ -350,7 +376,9 @@ fn test_serialize() {
             "matchers": [],
             "name": "bar",
             "offset": 0,
-            "type": "vectorSelector"
+            "type": "vectorSelector",
+            "startOrEnd": null,
+            "timestamp": null
         },
         "type": "binaryExpr"
     });
@@ -362,7 +390,9 @@ fn test_serialize() {
                 "matchers": [],
                 "name": "foo",
                 "offset": 0,
-                "type": "vectorSelector"
+                "type": "vectorSelector",
+                "startOrEnd": null,
+                "timestamp": null
             },
             "matching": {
                 "card": "one-to-one",
@@ -377,7 +407,9 @@ fn test_serialize() {
                 "matchers": [],
                 "name": "bar",
                 "offset": 0,
-                "type": "vectorSelector"
+                "type": "vectorSelector",
+                "startOrEnd": null,
+                "timestamp": null
             },
             "type": "binaryExpr"
         }
@@ -394,7 +426,9 @@ fn test_serialize() {
                                 "name": "http_requests_total",
                                 "offset": 0,
                                 "range": 300000,
-                                "type": "matrixSelector"
+                                "type": "matrixSelector",
+                                "startOrEnd": null,
+                                "timestamp": null
                             }
                         ],
                         "func": {
@@ -410,7 +444,9 @@ fn test_serialize() {
                     "offset": 0,
                     "range": 1800000,
                     "step": 60000,
-                    "type": "subquery"
+                    "type": "subquery",
+                    "startOrEnd": null,
+                    "timestamp": null
                 }
             ],
             "func": {
@@ -435,7 +471,9 @@ fn test_serialize() {
             "name": "http_requests_total",
             "offset": 0,
             "range": 300000,
-            "type": "matrixSelector"
+            "type": "matrixSelector",
+            "startOrEnd": null,
+            "timestamp": null
             }
         ],
         "func": {
@@ -464,7 +502,9 @@ fn test_serialize() {
             "name": "http_requests_total",
             "offset": 0,
             "range": 300000,
-            "type": "matrixSelector"
+            "type": "matrixSelector",
+            "startOrEnd": null,
+            "timestamp": null
             }
         ],
         "func": {
@@ -493,7 +533,9 @@ fn test_serialize() {
             "name": "http_requests_total",
             "offset": 0,
             "range": 300000,
-            "type": "matrixSelector"
+            "type": "matrixSelector",
+            "startOrEnd": null,
+            "timestamp": null
             }
         ],
         "func": {
