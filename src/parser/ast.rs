@@ -43,7 +43,6 @@ use std::time::{Duration, SystemTime};
 ///
 /// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum LabelModifier {
     Include(Labels),
     Exclude(Labels),
@@ -198,6 +197,34 @@ impl BinModifier {
             ""
         }
     }
+}
+
+#[cfg(feature = "ser")]
+pub(crate) fn serialize_grouping<S>(
+    this: &Option<LabelModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    match this {
+        Some(LabelModifier::Include(l)) => {
+            map.serialize_entry("grouping", l)?;
+            map.serialize_entry("without", &false)?;
+        }
+        Some(LabelModifier::Exclude(l)) => {
+            map.serialize_entry("grouping", l)?;
+            map.serialize_entry("without", &true)?;
+        }
+        None => {
+            map.serialize_entry("grouping", &(vec![] as Vec<String>))?;
+            map.serialize_entry("without", &false)?;
+        }
+    }
+
+    map.end()
 }
 
 #[cfg(feature = "ser")]
@@ -465,6 +492,8 @@ pub struct AggregateExpr {
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
     /// modifier is optional for some aggregation operators, like sum.
+    #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_grouping"))]
     pub modifier: Option<LabelModifier>,
 }
 
@@ -1030,7 +1059,7 @@ impl Eq for Extension {}
 #[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
-    #[cfg_attr(feature = "ser", serde(rename = "aggregateExpr"))]
+    #[cfg_attr(feature = "ser", serde(rename = "aggregation"))]
     Aggregate(AggregateExpr),
 
     /// Unary represents a unary operation on another expression.

@@ -424,5 +424,34 @@ fn test_serialize() {
             "type": "call"
 
     }
-        );
+    );
+
+    assert_json_ser_eq!("sum(rate(http_requests_total[5m]))",
+    {
+        "expr": {
+        "args": [
+            {
+            "matchers": [],
+            "name": "http_requests_total",
+            "offset": 0,
+            "range": 300000,
+            "type": "matrixSelector"
+            }
+        ],
+        "func": {
+            "argTypes": [
+            "matrix"
+            ],
+            "name": "rate",
+            "returnType": "vector",
+            "variadic": 0
+        },
+        "type": "call"
+        },
+        "grouping": [],
+        "op": "sum",
+        "param": null,
+        "type": "aggregation",
+        "without": false
+    });
 }
