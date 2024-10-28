@@ -43,7 +43,6 @@ use std::time::{Duration, SystemTime};
 ///
 /// if empty listed labels, meaning no grouping
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub enum LabelModifier {
     Include(Labels),
     Exclude(Labels),
@@ -201,6 +200,34 @@ impl BinModifier {
 }
 
 #[cfg(feature = "ser")]
+pub(crate) fn serialize_grouping<S>(
+    this: &Option<LabelModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    match this {
+        Some(LabelModifier::Include(l)) => {
+            map.serialize_entry("grouping", l)?;
+            map.serialize_entry("without", &false)?;
+        }
+        Some(LabelModifier::Exclude(l)) => {
+            map.serialize_entry("grouping", l)?;
+            map.serialize_entry("without", &true)?;
+        }
+        None => {
+            map.serialize_entry("grouping", &(vec![] as Vec<String>))?;
+            map.serialize_entry("without", &false)?;
+        }
+    }
+
+    map.end()
+}
+
+#[cfg(feature = "ser")]
 pub(crate) fn serialize_bin_modifier<S>(
     this: &Option<BinModifier>,
     serializer: S,
@@ -252,6 +279,44 @@ where
         }
     } else {
         map.serialize_entry("matching", &None::<bool>)?;
+    }
+
+    map.end()
+}
+
+#[cfg(feature = "ser")]
+pub(crate) fn serialize_at_modifier<S>(
+    this: &Option<AtModifier>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    match this {
+        Some(AtModifier::Start) => {
+            map.serialize_entry("startOrEnd", &Some("start"))?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
+        Some(AtModifier::End) => {
+            map.serialize_entry("startOrEnd", &Some("end"))?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
+        Some(AtModifier::At(time)) => {
+            map.serialize_entry("startOrEnd", &None::<&str>)?;
+            map.serialize_entry(
+                "timestamp",
+                &time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO)
+                    .as_millis(),
+            )?;
+        }
+        None => {
+            map.serialize_entry("startOrEnd", &None::<&str>)?;
+            map.serialize_entry("timestamp", &None::<u128>)?;
+        }
     }
 
     map.end()
@@ -314,39 +379,6 @@ impl fmt::Display for AtModifier {
                 write!(f, "@ {:.3}", d.as_secs() as f64)
             }
         }
-    }
-}
-
-#[cfg(feature = "ser")]
-impl serde::Serialize for AtModifier {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(Some(2))?;
-        match self {
-            AtModifier::Start => {
-                map.serialize_entry("startOrEnd", &Some("start"))?;
-                map.serialize_entry("timestamp", &None::<u128>)?;
-            }
-            AtModifier::End => {
-                map.serialize_entry("startOrEnd", &Some("end"))?;
-                map.serialize_entry("timestamp", &None::<u128>)?;
-            }
-            AtModifier::At(time) => {
-                map.serialize_entry("startOrEnd", &None::<&str>)?;
-                map.serialize_entry(
-                    "timestamp",
-                    &time
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap_or(Duration::ZERO)
-                        .as_millis(),
-                )?;
-            }
-        }
-
-        map.end()
     }
 }
 
@@ -465,6 +497,8 @@ pub struct AggregateExpr {
     /// Parameter used by some aggregators.
     pub param: Option<Box<Expr>>,
     /// modifier is optional for some aggregation operators, like sum.
+    #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_grouping"))]
     pub modifier: Option<LabelModifier>,
 }
 
@@ -658,6 +692,7 @@ pub struct SubqueryExpr {
     #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
     #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_at_modifier"))]
     pub at: Option<AtModifier>,
     #[cfg_attr(
         feature = "ser",
@@ -797,6 +832,7 @@ pub struct VectorSelector {
     #[cfg_attr(feature = "ser", serde(serialize_with = "Offset::serialize_offset"))]
     pub offset: Option<Offset>,
     #[cfg_attr(feature = "ser", serde(flatten))]
+    #[cfg_attr(feature = "ser", serde(serialize_with = "serialize_at_modifier"))]
     pub at: Option<AtModifier>,
 }
 
@@ -1030,7 +1066,7 @@ impl Eq for Extension {}
 #[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
     /// Aggregate represents an aggregation operation on a Vector.
-    #[cfg_attr(feature = "ser", serde(rename = "aggregateExpr"))]
+    #[cfg_attr(feature = "ser", serde(rename = "aggregation"))]
     Aggregate(AggregateExpr),
 
     /// Unary represents a unary operation on another expression.
