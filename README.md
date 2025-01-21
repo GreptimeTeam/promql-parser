@@ -60,7 +60,8 @@ provide integrations with other systems.
 
 ### Language Bindings
 
-- [py-promql-parser](https://github.com/messense/py-promql-parser) Python binding of this crate.
+- [py-promql-parser](https://github.com/messense/py-promql-parser) Python.
+- [lua-promql-parser](https://github.com/mtrbpr/lua-promql-parser) Lua.
 
 ## Known Uses
 
