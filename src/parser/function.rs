@@ -280,6 +280,12 @@ lazy_static! {
         ("sinh", vec![ValueType::Vector], ValueType::Vector),
         ("sort", vec![ValueType::Vector], ValueType::Vector),
         ("sort_desc", vec![ValueType::Vector], ValueType::Vector),
+        ("sort_by_label", vec![ValueType::Vector], ValueType::Vector),
+        (
+            "sort_by_label_desc",
+            vec![ValueType::Vector],
+            ValueType::Vector
+        ),
         ("sqrt", vec![ValueType::Vector], ValueType::Vector),
         (
             "stddev_over_time",
