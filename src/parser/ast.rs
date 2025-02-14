@@ -1571,9 +1571,13 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
             ));
         }
 
-        // `label_join` do not have a maximum arguments threshold.
+        // `label_join`, `sort_by_label`, `sort_by_label_desc` do not have a maximum arguments threshold.
         // this hard code SHOULD be careful if new functions are supported by Prometheus.
-        if actual_args_len > expected_args_len && name.ne("label_join") {
+        if actual_args_len > expected_args_len
+            && name.ne("label_join")
+            && name.ne("sort_by_label")
+            && name.ne("sort_by_label_desc")
+        {
             return Err(format!(
                 "expected at most {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
             ));

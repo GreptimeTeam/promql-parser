@@ -1516,6 +1516,66 @@ mod tests {
                     })
                 },
             ),
+            (
+                r#"sort_by_label(sum(up{job="api-server",src1="a",src2="b",src3="c"}) by (job), "src1","src2")"#,
+                {
+                    let name = String::from("up");
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
+                        Matcher::new(MatchOp::Equal, "src1", "a"),
+                        Matcher::new(MatchOp::Equal, "src2", "b"),
+                        Matcher::new(MatchOp::Equal, "src3", "c"),
+                    ]);
+
+                    Expr::new_vector_selector(Some(name), matchers)
+                        .and_then(|ex| {
+                            let modifier = LabelModifier::include(vec!["job"]);
+                            Expr::new_aggregate_expr(
+                                token::T_SUM,
+                                Some(modifier),
+                                FunctionArgs::new_args(ex),
+                            )
+                        })
+                        .and_then(|ex| {
+                            Expr::new_call(
+                                get_function("sort_by_label").unwrap(),
+                                FunctionArgs::new_args(ex)
+                                    .append_args(Expr::from("src1"))
+                                    .append_args(Expr::from("src2")),
+                            )
+                        })
+                },
+            ),
+            (
+                r#"sort_by_label_desc(sum(up{job="api-server",src1="a",src2="b",src3="c"}) by (job), "src1","src2")"#,
+                {
+                    let name = String::from("up");
+                    let matchers = Matchers::new(vec![
+                        Matcher::new(MatchOp::Equal, "job", "api-server"),
+                        Matcher::new(MatchOp::Equal, "src1", "a"),
+                        Matcher::new(MatchOp::Equal, "src2", "b"),
+                        Matcher::new(MatchOp::Equal, "src3", "c"),
+                    ]);
+
+                    Expr::new_vector_selector(Some(name), matchers)
+                        .and_then(|ex| {
+                            let modifier = LabelModifier::include(vec!["job"]);
+                            Expr::new_aggregate_expr(
+                                token::T_SUM,
+                                Some(modifier),
+                                FunctionArgs::new_args(ex),
+                            )
+                        })
+                        .and_then(|ex| {
+                            Expr::new_call(
+                                get_function("sort_by_label_desc").unwrap(),
+                                FunctionArgs::new_args(ex)
+                                    .append_args(Expr::from("src1"))
+                                    .append_args(Expr::from("src2")),
+                            )
+                        })
+                },
+            ),
             // special cases
             (
                 r#"exp(+Inf)"#,
@@ -1665,6 +1725,22 @@ mod tests {
             (
                 "label_join()",
                 "expected at least 3 argument(s) in call to 'label_join', got 0",
+            ),
+            (
+                "sort_by_label()",
+                "expected at least 2 argument(s) in call to 'sort_by_label', got 0",
+            ),
+            (
+                "sort_by_label_desc()",
+                "expected at least 2 argument(s) in call to 'sort_by_label_desc', got 0",
+            ),
+            (
+                "sort_by_label(sum(up) by (instance))",
+                "expected at least 2 argument(s) in call to 'sort_by_label', got 1",
+            ),
+            (
+                "sort_by_label_desc(sum(up) by (instance))",
+                "expected at least 2 argument(s) in call to 'sort_by_label_desc', got 1",
             ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];

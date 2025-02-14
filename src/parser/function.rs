@@ -146,6 +146,8 @@ lazy_static! {
         "hour",
         "minute",
         "label_join",
+        "sort_by_label",
+        "sort_by_label_desc",
         "round",
     ]);
     static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
@@ -280,10 +282,14 @@ lazy_static! {
         ("sinh", vec![ValueType::Vector], ValueType::Vector),
         ("sort", vec![ValueType::Vector], ValueType::Vector),
         ("sort_desc", vec![ValueType::Vector], ValueType::Vector),
-        ("sort_by_label", vec![ValueType::Vector], ValueType::Vector),
+        (
+            "sort_by_label",
+            vec![ValueType::Vector, ValueType::String, ValueType::String],
+            ValueType::Vector
+        ),
         (
             "sort_by_label_desc",
-            vec![ValueType::Vector],
+            vec![ValueType::Vector, ValueType::String, ValueType::String],
             ValueType::Vector
         ),
         ("sqrt", vec![ValueType::Vector], ValueType::Vector),
