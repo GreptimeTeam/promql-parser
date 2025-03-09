@@ -36,7 +36,6 @@ pub fn parse(input: &str) -> Result<Expr, String> {
 mod tests {
     use regex::Regex;
 
-    use crate::label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME};
     use crate::parser;
     use crate::parser::function::get_function;
     use crate::parser::{
@@ -44,6 +43,10 @@ mod tests {
         VectorMatchCardinality, VectorSelector, INVALID_QUERY_INFO,
     };
     use crate::util::duration;
+    use crate::{
+        label::{Labels, MatchOp, Matcher, Matchers, METRIC_NAME},
+        util::duration::{DAY_DURATION, HOUR_DURATION, MINUTE_DURATION, YEAR_DURATION},
+    };
     use std::time::Duration;
     use std::vec;
 
@@ -158,6 +161,30 @@ mod tests {
             // (r#""\x.""#, ""),
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
+    }
+
+    #[test]
+    fn test_duration_literal() {
+        let cases = vec![
+            ("1ms", Expr::from(Duration::from_millis(1))),
+            ("1s", Expr::from(Duration::from_secs(1))),
+            ("1m", Expr::from(MINUTE_DURATION)),
+            ("1h", Expr::from(HOUR_DURATION)),
+            ("1d", Expr::from(DAY_DURATION)),
+            ("1y", Expr::from(YEAR_DURATION)),
+            (
+                "1y2d4h8m16s32ms",
+                Expr::from(
+                    YEAR_DURATION
+                        + DAY_DURATION * 2
+                        + HOUR_DURATION * 4
+                        + MINUTE_DURATION * 8
+                        + Duration::from_secs(16)
+                        + Duration::from_millis(32),
+                ),
+            ),
+        ];
+        assert_cases(Case::new_expr_cases(cases));
     }
 
     #[test]

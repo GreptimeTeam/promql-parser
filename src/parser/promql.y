@@ -151,6 +151,7 @@ expr -> Result<Expr, String>:
         |       offset_expr { check_ast($1?) }
         |       paren_expr { check_ast($1?) }
         |       string_literal { check_ast($1?) }
+        |       duration_literal { check_ast($1?) }
         |       subquery_expr { check_ast($1?) }
         |       unary_expr  { check_ast($1?) }
         |       vector_selector  { check_ast($1?) }
@@ -557,6 +558,10 @@ number_literal -> Result<Expr, String>:
 
 string_literal -> Result<Expr, String>:
                 STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
+;
+
+duration_literal -> Result<Expr, String>:
+                duration { Ok(Expr::from($1?)) }
 ;
 
 duration -> Result<Duration, String>:

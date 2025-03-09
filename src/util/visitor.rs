@@ -69,6 +69,7 @@ pub fn walk_expr<V: ExprVisitor>(visitor: &mut V, expr: &Expr) -> Result<bool, V
         }
         Expr::NumberLiteral(_)
         | Expr::StringLiteral(_)
+        | Expr::DurationLiteral(_)
         | Expr::VectorSelector(_)
         | Expr::MatrixSelector(_) => true,
     };

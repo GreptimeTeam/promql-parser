@@ -825,6 +825,28 @@ impl Prettier for StringLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
+pub struct DurationLiteral {
+    #[cfg_attr(
+        feature = "ser",
+        serde(serialize_with = "crate::util::duration::serialize_duration")
+    )]
+    pub val: Duration,
+}
+
+impl fmt::Display for DurationLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", display_duration(&self.val))
+    }
+}
+
+impl Prettier for DurationLiteral {
+    fn needs_split(&self, _max: usize) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct VectorSelector {
     pub name: Option<String>,
     #[cfg_attr(feature = "ser", serde(flatten))]
@@ -1092,6 +1114,9 @@ pub enum Expr {
     /// StringLiteral represents a string.
     StringLiteral(StringLiteral),
 
+    /// DurationLiteral represents a duration.
+    DurationLiteral(DurationLiteral),
+
     /// VectorSelector represents a Vector selection.
     VectorSelector(VectorSelector),
 
@@ -1299,6 +1324,7 @@ impl Expr {
             Expr::Subquery(_) => ValueType::Matrix,
             Expr::NumberLiteral(_) => ValueType::Scalar,
             Expr::StringLiteral(_) => ValueType::String,
+            Expr::DurationLiteral(_) => ValueType::Scalar,
             Expr::VectorSelector(_) => ValueType::Vector,
             Expr::MatrixSelector(_) => ValueType::Matrix,
             Expr::Call(ex) => ex.func.return_type,
@@ -1334,6 +1360,12 @@ impl From<&str> for Expr {
 impl From<f64> for Expr {
     fn from(val: f64) -> Self {
         Expr::NumberLiteral(NumberLiteral { val })
+    }
+}
+
+impl From<Duration> for Expr {
+    fn from(val: Duration) -> Self {
+        Expr::DurationLiteral(DurationLiteral { val })
     }
 }
 
@@ -1381,6 +1413,7 @@ impl fmt::Display for Expr {
             Expr::Subquery(ex) => write!(f, "{ex}"),
             Expr::NumberLiteral(ex) => write!(f, "{ex}"),
             Expr::StringLiteral(ex) => write!(f, "{ex}"),
+            Expr::DurationLiteral(ex) => write!(f, "{ex}"),
             Expr::VectorSelector(ex) => write!(f, "{ex}"),
             Expr::MatrixSelector(ex) => write!(f, "{ex}"),
             Expr::Call(ex) => write!(f, "{ex}"),
@@ -1399,6 +1432,7 @@ impl Prettier for Expr {
             Expr::Subquery(ex) => ex.pretty(level, max),
             Expr::NumberLiteral(ex) => ex.pretty(level, max),
             Expr::StringLiteral(ex) => ex.pretty(level, max),
+            Expr::DurationLiteral(ex) => ex.pretty(level, max),
             Expr::VectorSelector(ex) => ex.pretty(level, max),
             Expr::MatrixSelector(ex) => ex.pretty(level, max),
             Expr::Call(ex) => ex.pretty(level, max),
@@ -1420,6 +1454,7 @@ pub(crate) fn check_ast(expr: Expr) -> Result<Expr, String> {
         Expr::Paren(_) => Ok(expr),
         Expr::NumberLiteral(_) => Ok(expr),
         Expr::StringLiteral(_) => Ok(expr),
+        Expr::DurationLiteral(_) => Ok(expr),
         Expr::MatrixSelector(_) => Ok(expr),
         Expr::Extension(_) => Ok(expr),
     }
@@ -1951,7 +1986,8 @@ mod tests {
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
             ),
             ("some_metric OFFSET 1m [10m:5s]", "some_metric offset 1m[10m:5s]"),
-            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]")
+            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]"),
+            ("some_metric <= 1ms", "some_metric <= 1ms"),
         ];
 
         // the following cases are from https://github.com/prometheus/prometheus/blob/main/promql/parser/printer_test.go
