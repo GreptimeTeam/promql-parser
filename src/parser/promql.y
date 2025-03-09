@@ -151,7 +151,6 @@ expr -> Result<Expr, String>:
         |       offset_expr { check_ast($1?) }
         |       paren_expr { check_ast($1?) }
         |       string_literal { check_ast($1?) }
-        |       duration_literal { check_ast($1?) }
         |       subquery_expr { check_ast($1?) }
         |       unary_expr  { check_ast($1?) }
         |       vector_selector  { check_ast($1?) }
@@ -315,11 +314,6 @@ offset_expr -> Result<Expr, String>:
                 expr OFFSET duration { $1?.offset_expr(Offset::Pos($3?)) }
         |       expr OFFSET ADD duration { $1?.offset_expr(Offset::Pos($4?)) }
         |       expr OFFSET SUB duration { $1?.offset_expr(Offset::Neg($4?)) }
-        |       expr OFFSET NUMBER
-                {
-                        let num = parse_str_radix(&lexeme_to_string($lexer, &$3)?)?;
-                        Err(format!("unexpected number '{num}' in offset, expected duration"))
-                }
         |       expr OFFSET EOF { Err("unexpected end of input in offset, expected duration".into()) }
 ;
 
@@ -340,11 +334,6 @@ at_expr -> Result<Expr, String>:
                 {
                         let at = AtModifier::try_from($3?)?;
                         $1?.at_expr(at)
-                }
-        |       expr AT DURATION
-                {
-                        let du = lexeme_to_string($lexer, &$3)?;
-                        Err(format!("unexpected duration '{du}' in @, expected timestamp"))
                 }
         |       expr AT EOF
                 {
@@ -551,8 +540,13 @@ match_op -> Result<Token, String>:
 number_literal -> Result<Expr, String>:
                 NUMBER
                 {
-                        let num = parse_str_radix($lexer.span_str($span));
-                        Ok(Expr::from(num?))
+                        let num = parse_str_radix($lexer.span_str($span))?;
+                        Ok(Expr::from(num))
+                }
+        |       DURATION
+                {
+                        let duration = parse_duration($lexer.span_str($span))?;
+                        Ok(Expr::from(duration.as_secs_f64()))
                 }
 ;
 
@@ -560,12 +554,13 @@ string_literal -> Result<Expr, String>:
                 STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
 ;
 
-duration_literal -> Result<Expr, String>:
-                duration { Ok(Expr::from($1?)) }
-;
-
 duration -> Result<Duration, String>:
                 DURATION { parse_duration($lexer.span_str($span)) }
+        |       NUMBER
+                {
+                        let num = parse_str_radix($lexer.span_str($span))?;
+                        Ok(Duration::from_secs_f64(num))
+                }
 ;
 
 /*

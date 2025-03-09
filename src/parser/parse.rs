@@ -166,21 +166,22 @@ mod tests {
     #[test]
     fn test_duration_literal() {
         let cases = vec![
-            ("1ms", Expr::from(Duration::from_millis(1))),
-            ("1s", Expr::from(Duration::from_secs(1))),
-            ("1m", Expr::from(MINUTE_DURATION)),
-            ("1h", Expr::from(HOUR_DURATION)),
-            ("1d", Expr::from(DAY_DURATION)),
-            ("1y", Expr::from(YEAR_DURATION)),
+            ("1ms", Expr::from(Duration::from_millis(1).as_secs_f64())),
+            ("1s", Expr::from(Duration::from_secs(1).as_secs_f64())),
+            ("1m", Expr::from(MINUTE_DURATION.as_secs_f64())),
+            ("1h", Expr::from(HOUR_DURATION.as_secs_f64())),
+            ("1d", Expr::from(DAY_DURATION.as_secs_f64())),
+            ("1y", Expr::from(YEAR_DURATION.as_secs_f64())),
             (
                 "1y2d4h8m16s32ms",
                 Expr::from(
-                    YEAR_DURATION
+                    (YEAR_DURATION
                         + DAY_DURATION * 2
                         + HOUR_DURATION * 4
                         + MINUTE_DURATION * 8
                         + Duration::from_secs(16)
-                        + Duration::from_millis(32),
+                        + Duration::from_millis(32))
+                    .as_secs_f64(),
                 ),
             ),
         ];
@@ -1096,14 +1097,34 @@ mod tests {
                 .and_then(|ex| Expr::new_matrix_selector(ex, duration::YEAR_DURATION * 5))
                 .and_then(|ex| ex.at_expr(At::try_from(1603774699_f64).unwrap()))
             }),
+            ("foo[1]", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("foo")),
+                    Duration::from_secs(1),
+                )
+            }),
+            ("some_metric[5m] OFFSET 1", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| ex.offset_expr(Offset::Pos(Duration::from_secs(1))))
+            }),
+            ("some_metric[5m] @ 1m", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| ex.at_expr(At::try_from(duration::MINUTE_DURATION.as_secs_f64()).unwrap()))
+            }),
         ];
 
         assert_cases(Case::new_result_cases(cases));
 
         let fail_cases = vec![
-            ("foo[5mm]", "bad duration syntax: 5mm"),
-            ("foo[5m1]", "bad duration syntax: 5m1]"),
-            ("foo[5m:1m1]", "bad duration syntax: 1m1]"),
+            ("foo[5mm]", "bad number or duration syntax: 5mm"),
+            ("foo[5m1]", "bad number or duration syntax: 5m1]"),
+            ("foo[5m:1m1]", "bad number or duration syntax: 1m1]"),
             ("foo[5y1hs]", "not a valid duration string: 5y1hs"),
             ("foo[5m1h]", "not a valid duration string: 5m1h"),
             ("foo[5m1m]", "not a valid duration string: 5m1m"),
@@ -1113,11 +1134,6 @@ mod tests {
                 r#"unexpected character inside brackets: '"'"#,
             ),
             (r#"foo[]"#, "missing unit character in duration"),
-            (r#"foo[1]"#, r#"bad duration syntax: 1]"#),
-            (
-                "some_metric[5m] OFFSET 1",
-                "unexpected number '1' in offset, expected duration",
-            ),
             (
                 "some_metric[5m] OFFSET 1mm",
                 "bad number or duration syntax: 1mm",
@@ -1129,10 +1145,6 @@ mod tests {
             (
                 "some_metric OFFSET 1m[5m]",
                 "no offset modifiers allowed before range",
-            ),
-            (
-                "some_metric[5m] @ 1m",
-                "unexpected duration '1m' in @, expected timestamp",
             ),
             (
                 "some_metric[5m] @",
