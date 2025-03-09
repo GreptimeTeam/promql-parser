@@ -1115,7 +1115,9 @@ mod tests {
                     Expr::from(VectorSelector::from("some_metric")),
                     duration::MINUTE_DURATION * 5,
                 )
-                .and_then(|ex| ex.at_expr(At::try_from(duration::MINUTE_DURATION.as_secs_f64()).unwrap()))
+                .and_then(|ex| {
+                    ex.at_expr(At::try_from(duration::MINUTE_DURATION.as_secs_f64()).unwrap())
+                })
             }),
         ];
 

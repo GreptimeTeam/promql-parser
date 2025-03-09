@@ -2045,7 +2045,10 @@ mod tests {
                 r#"sum_over_time(metric{job="1"}[100] @ 100) + label_replace(sum_over_time(metric{job="2"}[100] @ 100), "job", "1", "", "")"#,
                 r#"sum_over_time(metric{job="1"}[1m40s] @ 100.000) + label_replace(sum_over_time(metric{job="2"}[1m40s] @ 100.000), "job", "1", "", "")"#,
             ),
-            (r#"sum_over_time(metric{job="1"}[100:1] offset 20 @ 100)"#, r#"sum_over_time(metric{job="1"}[1m40s:1s] @ 100.000 offset 20s)"#)
+            (
+                r#"sum_over_time(metric{job="1"}[100:1] offset 20 @ 100)"#,
+                r#"sum_over_time(metric{job="1"}[1m40s:1s] @ 100.000 offset 20s)"#,
+            ),
         ];
 
         cases.append(&mut cases1);
