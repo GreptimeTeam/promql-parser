@@ -376,7 +376,7 @@ impl fmt::Display for AtModifier {
                 let d = time
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap_or(Duration::ZERO); // This should not happen
-                write!(f, "@ {:.3}", d.as_secs() as f64)
+                write!(f, "@ {:.3}", d.as_secs_f64())
             }
         }
     }
@@ -1951,7 +1951,8 @@ mod tests {
                 r#"min_over_time(rate(foo{bar="baz"}[2s])[5m:] offset 4m)[4m:3s]"#,
             ),
             ("some_metric OFFSET 1m [10m:5s]", "some_metric offset 1m[10m:5s]"),
-            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]")
+            ("some_metric @123 [10m:5s]", "some_metric @ 123.000[10m:5s]"),
+            ("some_metric <= 1ms", "some_metric <= 0.001"),
         ];
 
         // the following cases are from https://github.com/prometheus/prometheus/blob/main/promql/parser/printer_test.go
@@ -2009,7 +2010,49 @@ mod tests {
             ("a[1m] @ end()", "a[1m] @ end()"),
         ];
 
+        // the following cases copy the tests from the following: https://github.com/prometheus/prometheus/pull/9138
+        let mut cases2 = vec![
+            (
+                r#"test{a="b"}[5y] OFFSET 3d"#,
+                r#"test{a="b"}[5y] offset 3d"#,
+            ),
+            (
+                r#"test{a="b"}[5m] OFFSET 3600"#,
+                r#"test{a="b"}[5m] offset 1h"#,
+            ),
+            ("foo[3ms] @ 2.345", "foo[3ms] @ 2.345"),
+            ("foo[4s180ms] @ 2.345", "foo[4s180ms] @ 2.345"),
+            ("foo[4.18] @ 2.345", "foo[4s180ms] @ 2.345"),
+            ("foo[4s18ms] @ 2.345", "foo[4s18ms] @ 2.345"),
+            ("foo[4.018] @ 2.345", "foo[4s18ms] @ 2.345"),
+            ("test[5]", "test[5s]"),
+            ("some_metric[5m] @ 1m", "some_metric[5m] @ 60.000"),
+            ("metric @ 100s", "metric @ 100.000"),
+            ("metric @ 1m40s", "metric @ 100.000"),
+            ("metric @ 100 offset 50", "metric @ 100.000 offset 50s"),
+            ("metric offset 50 @ 100", "metric @ 100.000 offset 50s"),
+            ("metric @ 0 offset -50", "metric @ 0.000 offset -50s"),
+            ("metric offset -50 @ 0", "metric @ 0.000 offset -50s"),
+            (
+                r#"sum_over_time(metric{job="1"}[100] @ 100 offset 50)"#,
+                r#"sum_over_time(metric{job="1"}[1m40s] @ 100.000 offset 50s)"#,
+            ),
+            (
+                r#"sum_over_time(metric{job="1"}[100] offset 50s @ 100)"#,
+                r#"sum_over_time(metric{job="1"}[1m40s] @ 100.000 offset 50s)"#,
+            ),
+            (
+                r#"sum_over_time(metric{job="1"}[100] @ 100) + label_replace(sum_over_time(metric{job="2"}[100] @ 100), "job", "1", "", "")"#,
+                r#"sum_over_time(metric{job="1"}[1m40s] @ 100.000) + label_replace(sum_over_time(metric{job="2"}[1m40s] @ 100.000), "job", "1", "", "")"#,
+            ),
+            (
+                r#"sum_over_time(metric{job="1"}[100:1] offset 20 @ 100)"#,
+                r#"sum_over_time(metric{job="1"}[1m40s:1s] @ 100.000 offset 20s)"#,
+            ),
+        ];
+
         cases.append(&mut cases1);
+        cases.append(&mut cases2);
         for (input, expected) in cases {
             let expr = crate::parser::parse(input).unwrap();
             assert_eq!(expected, expr.to_string())

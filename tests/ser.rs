@@ -554,4 +554,55 @@ fn test_serialize() {
         "type": "aggregation",
         "without": true
     });
+
+    assert_json_ser_eq!("min by (name,namespace,cluster) (certmanager_certificate_expiration_timestamp_seconds)-time() <= 15d",
+    {
+        "bool":false,
+        "lhs":{
+            "bool":false,
+            "lhs":{
+                "expr":{
+                "matchers":[],
+                "name":"certmanager_certificate_expiration_timestamp_seconds",
+                "offset":0,
+                "startOrEnd":null,
+                "timestamp":null,
+                "type":"vectorSelector"
+                },
+                "grouping":[
+                "name",
+                "namespace",
+                "cluster"
+                ],
+                "op":"min",
+                "param":null,
+                "type":"aggregation",
+                "without":false
+            },
+            "matching":null,
+            "op":"-",
+            "rhs":{
+                "args":[
+
+                ],
+                "func":{
+                "argTypes":[
+
+                ],
+                "name":"time",
+                "returnType":"scalar",
+                "variadic":0
+                },
+                "type":"call"
+            },
+            "type":"binaryExpr"
+        },
+        "matching":null,
+        "op":"<=",
+        "rhs":{
+            "type":"numberLiteral",
+            "val":"1296000"
+        },
+        "type":"binaryExpr"
+    });
 }

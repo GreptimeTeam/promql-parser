@@ -382,17 +382,6 @@ impl Lexer {
     }
 
     /// the first number has been consumed, so first backup.
-    fn accept_duration(&mut self) -> State {
-        self.backup();
-        self.scan_number();
-        if !self.accept_remaining_duration() {
-            self.pop(); // this is to include the bad syntax
-            return State::Err(format!("bad duration syntax: {}", self.lexeme_string()));
-        }
-        State::Lexeme(T_DURATION)
-    }
-
-    /// the first number has been consumed, so first backup.
     fn accept_number_or_duration(&mut self) -> State {
         self.backup();
         if self.scan_number() {
@@ -644,7 +633,7 @@ impl Lexer {
                 self.set_colon_scanned();
                 State::Lexeme(T_COLON)
             }
-            Some(ch) if ch.is_ascii_digit() => self.accept_duration(),
+            Some(ch) if ch.is_ascii_digit() => self.accept_number_or_duration(),
             Some(']') => {
                 self.jump_outof_brackets();
                 self.reset_colon_scanned();
