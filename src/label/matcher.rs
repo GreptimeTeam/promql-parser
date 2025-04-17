@@ -539,8 +539,8 @@ mod tests {
 
         let matcher = Matcher::new(
             MatchOp::Re(Matcher::try_parse_re("abc").unwrap()),
-            "code".into(),
-            "abc".into(),
+            "code",
+            "abc",
         );
         assert!(matcher.is_match("abc"));
         assert!(!matcher.is_match("xabc"));
