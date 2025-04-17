@@ -928,7 +928,7 @@ mod tests {
             }),
             (r#"foo:bar{a=~"bc{9}"}"#, {
                 let matchers = Matchers::one(Matcher::new(
-                    MatchOp::Re(Regex::new("bc{9}").unwrap()),
+                    MatchOp::Re(Regex::new("^bc{9}$").unwrap()),
                     "a",
                     "bc{9}",
                 ));
@@ -936,7 +936,7 @@ mod tests {
             }),
             (r#"foo:bar{a=~"bc{abc}"}"#, {
                 let matchers = Matchers::one(Matcher::new(
-                    MatchOp::Re(Regex::new("bc\\{abc}").unwrap()),
+                    MatchOp::Re(Regex::new("^bc\\{abc}$").unwrap()),
                     "a",
                     "bc{abc}",
                 ));
@@ -1340,7 +1340,7 @@ mod tests {
                 let name = String::from("nonexistent");
                 let matchers = Matchers::new(vec![
                     Matcher::new(MatchOp::Equal, "job", "myjob"),
-                    Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
+                    Matcher::new(MatchOp::Re(Regex::new("^.*$").unwrap()), "instance", ".*"),
                 ]);
                 Expr::new_vector_selector(Some(name), matchers).and_then(|ex| {
                     Expr::new_call(get_function("absent").unwrap(), FunctionArgs::new_args(ex))
@@ -1375,7 +1375,7 @@ mod tests {
                     let name = String::from("nonexistent");
                     let matchers = Matchers::new(vec![
                         Matcher::new(MatchOp::Equal, "job", "myjob"),
-                        Matcher::new(MatchOp::Re(Regex::new(".*").unwrap()), "instance", ".*"),
+                        Matcher::new(MatchOp::Re(Regex::new("^.*$").unwrap()), "instance", ".*"),
                     ]);
                     Expr::new_vector_selector(Some(name), matchers)
                         .and_then(|ex| Expr::new_matrix_selector(ex, duration::HOUR_DURATION))

@@ -104,14 +104,19 @@ impl Matcher {
         }
     }
 
-    // Go and Rust handle the repeat pattern differently
-    // in Go the following is valid: `aaa{bbb}ccc`
-    // in Rust {bbb} is seen as an invalid repeat and must be ecaped \{bbb}
-    // This escapes the opening { if its not followed by valid repeat pattern (e.g. 4,6).
-    fn try_parse_re(re: &str) -> Result<Regex, String> {
-        Regex::new(re)
-            .or_else(|_| Regex::new(&try_escape_for_repeat_re(re)))
-            .map_err(|_| format!("illegal regex for {re}",))
+    /// Parse and potentially transform the regex.
+    ///
+    /// Go and Rust handle the repeat pattern differently,
+    /// in Go the following is valid: `aaa{bbb}ccc` but
+    /// in Rust {bbb} is seen as an invalid repeat and must be escaped as \{bbb}.
+    /// This escapes the opening { if its not followed by valid repeat pattern (e.g. 4,6).
+    ///
+    /// Regex used in PromQL are fully anchored.
+    fn try_parse_re(original_re: &str) -> Result<Regex, String> {
+        let re = format!("^{original_re}$");
+        Regex::new(&re)
+            .or_else(|_| Regex::new(&try_escape_for_repeat_re(&re)))
+            .map_err(|_| format!("illegal regex for {original_re}",))
     }
 
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
@@ -514,6 +519,32 @@ mod tests {
             Matcher::new(MatchOp::Re(Regex::new("2??").unwrap()), "code", "2??",),
             Matcher::new(MatchOp::Equal, "code", "2??")
         );
+
+        // Test anchoring behavior - should match full string only
+        let matcher = Matcher::new(
+            MatchOp::Re(Matcher::try_parse_re("abc.*").unwrap()),
+            "code",
+            "abc.*",
+        );
+        assert!(matcher.is_match("abc123"));
+        assert!(!matcher.is_match("xabc123"));
+
+        let matcher = Matcher::new(
+            MatchOp::Re(Matcher::try_parse_re(".*xyz$").unwrap()),
+            "code",
+            ".*xyz",
+        );
+        assert!(matcher.is_match("123xyz"));
+        assert!(!matcher.is_match("123xyzx"));
+
+        let matcher = Matcher::new(
+            MatchOp::Re(Matcher::try_parse_re("abc").unwrap()),
+            "code",
+            "abc",
+        );
+        assert!(matcher.is_match("abc"));
+        assert!(!matcher.is_match("xabc"));
+        assert!(!matcher.is_match("abcx"));
     }
 
     #[test]
@@ -532,6 +563,23 @@ mod tests {
             Matcher::new(MatchOp::NotRe(Regex::new("2??").unwrap()), "code", "2??",),
             Matcher::new(MatchOp::Equal, "code", "2??")
         );
+
+        // Test anchoring behavior - should NOT match full string only
+        let matcher = Matcher::new(
+            MatchOp::NotRe(Matcher::try_parse_re("abc.*").unwrap()),
+            "code",
+            "abc.*",
+        );
+        assert!(!matcher.is_match("abc123"));
+        assert!(matcher.is_match("xabc123")); // Does not match at start, so NotRe returns true
+
+        let matcher = Matcher::new(
+            MatchOp::NotRe(Matcher::try_parse_re(".*xyz$").unwrap()),
+            "code",
+            ".*xyz",
+        );
+        assert!(!matcher.is_match("123xyz"));
+        assert!(matcher.is_match("123xyzx")); // Does not match at end, so NotRe returns true
     }
 
     #[test]
