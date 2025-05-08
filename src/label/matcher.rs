@@ -113,7 +113,10 @@ impl Matcher {
     ///
     /// Regex used in PromQL are fully anchored.
     fn try_parse_re(original_re: &str) -> Result<Regex, String> {
-        let re = format!("^{original_re}$");
+        let re = format!(
+            "^{}$",
+            unescaper::unescape(original_re).map_err(|e| format!("Invalid regex pattern, {e}"))?
+        );
         Regex::new(&re)
             .or_else(|_| Regex::new(&try_escape_for_repeat_re(&re)))
             .map_err(|_| format!("illegal regex for {original_re}",))
@@ -545,6 +548,29 @@ mod tests {
         assert!(matcher.is_match("abc"));
         assert!(!matcher.is_match("xabc"));
         assert!(!matcher.is_match("abcx"));
+
+        let matcher = Matcher::new(
+            MatchOp::Re(Matcher::try_parse_re("127.0.0.1").unwrap()),
+            "code",
+            "127.0.0.1",
+        );
+        assert!(matcher.is_match("127.0.0.1"));
+        assert!(!matcher.is_match("x127.0.0.1"));
+        assert!(!matcher.is_match("127.0.0.2"));
+
+        let raw_input = r#"127\\.0\\.0\\.1"#;
+        let matcher = Matcher::new(
+            MatchOp::Re(Matcher::try_parse_re(raw_input).unwrap()),
+            "code",
+            raw_input,
+        );
+        assert!(matcher.is_match("127.0.0.1"));
+        assert!(!matcher.is_match("x127.0.0.1"));
+        assert!(!matcher.is_match("127.0.0.2"));
+        // regex round trip
+        let re = Matcher::try_parse_re(raw_input).unwrap();
+        let new_re = Regex::new(re.as_str()).unwrap();
+        assert_eq!(re.as_str(), new_re.as_str());
     }
 
     #[test]
