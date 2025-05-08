@@ -115,8 +115,7 @@ impl Matcher {
     fn try_parse_re(original_re: &str) -> Result<Regex, String> {
         let re = format!(
             "^{}$",
-            unescaper::unescape(original_re)
-                .map_err(|e| format!("Invalid regex pattern, {}", e.to_string()))?
+            unescaper::unescape(original_re).map_err(|e| format!("Invalid regex pattern, {e}"))?
         );
         Regex::new(&re)
             .or_else(|_| Regex::new(&try_escape_for_repeat_re(&re)))
@@ -570,7 +569,7 @@ mod tests {
         assert!(!matcher.is_match("127.0.0.2"));
         // regex round trip
         let re = Matcher::try_parse_re(raw_input).unwrap();
-        let new_re = Regex::new(&re.as_str()).unwrap();
+        let new_re = Regex::new(re.as_str()).unwrap();
         assert_eq!(re.as_str(), new_re.as_str());
     }
 
