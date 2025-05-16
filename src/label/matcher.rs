@@ -114,7 +114,7 @@ impl Matcher {
     /// Regex used in PromQL are fully anchored.
     fn try_parse_re(original_re: &str) -> Result<Regex, String> {
         let re = format!(
-            "^{}$",
+            "^(?:{})$",
             unescaper::unescape(original_re).map_err(|e| format!("Invalid regex pattern, {e}"))?
         );
         Regex::new(&re)
