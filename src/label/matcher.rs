@@ -113,7 +113,7 @@ impl Matcher {
     ///
     /// Regex used in PromQL are fully anchored.
     fn try_parse_re(original_re: &str) -> Result<Regex, String> {
-        let re = format!("^{original_re}$");
+        let re = format!("^({original_re})$");
         Regex::new(&re)
             .or_else(|_| Regex::new(&try_escape_for_repeat_re(&re)))
             .map_err(|_| format!("illegal regex for {original_re}",))
