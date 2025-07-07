@@ -1055,7 +1055,7 @@ pub trait ExtensionExpr: std::fmt::Debug + Send + Sync {
 
 impl PartialEq for Extension {
     fn eq(&self, other: &Self) -> bool {
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 
@@ -1647,8 +1647,7 @@ fn check_ast_for_vector_selector(ex: VectorSelector) -> Result<Expr, String> {
     match ex.name {
         Some(ref name) => match ex.matchers.find_matcher_value(METRIC_NAME) {
             Some(val) => Err(format!(
-                "metric name must not be set twice: '{}' or '{}'",
-                name, val
+                "metric name must not be set twice: '{name}' or '{val}'"
             )),
             None => Ok(Expr::VectorSelector(ex)),
         },

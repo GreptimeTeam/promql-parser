@@ -312,7 +312,7 @@ impl fmt::Display for Matchers {
                         format!("{} or {}", or_matchers_str, join_vector(pair, ", ", false))
                     });
             let or_matchers_string = or_matchers_string.trim_start_matches(" or").trim();
-            write!(f, "{}", or_matchers_string)
+            write!(f, "{or_matchers_string}")
         }
     }
 }
