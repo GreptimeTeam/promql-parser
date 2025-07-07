@@ -75,6 +75,11 @@ pub fn parse_duration(ds: &str) -> Result<Duration, String> {
         return Err("duration must be greater than 0".into());
     }
 
+    // the duration is float number of seconds
+    if let Ok(float_duration) = ds.parse::<f64>() {
+        return Ok(Duration::from_secs_f64(float_duration));
+    }
+
     if !DURATION_RE.is_match(ds) {
         return Err(format!("not a valid duration string: {ds}"));
     }
@@ -193,6 +198,10 @@ mod tests {
             ("3w", WEEK_DURATION * 3),
             ("3w2d1h", WEEK_DURATION * 3 + HOUR_DURATION * 49),
             ("10y", YEAR_DURATION * 10),
+            ("0.5", Duration::from_secs_f64(0.5)),
+            (".5", Duration::from_secs_f64(0.5)),
+            ("1", Duration::from_secs_f64(1.)),
+            ("11.2345", Duration::from_secs_f64(11.2345)),
         ];
 
         for (s, expect) in ds {
@@ -221,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_invalid_duration() {
-        let ds = vec!["1", "1y1m1d", "-1w", "1.5d", "d", "", "0", "0w", "0s"];
+        let ds = vec!["1y1m1d", "-1w", "1.5d", "d", "", "0", "0w", "0s"];
         for d in ds {
             assert!(parse_duration(d).is_err(), "{} is invalid duration!", d);
         }
