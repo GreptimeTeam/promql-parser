@@ -733,7 +733,7 @@ mod tests {
             .collect();
 
         for (input, expected, actual) in cases.iter() {
-            assert_eq!(expected, actual, "\n<input>: {}", input);
+            assert_eq!(expected, actual, "\n<input>: {input}");
         }
     }
 

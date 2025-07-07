@@ -120,7 +120,7 @@ mod tests {
         for (lb1, lb2, is) in cases {
             let lb1 = Labels::new(lb1);
             let lb2 = Labels::new(lb2);
-            assert_eq!(is, lb1.is_joint(&lb2), "{:?} and {:?}", lb1, lb2)
+            assert_eq!(is, lb1.is_joint(&lb2), "{lb1:?} and {lb2:?}")
         }
     }
 
