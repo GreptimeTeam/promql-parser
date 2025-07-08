@@ -175,13 +175,13 @@ mod tests {
             "1y", "2w", "3d", "4h", "5m", "6s", "7ms", "1y2w3d", "4h30m", "3600ms",
         ];
         for re in res {
-            assert!(DURATION_RE.is_match(re), "{} failed.", re)
+            assert!(DURATION_RE.is_match(re), "{re} failed.")
         }
 
         // invalid regex
         let res = vec!["1", "1y1m1d", "-1w", "1.5d", "d"];
         for re in res {
-            assert!(!DURATION_RE.is_match(re), "{} failed.", re)
+            assert!(!DURATION_RE.is_match(re), "{re} failed.")
         }
     }
 
@@ -207,7 +207,7 @@ mod tests {
         for (s, expect) in ds {
             let d = parse_duration(s);
             assert!(d.is_ok());
-            assert_eq!(expect, d.unwrap(), "{} and {:?} not matched", s, expect);
+            assert_eq!(expect, d.unwrap(), "{s} and {expect:?} not matched");
         }
     }
 
@@ -224,7 +224,7 @@ mod tests {
         for (s, expect) in ds {
             let d = parse_duration(s);
             assert!(d.is_ok());
-            assert_eq!(expect, d.unwrap(), "{} and {:?} not matched", s, expect);
+            assert_eq!(expect, d.unwrap(), "{s} and {expect:?} not matched");
         }
     }
 
@@ -232,7 +232,7 @@ mod tests {
     fn test_invalid_duration() {
         let ds = vec!["1y1m1d", "-1w", "1.5d", "d", "", "0", "0w", "0s"];
         for d in ds {
-            assert!(parse_duration(d).is_err(), "{} is invalid duration!", d);
+            assert!(parse_duration(d).is_err(), "{d} is invalid duration!");
         }
     }
 
@@ -259,7 +259,7 @@ mod tests {
 
         for (d, expect) in ds {
             let s = display_duration(&d);
-            assert_eq!(expect, s, "{} and {:?} not matched", s, expect);
+            assert_eq!(expect, s, "{s} and {expect:?} not matched");
         }
     }
 }
