@@ -909,6 +909,11 @@ mod tests {
                 ]);
                 Expr::new_vector_selector(None, matchers)
             }),
+            (r#"{__name__!="foo"}"#, {
+                let matchers =
+                    Matchers::new(vec![Matcher::new(MatchOp::NotEqual, METRIC_NAME, "foo")]);
+                Expr::new_vector_selector(None, matchers)
+            }),
             (r#"{__name__=~"foo.+",__name__=~".*bar"}"#, {
                 let matchers = Matchers::new(vec![
                     Matcher::new_matcher(
@@ -924,6 +929,15 @@ mod tests {
                     )
                     .unwrap(),
                 ]);
+                Expr::new_vector_selector(None, matchers)
+            }),
+            (r#"{__name__!~"foo.+"}"#, {
+                let matchers = Matchers::new(vec![Matcher::new_matcher(
+                    token::T_NEQ_REGEX,
+                    String::from(METRIC_NAME),
+                    String::from("foo.+"),
+                )
+                .unwrap()]);
                 Expr::new_vector_selector(None, matchers)
             }),
             (r#"foo:bar{a=~"bc{9}"}"#, {
