@@ -115,7 +115,7 @@ pub fn display_duration(duration: &Duration) -> String {
     let mut ss = String::new();
 
     let mut f = |unit: &str, mult: u128, exact: bool| {
-        if exact && ms % mult != 0 {
+        if exact && !ms.is_multiple_of(mult) {
             return;
         }
 
