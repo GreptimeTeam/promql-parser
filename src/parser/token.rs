@@ -56,6 +56,8 @@ lazy_static! {
             ("bottomk", T_BOTTOMK),
             ("count_values", T_COUNT_VALUES),
             ("quantile", T_QUANTILE),
+            ("limitk", T_LIMITK),
+            ("limit_ratio", T_LIMIT_RATIO),
 
             // Keywords.
             ("offset", T_OFFSET),
@@ -66,6 +68,8 @@ lazy_static! {
             ("group_left", T_GROUP_LEFT),
             ("group_right", T_GROUP_RIGHT),
             ("bool", T_BOOL),
+            ("smoothed", T_SMOOTHED),
+            ("anchored", T_ANCHORED),
 
             // Preprocessors.
             ("start", T_START),
@@ -94,6 +98,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_LEFT_BRACE => "{",
         T_LEFT_BRACKET => "[",
         T_LEFT_PAREN => "(",
+        T_OPEN_HIST => "{{",
+        T_CLOSE_HIST => "}}",
         T_METRIC_IDENTIFIER => "{Metric_ID}",
         T_NUMBER => "{Num}",
         T_RIGHT_BRACE => "}",
@@ -141,6 +147,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_STDVAR => "stdvar",
         T_SUM => "sum",
         T_TOPK => "topk",
+        T_LIMITK => "limitk",
+        T_LIMIT_RATIO => "limit_ratio",
         T_AGGREGATORS_END => "aggregators_end",
 
         // Keywords.
@@ -151,6 +159,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_GROUP_RIGHT => "group_right",
         T_IGNORING => "ignoring",
         T_OFFSET => "offset",
+        T_SMOOTHED => "smoothed",
+        T_ANCHORED => "anchored",
         T_ON => "on",
         T_WITHOUT => "without",
         T_KEYWORDS_END => "keywords_end",
@@ -159,7 +169,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_PREPROCESSOR_START => "preprocessor_start",
         T_START => "start",
         T_END => "end",
-        T_PREPROCESSOR_END => "preprocessor_end",
+        T_STEP => "step",
+        T_PREPROCESSOR_END => "preprocessors_end",
 
         T_STARTSYMBOLS_START
         | T_START_METRIC
@@ -168,13 +179,36 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         | T_START_METRIC_SELECTOR
         | T_STARTSYMBOLS_END => "not used",
 
+        // Histogram Descriptors.
+        T_HISTOGRAM_DESC_START => "histogram_desc_start",
+        T_SUM_DESC => "sum_desc",
+        T_COUNT_DESC => "count_desc",
+        T_SCHEMA_DESC => "schema_desc",
+        T_OFFSET_DESC => "offset_desc",
+        T_NEGATIVE_OFFSET_DESC => "negative_offset_desc",
+        T_BUCKETS_DESC => "buckets_desc",
+        T_NEGATIVE_BUCKETS_DESC => "negative_bucket_desc",
+        T_ZERO_BUCKET_DESC => "zero_bucket_desc",
+        T_ZERO_BUCKET_WIDTH_DESC => "zero_bucket_width_desc",
+        T_CUSTOM_VALUES_DESC => "custom_values_desc",
+        T_COUNTER_RESET_HINT_DESC => "counter_reset_hint_desc",
+        T_HISTOGRAM_DESC_END => "histogram_desc_end",
+
+        // Counter reset hints.
+        T_COUNTER_RESET_HINTS_START => "counter_reset_hints_start",
+        T_UNKNOWN_COUNTER_RESET => "unknown_counter_reset",
+        T_COUNTER_RESET => "counter_reset",
+        T_NOT_COUNTER_RESET => "not_counter_reset",
+        T_GAUGE_TYPE => "gauge_type",
+        T_COUNTER_RESET_HINTS_END => "counter_reset_hints_end",
+
         _ => "unknown token",
     }
 }
 
 /// This is a list of all keywords in PromQL.
 /// When changing this list, make sure to also change
-/// the maybe_label grammar rule in the generated parser
+/// maybe_label grammar rule in generated parser
 /// to avoid misinterpretation of labels as keywords.
 pub(crate) fn get_keyword_token(s: &str) -> Option<TokenId> {
     KEYWORDS.get(s).copied()
@@ -253,6 +287,8 @@ mod tests {
         assert_eq!(token_display(T_LEFT_BRACE), "{");
         assert_eq!(token_display(T_LEFT_BRACKET), "[");
         assert_eq!(token_display(T_LEFT_PAREN), "(");
+        assert_eq!(token_display(T_OPEN_HIST), "{{");
+        assert_eq!(token_display(T_CLOSE_HIST), "}}");
         assert_eq!(token_display(T_METRIC_IDENTIFIER), "{Metric_ID}");
         assert_eq!(token_display(T_NUMBER), "{Num}");
         assert_eq!(token_display(T_RIGHT_BRACE), "}");
@@ -304,20 +340,68 @@ mod tests {
         assert_eq!(token_display(T_GROUP_RIGHT), "group_right");
         assert_eq!(token_display(T_IGNORING), "ignoring");
         assert_eq!(token_display(T_OFFSET), "offset");
+        assert_eq!(token_display(T_SMOOTHED), "smoothed");
+        assert_eq!(token_display(T_ANCHORED), "anchored");
         assert_eq!(token_display(T_ON), "on");
         assert_eq!(token_display(T_WITHOUT), "without");
         assert_eq!(token_display(T_KEYWORDS_END), "keywords_end");
         assert_eq!(token_display(T_PREPROCESSOR_START), "preprocessor_start");
         assert_eq!(token_display(T_START), "start");
         assert_eq!(token_display(T_END), "end");
-        assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessor_end");
+        assert_eq!(token_display(T_STEP), "step");
+        assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessors_end");
+        assert_eq!(
+            token_display(T_HISTOGRAM_DESC_START),
+            "histogram_desc_start"
+        );
+        assert_eq!(token_display(T_SUM_DESC), "sum_desc");
+        assert_eq!(token_display(T_COUNT_DESC), "count_desc");
+        assert_eq!(token_display(T_SCHEMA_DESC), "schema_desc");
+        assert_eq!(token_display(T_OFFSET_DESC), "offset_desc");
+        assert_eq!(
+            token_display(T_NEGATIVE_OFFSET_DESC),
+            "negative_offset_desc"
+        );
+        assert_eq!(token_display(T_BUCKETS_DESC), "buckets_desc");
+        assert_eq!(
+            token_display(T_NEGATIVE_BUCKETS_DESC),
+            "negative_bucket_desc"
+        );
+        assert_eq!(token_display(T_ZERO_BUCKET_DESC), "zero_bucket_desc");
+        assert_eq!(
+            token_display(T_ZERO_BUCKET_WIDTH_DESC),
+            "zero_bucket_width_desc"
+        );
+        assert_eq!(token_display(T_CUSTOM_VALUES_DESC), "custom_values_desc");
+        assert_eq!(
+            token_display(T_COUNTER_RESET_HINT_DESC),
+            "counter_reset_hint_desc"
+        );
+        assert_eq!(token_display(T_HISTOGRAM_DESC_END), "histogram_desc_end");
+        assert_eq!(
+            token_display(T_COUNTER_RESET_HINTS_START),
+            "counter_reset_hints_start"
+        );
+        assert_eq!(
+            token_display(T_UNKNOWN_COUNTER_RESET),
+            "unknown_counter_reset"
+        );
+        assert_eq!(token_display(T_COUNTER_RESET), "counter_reset");
+        assert_eq!(token_display(T_NOT_COUNTER_RESET), "not_counter_reset");
+        assert_eq!(token_display(T_GAUGE_TYPE), "gauge_type");
+        assert_eq!(
+            token_display(T_COUNTER_RESET_HINTS_END),
+            "counter_reset_hints_end"
+        );
 
         // if new token added in promql.y, this has to be updated
-        for i in 70..=75 {
+        for i in 96..=101 {
             assert_eq!(token_display(i), "not used");
         }
 
-        for i in 76..=255 {
+        // All tokens are now tested individually above
+
+        for i in 102..=255 {
             assert_eq!(token_display(i), "unknown token");
         }
     }
