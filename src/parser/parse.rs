@@ -2360,4 +2360,10 @@ mod tests {
         ];
         assert_cases(Case::new_fail_cases(fail_cases));
     }
+
+    #[test]
+    fn test_prom3_quotes() {
+        let case = r#"{"some.metric"}"#;
+        parser::parse(case).unwrap();
+    }
 }

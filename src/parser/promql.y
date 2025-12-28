@@ -449,7 +449,19 @@ label_matcher -> Result<Matcher, String>:
                         let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
+        |       string_identifier match_op STRING
+                {
+                        let name = $1?;
+                        let value = lexeme_to_string($lexer, &$3)?;
+                        Matcher::new_matcher($2?.id(), name, value)
+                }
         |       IDENTIFIER match_op match_op
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       string_identifier match_op match_op
                 {
                         let op = $3?.val;
                         Err(format!("unexpected '{op}' in label matching, expected string"))
@@ -461,7 +473,19 @@ label_matcher -> Result<Matcher, String>:
                         Err(format!("unexpected '{op}' in label matching, expected string"))
 
                 }
+        |       string_identifier match_op match_op STRING
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
         |       IDENTIFIER match_op match_op IDENTIFIER
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       string_identifier match_op match_op IDENTIFIER
                 {
                         let op = $3?.val;
                         Err(format!("unexpected '{op}' in label matching, expected string"))
@@ -472,9 +496,19 @@ label_matcher -> Result<Matcher, String>:
                         let id = lexeme_to_string($lexer, &$3)?;
                         Err(format!("unexpected identifier '{id}' in label matching, expected string"))
                 }
+        |       string_identifier match_op IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$3)?;
+                        Err(format!("unexpected identifier '{id}' in label matching, expected string"))
+                }
         |       IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$1)?;
+                        Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
+                }
+        |       string_identifier
+                {
+                        let id = $1?;
                         Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
                 }
 ;
@@ -589,6 +623,13 @@ string_literal -> Result<Expr, String>:
                 STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
 ;
 
+string_identifier -> Result<String, String>:
+                STRING {
+                        let name = unquote_string($lexer.span_str($span));
+                        Ok(name)
+                }
+;
+
 duration -> Result<Duration, String>:
                 DURATION { parse_duration($lexer.span_str($span)) }
         |       NUMBER
@@ -615,8 +656,8 @@ use crate::parser::ast::check_ast;
 use crate::parser::function::get_function;
 use crate::parser::lex::is_label;
 use crate::parser::production::{lexeme_to_string, lexeme_to_token, span_to_string};
-use crate::parser::token::Token;
-use crate::util::{parse_duration, parse_str_radix};
+use crate::parser::token::{Token};
+use crate::util::{parse_duration, parse_str_radix, unquote_string};
 
 fn update_optional_matching(
     modifier: Option<BinModifier>,
