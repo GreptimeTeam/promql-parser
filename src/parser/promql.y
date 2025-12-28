@@ -455,6 +455,10 @@ label_matcher -> Result<Matcher, String>:
                         let value = lexeme_to_string($lexer, &$3)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
+        |       string_identifier
+                {
+                        Matcher::new_metric_name_matcher($1?)
+                }
         |       IDENTIFIER match_op match_op
                 {
                         let op = $3?.val;
@@ -504,11 +508,6 @@ label_matcher -> Result<Matcher, String>:
         |       IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$1)?;
-                        Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
-                }
-        |       string_identifier
-                {
-                        let id = $1?;
                         Err(format!("invalid label matcher, expected label matching operator after '{id}'"))
                 }
 ;

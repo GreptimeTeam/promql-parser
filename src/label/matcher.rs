@@ -20,6 +20,8 @@ use regex::Regex;
 use crate::parser::token::{token_display, TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use crate::util::join_vector;
 
+const LABEL_METRIC_NAME: &str = "__name__";
+
 #[derive(Debug, Clone)]
 pub enum MatchOp {
     Equal,
@@ -125,6 +127,14 @@ impl Matcher {
     pub fn new_matcher(id: TokenId, name: String, value: String) -> Result<Matcher, String> {
         let op = Self::find_matcher_op(id, &value)?;
         op.map(|op| Matcher::new(op, name.as_str(), value.as_str()))
+    }
+
+    pub fn new_metric_name_matcher(name: String) -> Result<Matcher, String> {
+        Ok(Matcher::new(
+            MatchOp::Equal,
+            LABEL_METRIC_NAME,
+            name.as_str(),
+        ))
     }
 
     fn find_matcher_op(id: TokenId, value: &str) -> Result<Result<MatchOp, String>, String> {
