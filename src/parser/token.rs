@@ -179,29 +179,6 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         | T_START_METRIC_SELECTOR
         | T_STARTSYMBOLS_END => "not used",
 
-        // Histogram Descriptors.
-        T_HISTOGRAM_DESC_START => "histogram_desc_start",
-        T_SUM_DESC => "sum_desc",
-        T_COUNT_DESC => "count_desc",
-        T_SCHEMA_DESC => "schema_desc",
-        T_OFFSET_DESC => "offset_desc",
-        T_NEGATIVE_OFFSET_DESC => "negative_offset_desc",
-        T_BUCKETS_DESC => "buckets_desc",
-        T_NEGATIVE_BUCKETS_DESC => "negative_bucket_desc",
-        T_ZERO_BUCKET_DESC => "zero_bucket_desc",
-        T_ZERO_BUCKET_WIDTH_DESC => "zero_bucket_width_desc",
-        T_CUSTOM_VALUES_DESC => "custom_values_desc",
-        T_COUNTER_RESET_HINT_DESC => "counter_reset_hint_desc",
-        T_HISTOGRAM_DESC_END => "histogram_desc_end",
-
-        // Counter reset hints.
-        T_COUNTER_RESET_HINTS_START => "counter_reset_hints_start",
-        T_UNKNOWN_COUNTER_RESET => "unknown_counter_reset",
-        T_COUNTER_RESET => "counter_reset",
-        T_NOT_COUNTER_RESET => "not_counter_reset",
-        T_GAUGE_TYPE => "gauge_type",
-        T_COUNTER_RESET_HINTS_END => "counter_reset_hints_end",
-
         _ => "unknown token",
     }
 }
@@ -352,58 +329,15 @@ mod tests {
         assert_eq!(token_display(T_END), "end");
         assert_eq!(token_display(T_STEP), "step");
         assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessors_end");
-        assert_eq!(
-            token_display(T_HISTOGRAM_DESC_START),
-            "histogram_desc_start"
-        );
-        assert_eq!(token_display(T_SUM_DESC), "sum_desc");
-        assert_eq!(token_display(T_COUNT_DESC), "count_desc");
-        assert_eq!(token_display(T_SCHEMA_DESC), "schema_desc");
-        assert_eq!(token_display(T_OFFSET_DESC), "offset_desc");
-        assert_eq!(
-            token_display(T_NEGATIVE_OFFSET_DESC),
-            "negative_offset_desc"
-        );
-        assert_eq!(token_display(T_BUCKETS_DESC), "buckets_desc");
-        assert_eq!(
-            token_display(T_NEGATIVE_BUCKETS_DESC),
-            "negative_bucket_desc"
-        );
-        assert_eq!(token_display(T_ZERO_BUCKET_DESC), "zero_bucket_desc");
-        assert_eq!(
-            token_display(T_ZERO_BUCKET_WIDTH_DESC),
-            "zero_bucket_width_desc"
-        );
-        assert_eq!(token_display(T_CUSTOM_VALUES_DESC), "custom_values_desc");
-        assert_eq!(
-            token_display(T_COUNTER_RESET_HINT_DESC),
-            "counter_reset_hint_desc"
-        );
-        assert_eq!(token_display(T_HISTOGRAM_DESC_END), "histogram_desc_end");
-        assert_eq!(
-            token_display(T_COUNTER_RESET_HINTS_START),
-            "counter_reset_hints_start"
-        );
-        assert_eq!(
-            token_display(T_UNKNOWN_COUNTER_RESET),
-            "unknown_counter_reset"
-        );
-        assert_eq!(token_display(T_COUNTER_RESET), "counter_reset");
-        assert_eq!(token_display(T_NOT_COUNTER_RESET), "not_counter_reset");
-        assert_eq!(token_display(T_GAUGE_TYPE), "gauge_type");
-        assert_eq!(
-            token_display(T_COUNTER_RESET_HINTS_END),
-            "counter_reset_hints_end"
-        );
 
         // if new token added in promql.y, this has to be updated
-        for i in 96..=101 {
+        for i in 77..=82 {
             assert_eq!(token_display(i), "not used");
         }
 
         // All tokens are now tested individually above
 
-        for i in 102..=255 {
+        for i in 83..=255 {
             assert_eq!(token_display(i), "unknown token");
         }
     }
