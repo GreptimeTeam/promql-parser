@@ -332,6 +332,8 @@ mod tests {
         assert_eq!(token_display(T_STDVAR), "stdvar");
         assert_eq!(token_display(T_SUM), "sum");
         assert_eq!(token_display(T_TOPK), "topk");
+        assert_eq!(token_display(T_LIMITK), "limitk");
+        assert_eq!(token_display(T_LIMIT_RATIO), "limit_ratio");
         assert_eq!(token_display(T_AGGREGATORS_END), "aggregators_end");
         assert_eq!(token_display(T_KEYWORDS_START), "keywords_start");
         assert_eq!(token_display(T_BOOL), "bool");

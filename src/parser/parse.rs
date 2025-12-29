@@ -2364,6 +2364,22 @@ mod tests {
     #[test]
     fn test_prom3_quotes() {
         let case = r#"{"some.metric"}"#;
+        assert_eq!(
+            parser::parse(case).unwrap(),
+            parser::parse(r#"{__name__="some.metric"}"#).unwrap()
+        );
+
+        let case = r#"some_metric{"service.name"="api-server"}"#;
+        assert_eq!(
+            parser::parse(case).unwrap(),
+            Expr::new_vector_selector(
+                Some("some_metric".to_string()),
+                Matchers::one(Matcher::new(MatchOp::Equal, "service.name", "api-server"))
+            )
+            .unwrap()
+        );
+
+        let case = r#"sum by ("foo")(some_metric{})"#;
         parser::parse(case).unwrap();
     }
 }
