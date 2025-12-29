@@ -308,6 +308,10 @@ grouping_label -> Result<Token, String>:
                             Err(format!("{label} is not valid label in grouping opts"))
                         }
                 }
+        |       STRING {
+                        let name = unquote_string($lexer.span_str($span))?;
+                        Ok(Token::new(T_IDENTIFIER, name))
+                }
 ;
 
 /*
@@ -446,13 +450,13 @@ label_matcher -> Result<Matcher, String>:
                 IDENTIFIER match_op STRING
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
-                        let value = lexeme_to_string($lexer, &$3)?;
+                        let value = unquote_string(&lexeme_to_string($lexer, &$3)?)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
         |       string_identifier match_op STRING
                 {
                         let name = $1?;
-                        let value = lexeme_to_string($lexer, &$3)?;
+                        let value = unquote_string(&lexeme_to_string($lexer, &$3)?)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
         |       string_identifier
@@ -619,12 +623,12 @@ number_literal -> Result<Expr, String>:
 ;
 
 string_literal -> Result<Expr, String>:
-                STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
+                STRING { Ok(Expr::from(unquote_string(&span_to_string($lexer, $span))?)) }
 ;
 
 string_identifier -> Result<String, String>:
                 STRING {
-                        let name = unquote_string($lexer.span_str($span));
+                        let name = unquote_string(&span_to_string($lexer, $span))?;
                         Ok(name)
                 }
 ;
@@ -655,7 +659,7 @@ use crate::parser::ast::check_ast;
 use crate::parser::function::get_function;
 use crate::parser::lex::is_label;
 use crate::parser::production::{lexeme_to_string, lexeme_to_token, span_to_string};
-use crate::parser::token::{Token};
+use crate::parser::token::{Token, T_IDENTIFIER};
 use crate::util::{parse_duration, parse_str_radix, unquote_string};
 
 fn update_optional_matching(

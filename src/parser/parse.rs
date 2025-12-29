@@ -124,32 +124,33 @@ mod tests {
         let cases = vec![
             (
                 "\"double-quoted string \\\" with escaped quote\"",
-                Expr::from("double-quoted string \\\" with escaped quote"),
+                Expr::from("double-quoted string \" with escaped quote"),
             ),
             (
-                // this case is the same with the previous upper one
-                r#""double-quoted string \" with escaped quote""#,
-                Expr::from(r#"double-quoted string \" with escaped quote"#),
+                r#""double-quoted raw string \" with escaped quote""#,
+                Expr::from(r#"double-quoted raw string " with escaped quote"#),
             ),
             (
-                r"'single-quoted string \' with escaped quote'",
-                Expr::from(r"single-quoted string \' with escaped quote"),
+                r#"'single-quoted string \' with escaped quote'"#,
+                Expr::from("single-quoted string ' with escaped quote"),
             ),
             (
                 "`backtick-quoted string`",
                 Expr::from("backtick-quoted string"),
             ),
+            // \a is not valid character in rust, use \u{7} instead
             (
                 r#""\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺""#,
-                Expr::from(r#"\a\b\f\n\r\t\v\\\" - \xFF\377\u1234\U00010111\U0001011111☺"#),
+                Expr::from("\u{7}\u{8}\u{c}\n\r\t\u{b}\\\" - ÿÿሴ𐄑𐄑11☺"),
             ),
             (
                 r"'\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺'",
-                Expr::from(r"\a\b\f\n\r\t\v\\\' - \xFF\377\u1234\U00010111\U0001011111☺"),
+                Expr::from("\u{7}\u{8}\u{c}\n\r\t\u{b}\\' - ÿÿሴ𐄑𐄑11☺"),
             ),
+            // no escape in ` quoted string
             (
-                r"`\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺`",
-                Expr::from(r"\a\b\f\n\r\t\v\\\` - \xFF\377\u1234\U00010111\U0001011111☺"),
+                r"`\a\b\f\n\r\t\v\\ - \xFF\377\u1234\U00010111\U0001011111☺`",
+                Expr::from(r"\a\b\f\n\r\t\v\\ - \xFF\377\u1234\U00010111\U0001011111☺"),
             ),
         ];
         assert_cases(Case::new_expr_cases(cases));
@@ -2362,7 +2363,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prom3_quotes() {
+    fn test_prom3_string_identifier() {
         let case = r#"{"some.metric"}"#;
         assert_eq!(
             parser::parse(case).unwrap(),
@@ -2380,6 +2381,9 @@ mod tests {
         );
 
         let case = r#"sum by ("foo")(some_metric{})"#;
-        parser::parse(case).unwrap();
+        assert_eq!(
+            parser::parse(case).unwrap(),
+            parser::parse(r#"sum by (foo)(some_metric{})"#).unwrap()
+        );
     }
 }
