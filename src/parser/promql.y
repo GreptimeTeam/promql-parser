@@ -31,6 +31,8 @@ IDENTIFIER
 LEFT_BRACE
 LEFT_BRACKET
 LEFT_PAREN
+OPEN_HIST
+CLOSE_HIST
 METRIC_IDENTIFIER
 NUMBER
 RIGHT_BRACE
@@ -78,6 +80,8 @@ STDDEV
 STDVAR
 SUM
 TOPK
+LIMITK
+LIMIT_RATIO
 %token AGGREGATORS_END
 
 // Keywords.
@@ -88,6 +92,8 @@ GROUP_LEFT
 GROUP_RIGHT
 IGNORING
 OFFSET
+SMOOTHED
+ANCHORED
 ON
 WITHOUT
 %token KEYWORDS_END
@@ -96,6 +102,7 @@ WITHOUT
 %token PREPROCESSOR_START
 START
 END
+STEP
 %token PREPROCESSOR_END
 
 // Start symbols for the generated parser.
@@ -106,11 +113,12 @@ START_EXPRESSION
 START_METRIC_SELECTOR
 %token STARTSYMBOLS_END
 
-%expect-unused 'BLANK' 'COMMENT' 'ERROR' 'SEMICOLON' 'SPACE' 'TIMES'
+%expect-unused 'BLANK' 'COMMENT' 'ERROR' 'SEMICOLON' 'SPACE' 'TIMES' 'OPEN_HIST' 'CLOSE_HIST'
 %expect-unused 'OPERATORS_START' 'OPERATORS_END' 'AGGREGATORS_START' 'AGGREGATORS_END'
-%expect-unused 'KEYWORDS_START' 'KEYWORDS_END' 'PREPROCESSOR_START' 'PREPROCESSOR_END'
-%expect-unused 'STARTSYMBOLS_START' 'START_METRIC' 'START_SERIES_DESCRIPTION'
-%expect-unused 'START_EXPRESSION' 'START_METRIC_SELECTOR' 'STARTSYMBOLS_END'
+%expect-unused 'LIMITK' 'LIMIT_RATIO' 'KEYWORDS_START' 'KEYWORDS_END' 'PREPROCESSOR_START' 'PREPROCESSOR_END'
+%expect-unused 'STEP' 'STARTSYMBOLS_START'
+%expect-unused 'START_METRIC' 'START_SERIES_DESCRIPTION' 'START_EXPRESSION' 'START_METRIC_SELECTOR' 'STARTSYMBOLS_END'
+%expect-unused 'SMOOTHED' 'ANCHORED'
 
 %start start
 
@@ -273,6 +281,10 @@ grouping_label -> Result<Token, String>:
                             Err(format!("{label} is not valid label in grouping opts"))
                         }
                 }
+        |       STRING {
+                        let name = unquote_string($lexer.span_str($span))?;
+                        Ok(Token::new(T_IDENTIFIER, name))
+                }
 ;
 
 /*
@@ -411,10 +423,26 @@ label_matcher -> Result<Matcher, String>:
                 IDENTIFIER match_op STRING
                 {
                         let name = lexeme_to_string($lexer, &$1)?;
-                        let value = lexeme_to_string($lexer, &$3)?;
+                        let value = unquote_string(&lexeme_to_string($lexer, &$3)?)?;
                         Matcher::new_matcher($2?.id(), name, value)
                 }
+        |       string_identifier match_op STRING
+                {
+                        let name = $1?;
+                        let value = unquote_string(&lexeme_to_string($lexer, &$3)?)?;
+                        Matcher::new_matcher($2?.id(), name, value)
+                }
+        |       string_identifier
+                {
+                        Matcher::new_metric_name_matcher($1?)
+                }
         |       IDENTIFIER match_op match_op
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
+        |       string_identifier match_op match_op
                 {
                         let op = $3?.val;
                         Err(format!("unexpected '{op}' in label matching, expected string"))
@@ -426,13 +454,30 @@ label_matcher -> Result<Matcher, String>:
                         Err(format!("unexpected '{op}' in label matching, expected string"))
 
                 }
+        |       string_identifier match_op match_op STRING
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
         |       IDENTIFIER match_op match_op IDENTIFIER
                 {
                         let op = $3?.val;
                         Err(format!("unexpected '{op}' in label matching, expected string"))
 
                 }
+        |       string_identifier match_op match_op IDENTIFIER
+                {
+                        let op = $3?.val;
+                        Err(format!("unexpected '{op}' in label matching, expected string"))
+
+                }
         |       IDENTIFIER match_op IDENTIFIER
+                {
+                        let id = lexeme_to_string($lexer, &$3)?;
+                        Err(format!("unexpected identifier '{id}' in label matching, expected string"))
+                }
+        |       string_identifier match_op IDENTIFIER
                 {
                         let id = lexeme_to_string($lexer, &$3)?;
                         Err(format!("unexpected identifier '{id}' in label matching, expected string"))
@@ -551,7 +596,14 @@ number_literal -> Result<Expr, String>:
 ;
 
 string_literal -> Result<Expr, String>:
-                STRING { Ok(Expr::from(span_to_string($lexer, $span))) }
+                STRING { Ok(Expr::from(unquote_string(&span_to_string($lexer, $span))?)) }
+;
+
+string_identifier -> Result<String, String>:
+                STRING {
+                        let name = unquote_string(&span_to_string($lexer, $span))?;
+                        Ok(name)
+                }
 ;
 
 duration -> Result<Duration, String>:
@@ -580,8 +632,8 @@ use crate::parser::ast::check_ast;
 use crate::parser::function::get_function;
 use crate::parser::lex::is_label;
 use crate::parser::production::{lexeme_to_string, lexeme_to_token, span_to_string};
-use crate::parser::token::Token;
-use crate::util::{parse_duration, parse_str_radix};
+use crate::parser::token::{Token, T_IDENTIFIER};
+use crate::util::{parse_duration, parse_str_radix, unquote_string};
 
 fn update_optional_matching(
     modifier: Option<BinModifier>,

@@ -56,6 +56,8 @@ lazy_static! {
             ("bottomk", T_BOTTOMK),
             ("count_values", T_COUNT_VALUES),
             ("quantile", T_QUANTILE),
+            ("limitk", T_LIMITK),
+            ("limit_ratio", T_LIMIT_RATIO),
 
             // Keywords.
             ("offset", T_OFFSET),
@@ -66,6 +68,8 @@ lazy_static! {
             ("group_left", T_GROUP_LEFT),
             ("group_right", T_GROUP_RIGHT),
             ("bool", T_BOOL),
+            ("smoothed", T_SMOOTHED),
+            ("anchored", T_ANCHORED),
 
             // Preprocessors.
             ("start", T_START),
@@ -94,6 +98,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_LEFT_BRACE => "{",
         T_LEFT_BRACKET => "[",
         T_LEFT_PAREN => "(",
+        T_OPEN_HIST => "{{",
+        T_CLOSE_HIST => "}}",
         T_METRIC_IDENTIFIER => "{Metric_ID}",
         T_NUMBER => "{Num}",
         T_RIGHT_BRACE => "}",
@@ -141,6 +147,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_STDVAR => "stdvar",
         T_SUM => "sum",
         T_TOPK => "topk",
+        T_LIMITK => "limitk",
+        T_LIMIT_RATIO => "limit_ratio",
         T_AGGREGATORS_END => "aggregators_end",
 
         // Keywords.
@@ -151,6 +159,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_GROUP_RIGHT => "group_right",
         T_IGNORING => "ignoring",
         T_OFFSET => "offset",
+        T_SMOOTHED => "smoothed",
+        T_ANCHORED => "anchored",
         T_ON => "on",
         T_WITHOUT => "without",
         T_KEYWORDS_END => "keywords_end",
@@ -159,7 +169,8 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_PREPROCESSOR_START => "preprocessor_start",
         T_START => "start",
         T_END => "end",
-        T_PREPROCESSOR_END => "preprocessor_end",
+        T_STEP => "step",
+        T_PREPROCESSOR_END => "preprocessors_end",
 
         T_STARTSYMBOLS_START
         | T_START_METRIC
@@ -174,7 +185,7 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
 
 /// This is a list of all keywords in PromQL.
 /// When changing this list, make sure to also change
-/// the maybe_label grammar rule in the generated parser
+/// maybe_label grammar rule in generated parser
 /// to avoid misinterpretation of labels as keywords.
 pub(crate) fn get_keyword_token(s: &str) -> Option<TokenId> {
     KEYWORDS.get(s).copied()
@@ -253,6 +264,8 @@ mod tests {
         assert_eq!(token_display(T_LEFT_BRACE), "{");
         assert_eq!(token_display(T_LEFT_BRACKET), "[");
         assert_eq!(token_display(T_LEFT_PAREN), "(");
+        assert_eq!(token_display(T_OPEN_HIST), "{{");
+        assert_eq!(token_display(T_CLOSE_HIST), "}}");
         assert_eq!(token_display(T_METRIC_IDENTIFIER), "{Metric_ID}");
         assert_eq!(token_display(T_NUMBER), "{Num}");
         assert_eq!(token_display(T_RIGHT_BRACE), "}");
@@ -296,6 +309,8 @@ mod tests {
         assert_eq!(token_display(T_STDVAR), "stdvar");
         assert_eq!(token_display(T_SUM), "sum");
         assert_eq!(token_display(T_TOPK), "topk");
+        assert_eq!(token_display(T_LIMITK), "limitk");
+        assert_eq!(token_display(T_LIMIT_RATIO), "limit_ratio");
         assert_eq!(token_display(T_AGGREGATORS_END), "aggregators_end");
         assert_eq!(token_display(T_KEYWORDS_START), "keywords_start");
         assert_eq!(token_display(T_BOOL), "bool");
@@ -304,20 +319,25 @@ mod tests {
         assert_eq!(token_display(T_GROUP_RIGHT), "group_right");
         assert_eq!(token_display(T_IGNORING), "ignoring");
         assert_eq!(token_display(T_OFFSET), "offset");
+        assert_eq!(token_display(T_SMOOTHED), "smoothed");
+        assert_eq!(token_display(T_ANCHORED), "anchored");
         assert_eq!(token_display(T_ON), "on");
         assert_eq!(token_display(T_WITHOUT), "without");
         assert_eq!(token_display(T_KEYWORDS_END), "keywords_end");
         assert_eq!(token_display(T_PREPROCESSOR_START), "preprocessor_start");
         assert_eq!(token_display(T_START), "start");
         assert_eq!(token_display(T_END), "end");
-        assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessor_end");
+        assert_eq!(token_display(T_STEP), "step");
+        assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessors_end");
 
         // if new token added in promql.y, this has to be updated
-        for i in 70..=75 {
+        for i in 77..=82 {
             assert_eq!(token_display(i), "not used");
         }
 
-        for i in 76..=255 {
+        // All tokens are now tested individually above
+
+        for i in 83..=255 {
             assert_eq!(token_display(i), "unknown token");
         }
     }
