@@ -15,6 +15,7 @@
 //! Internal utilities for strings.
 
 /// This function is modified from original go version
+/// https://github.com/prometheus/prometheus/blob/v3.8.0/util/strutil/quote.go
 pub fn unquote_string(s: &str) -> Result<String, String> {
     let n = s.len();
     if n < 2 {
