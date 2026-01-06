@@ -50,8 +50,8 @@ VectorSelector(VectorSelector { name: Some("http_requests_total"), matchers: Mat
 
 ## PromQL compliance
 
-This crate declares compatible with [prometheus v2.45.0][prom-v2.45.0], which is
-released at 2023-06-23. Any revision on PromQL after this commit is not guaranteed.
+This crate declares compatible with [prometheus v3.8][prom-v3.8], which is
+released at 2025-11-28. Any revision on PromQL after this commit is not guaranteed.
 
 ## Community Extensions
 
@@ -87,5 +87,5 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 licensed as above, without any additional terms or conditions.
 
-[prom-v2.45.0]: https://github.com/prometheus/prometheus/blob/v2.45.0/promql/
+[prom-v3.8]: https://github.com/prometheus/prometheus/tree/v3.8.0/promql/parser
 [querying-prometheus]: https://prometheus.io/docs/prometheus/latest/querying/basics/
