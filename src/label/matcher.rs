@@ -115,10 +115,7 @@ impl Matcher {
     ///
     /// Regex used in PromQL are fully anchored.
     fn try_parse_re(original_re: &str) -> Result<Regex, String> {
-        let re = format!(
-            "^(?:{})$",
-            unescaper::unescape(original_re).map_err(|e| format!("Invalid regex pattern, {e}"))?
-        );
+        let re = format!("^(?:{})$", original_re);
         Regex::new(&re)
             .or_else(|_| Regex::new(&try_escape_for_repeat_re(&re)))
             .map_err(|_| format!("illegal regex for {original_re}",))
@@ -568,7 +565,7 @@ mod tests {
         assert!(!matcher.is_match("x127.0.0.1"));
         assert!(!matcher.is_match("127.0.0.2"));
 
-        let raw_input = r#"127\\.0\\.0\\.1"#;
+        let raw_input = r#"127\.0\.0\.1"#;
         let matcher = Matcher::new(
             MatchOp::Re(Matcher::try_parse_re(raw_input).unwrap()),
             "code",

@@ -2385,5 +2385,9 @@ mod tests {
             parser::parse(case).unwrap(),
             parser::parse(r#"sum by (foo)(some_metric{})"#).unwrap()
         );
+
+        let case = r#"test{host=~"10\\.0\\.160\\.237:808|nonexistence"}"#;
+        parser::parse(case).unwrap();
+        assert!(parser::parse(case).is_ok());
     }
 }
