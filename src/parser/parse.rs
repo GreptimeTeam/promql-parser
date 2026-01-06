@@ -1464,6 +1464,22 @@ mod tests {
                 }),
             ),
             (
+                r#"histogram_avg(rate(http_request_duration_seconds[10m]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_avg").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
+                }),
+            ),
+            (
                 r#"histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))"#,
                 Expr::new_matrix_selector(
                     Expr::from(VectorSelector::from("http_request_duration_seconds_bucket")),

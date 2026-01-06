@@ -204,6 +204,7 @@ lazy_static! {
             ValueType::Vector
         ),
         ("histogram_sum", vec![ValueType::Vector], ValueType::Vector),
+        ("histogram_avg", vec![ValueType::Vector], ValueType::Vector),
         (
             "histogram_fraction",
             vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector],
