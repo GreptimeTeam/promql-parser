@@ -2743,4 +2743,45 @@ or
 
         assert_eq!(expect, stmt.to_string());
     }
+
+    #[test]
+    fn test_prettify_with_utf8_labels() {
+        // Test that labels with special characters are properly quoted in display
+        let cases = vec![
+            // (input, expected_display)
+            (r#"{"some.metric"}"#, r#"{__name__="some.metric"}"#),
+            (
+                r#"foo{"label.with.dots"="value"}"#,
+                r#"foo{"label.with.dots"="value"}"#,
+            ),
+            (
+                r#"bar{"label-with-dashes"="test"}"#,
+                r#"bar{"label-with-dashes"="test"}"#,
+            ),
+            (
+                r#"baz{"label:with:colons"="data"}"#,
+                r#"baz{"label:with:colons"="data"}"#,
+            ),
+            (
+                r#"sum by ("service.version", foo) ({"some.metric"})"#,
+                r#"sum by ("service.version", foo) ({__name__="some.metric"})"#,
+            ),
+            (
+                r#"sum by (`service.version`, foo) ({"some.metric"})"#,
+                r#"sum by ("service.version", foo) ({__name__="some.metric"})"#,
+            ),
+            // Regular labels should not be quoted
+            (r#"foo{job="web"}"#, r#"foo{job="web"}"#),
+            (
+                r#"bar{instance_id="server1"}"#,
+                r#"bar{instance_id="server1"}"#,
+            ),
+        ];
+
+        for (input, expected) in cases {
+            let parsed = crate::parser::parse(input).unwrap();
+            let prettified = parsed.prettify();
+            assert_eq!(prettified, expected);
+        }
+    }
 }

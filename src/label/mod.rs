@@ -17,6 +17,8 @@
 use std::collections::HashSet;
 use std::fmt;
 
+use crate::parser::lex::is_label;
+
 mod matcher;
 pub use matcher::{MatchOp, Matcher, Matchers};
 
@@ -69,7 +71,18 @@ impl Labels {
 
 impl fmt::Display for Labels {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.labels.join(", "))
+        let formatted_labels: Vec<String> = self
+            .labels
+            .iter()
+            .map(|label| {
+                if is_label(label) {
+                    label.clone()
+                } else {
+                    format!("\"{}\"", label)
+                }
+            })
+            .collect();
+        write!(f, "{}", formatted_labels.join(", "))
     }
 }
 
