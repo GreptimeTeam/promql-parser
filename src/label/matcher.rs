@@ -17,6 +17,7 @@ use std::hash::{Hash, Hasher};
 
 use regex::Regex;
 
+use crate::parser::lex::is_label;
 use crate::parser::token::{token_display, TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
 use crate::util::join_vector;
 
@@ -148,7 +149,12 @@ impl Matcher {
 
 impl fmt::Display for Matcher {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}\"{}\"", self.name, self.op, self.value)
+        let name = if is_label(&self.name) {
+            self.name.clone()
+        } else {
+            format!("\"{}\"", self.name)
+        };
+        write!(f, "{}{}\"{}\"", name, self.op, self.value)
     }
 }
 
