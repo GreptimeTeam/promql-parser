@@ -1330,6 +1330,34 @@ mod tests {
                     FunctionArgs::new_args(ex).append_args(Expr::from(5.0)),
                 )
             }),
+            ("double_exponential_smoothing(some_metric[5m], 0.5, 0.1)", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("double_exponential_smoothing").unwrap(),
+                        FunctionArgs::new_args(ex)
+                            .append_args(Expr::from(0.5))
+                            .append_args(Expr::from(0.1)),
+                    )
+                })
+            }),
+            ("holt_winters(some_metric[5m], 0.5, 0.1)", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("holt_winters").unwrap(),
+                        FunctionArgs::new_args(ex)
+                            .append_args(Expr::from(0.5))
+                            .append_args(Expr::from(0.1)),
+                    )
+                })
+            }),
             // cases from https://prometheus.io/docs/prometheus/latest/querying/functions
             (r#"absent(nonexistent{job="myjob"})"#, {
                 let name = String::from("nonexistent");

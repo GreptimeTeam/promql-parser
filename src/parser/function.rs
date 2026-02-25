@@ -216,6 +216,12 @@ lazy_static! {
             ValueType::Vector
         ),
         (
+            "double_exponential_smoothing",
+            vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
+            ValueType::Vector
+        ),
+        // Kept for backward compatibility; Prometheus 3.x renamed this function.
+        (
             "holt_winters",
             vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
             ValueType::Vector
