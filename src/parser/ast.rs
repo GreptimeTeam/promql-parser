@@ -1563,31 +1563,29 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     let name = ex.func.name;
     let actual_args_len = ex.args.len();
 
-    if ex.func.variadic {
-        let expected_args_len_without_default = expected_args_len - 1;
+    if ex.func.variadic == 0 {
+        if expected_args_len != actual_args_len {
+            return Err(format!(
+                "expected {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
+            ));
+        }
+    } else {
+        let expected_args_len_without_default = expected_args_len.saturating_sub(1);
         if expected_args_len_without_default > actual_args_len {
             return Err(format!(
                 "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
             ));
         }
 
-        // `label_join`, `sort_by_label`, `sort_by_label_desc` do not have a maximum arguments threshold.
-        // this hard code SHOULD be careful if new functions are supported by Prometheus.
-        if actual_args_len > expected_args_len
-            && name.ne("label_join")
-            && name.ne("sort_by_label")
-            && name.ne("sort_by_label_desc")
-        {
-            return Err(format!(
-                "expected at most {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
-            ));
+        if ex.func.variadic > 0 {
+            let expected_max_args_len =
+                expected_args_len_without_default + ex.func.variadic as usize;
+            if expected_max_args_len < actual_args_len {
+                return Err(format!(
+                    "expected at most {expected_max_args_len} argument(s) in call to '{name}', got {actual_args_len}"
+                ));
+            }
         }
-    }
-
-    if !ex.func.variadic && expected_args_len != actual_args_len {
-        return Err(format!(
-            "expected {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
-        ));
     }
 
     // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
