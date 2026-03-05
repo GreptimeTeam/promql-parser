@@ -1546,6 +1546,38 @@ mod tests {
                     )
                 }),
             ),
+            (
+                r#"histogram_stddev(rate(http_request_duration_seconds[10m]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_stddev").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
+                }),
+            ),
+            (
+                r#"histogram_stdvar(rate(http_request_duration_seconds[10m]))"#,
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("http_request_duration_seconds")),
+                    duration::MINUTE_DURATION * 10,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("rate").unwrap(), FunctionArgs::new_args(ex))
+                })
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("histogram_stdvar").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
+                }),
+            ),
             (r#"increase(http_requests_total{job="api-server"}[5m])"#, {
                 let name = String::from("http_requests_total");
                 let matchers = Matchers::one(Matcher::new(MatchOp::Equal, "job", "api-server"));

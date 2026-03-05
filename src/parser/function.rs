@@ -215,6 +215,8 @@ lazy_static! {
             vec![ValueType::Scalar, ValueType::Vector],
             ValueType::Vector
         ),
+        ("histogram_stddev", vec![ValueType::Vector], ValueType::Vector),
+        ("histogram_stdvar", vec![ValueType::Vector], ValueType::Vector),
         (
             "double_exponential_smoothing",
             vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
