@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
 
 use lazy_static::lazy_static;
@@ -109,220 +109,417 @@ impl Function {
     }
 }
 
-macro_rules! map {
-    // if variadic args, then the last is the variadic one
-    ($(($name:literal, $arg:expr, $ret:expr)),*) => (
-        {
-            let mut m: HashMap<&'static str, Function> = HashMap::new();
-            $(
-                let variadic = FUNCTION_VARIADIC_CARDINALITY
-                    .get($name)
-                    .copied()
-                    .unwrap_or_default();
-                let experimental = EXPERIMENTAL_FUNCTIONS.contains($name);
-                let func = Function::new($name, $arg, variadic, $ret, experimental);
-                m.insert($name, func);
-            )*
-            m
-        }
-    );
+macro_rules! function {
+    ($name:expr, $arg_types:expr, $variadic:expr, $return_type:expr, $experimental:expr) => {
+        (
+            $name,
+            Function::new($name, $arg_types, $variadic, $return_type, $experimental),
+        )
+    };
 }
 
 lazy_static! {
-    // Variadic cardinality follows Prometheus semantics:
-    // 0 = exact args, >0 = bounded optional args, <0 = unbounded args.
-    // Only non-zero entries are listed here; missing entries default to 0.
-    static ref FUNCTION_VARIADIC_CARDINALITY: HashMap<&'static str, i32> = HashMap::from([
-        ("days_in_month", 1),
-        ("day_of_year", 1),
-        ("day_of_month", 1),
-        ("day_of_week", 1),
-        ("year", 1),
-        ("month", 1),
-        ("hour", 1),
-        ("minute", 1),
-        ("label_join", -1),
-        ("sort_by_label", -1),
-        ("sort_by_label_desc", -1),
-        ("round", 1),
-    ]);
-    // Functions currently supported by this parser that are marked experimental in Prometheus.
-    // Keep this set in sync when adding new functions to FUNCTIONS.
-    static ref EXPERIMENTAL_FUNCTIONS: HashSet<&'static str> = HashSet::from([
-        "double_exponential_smoothing",
-        "sort_by_label",
-        "sort_by_label_desc",
-    ]);
-    static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
-        ("abs", vec![ValueType::Vector], ValueType::Vector),
-        ("absent", vec![ValueType::Vector], ValueType::Vector),
-        (
+    static ref FUNCTIONS: HashMap<&'static str, Function> = HashMap::from([
+        function!("abs", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "absent",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "absent_over_time",
             vec![ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("acos", vec![ValueType::Vector], ValueType::Vector),
-        ("acosh", vec![ValueType::Vector], ValueType::Vector),
-        ("asin", vec![ValueType::Vector], ValueType::Vector),
-        ("asinh", vec![ValueType::Vector], ValueType::Vector),
-        ("atan", vec![ValueType::Vector], ValueType::Vector),
-        ("atanh", vec![ValueType::Vector], ValueType::Vector),
-        ("avg_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("ceil", vec![ValueType::Vector], ValueType::Vector),
-        ("changes", vec![ValueType::Matrix], ValueType::Vector),
-        (
+        function!("acos", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "acosh",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("asin", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "asinh",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("atan", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "atanh",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "avg_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("ceil", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "changes",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "clamp",
             vec![ValueType::Vector, ValueType::Scalar, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "clamp_max",
             vec![ValueType::Vector, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "clamp_min",
             vec![ValueType::Vector, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("cos", vec![ValueType::Vector], ValueType::Vector),
-        ("cosh", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!("cos", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("cosh", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
             "count_over_time",
             vec![ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("days_in_month", vec![ValueType::Vector], ValueType::Vector),
-        ("day_of_month", vec![ValueType::Vector], ValueType::Vector),
-        ("day_of_week", vec![ValueType::Vector], ValueType::Vector),
-        ("day_of_year", vec![ValueType::Vector], ValueType::Vector),
-        ("deg", vec![ValueType::Vector], ValueType::Vector),
-        ("delta", vec![ValueType::Matrix], ValueType::Vector),
-        ("deriv", vec![ValueType::Matrix], ValueType::Vector),
-        ("exp", vec![ValueType::Vector], ValueType::Vector),
-        ("floor", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!(
+            "days_in_month",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "day_of_month",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "day_of_week",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "day_of_year",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!("deg", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "delta",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "deriv",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("exp", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "floor",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "histogram_count",
             vec![ValueType::Vector],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("histogram_sum", vec![ValueType::Vector], ValueType::Vector),
-        ("histogram_avg", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!(
+            "histogram_sum",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "histogram_avg",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "histogram_fraction",
             vec![ValueType::Scalar, ValueType::Scalar, ValueType::Vector],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "histogram_quantile",
             vec![ValueType::Scalar, ValueType::Vector],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("histogram_stddev", vec![ValueType::Vector], ValueType::Vector),
-        ("histogram_stdvar", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!(
+            "histogram_stddev",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "histogram_stdvar",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "double_exponential_smoothing",
             vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            true
         ),
-        // Kept for backward compatibility; Prometheus 3.x renamed this function.
-        (
+        function!(
             "holt_winters",
             vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("hour", vec![ValueType::Vector], ValueType::Vector),
-        ("idelta", vec![ValueType::Matrix], ValueType::Vector),
-        ("increase", vec![ValueType::Matrix], ValueType::Vector),
-        ("irate", vec![ValueType::Matrix], ValueType::Vector),
-        (
+        function!("hour", vec![ValueType::Vector], 1, ValueType::Vector, false),
+        function!(
+            "idelta",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "increase",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "irate",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "label_replace",
             vec![
                 ValueType::Vector,
                 ValueType::String,
                 ValueType::String,
                 ValueType::String,
-                ValueType::String,
+                ValueType::String
             ],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "label_join",
             vec![
                 ValueType::Vector,
                 ValueType::String,
                 ValueType::String,
-                ValueType::String,
+                ValueType::String
             ],
-            ValueType::Vector
+            -1,
+            ValueType::Vector,
+            false
         ),
-        ("last_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("ln", vec![ValueType::Vector], ValueType::Vector),
-        ("log10", vec![ValueType::Vector], ValueType::Vector),
-        ("log2", vec![ValueType::Vector], ValueType::Vector),
-        ("max_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("min_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("minute", vec![ValueType::Vector], ValueType::Vector),
-        ("month", vec![ValueType::Vector], ValueType::Vector),
-        ("pi", vec![], ValueType::Scalar),
-        (
+        function!(
+            "last_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("ln", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "log10",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("log2", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "max_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "min_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "minute",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "month",
+            vec![ValueType::Vector],
+            1,
+            ValueType::Vector,
+            false
+        ),
+        function!("pi", vec![], 0, ValueType::Scalar, false),
+        function!(
             "predict_linear",
             vec![ValueType::Matrix, ValueType::Scalar],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "present_over_time",
             vec![ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "quantile_over_time",
             vec![ValueType::Scalar, ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("rad", vec![ValueType::Vector], ValueType::Vector),
-        ("rate", vec![ValueType::Matrix], ValueType::Vector),
-        ("resets", vec![ValueType::Matrix], ValueType::Vector),
-        (
+        function!("rad", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("rate", vec![ValueType::Matrix], 0, ValueType::Vector, false),
+        function!(
+            "resets",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "round",
             vec![ValueType::Vector, ValueType::Scalar],
-            ValueType::Vector
+            1,
+            ValueType::Vector,
+            false
         ),
-        ("scalar", vec![ValueType::Vector], ValueType::Scalar),
-        ("sgn", vec![ValueType::Vector], ValueType::Vector),
-        ("sin", vec![ValueType::Vector], ValueType::Vector),
-        ("sinh", vec![ValueType::Vector], ValueType::Vector),
-        ("sort", vec![ValueType::Vector], ValueType::Vector),
-        ("sort_desc", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!(
+            "scalar",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Scalar,
+            false
+        ),
+        function!("sgn", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("sin", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("sinh", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("sort", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "sort_desc",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
             "sort_by_label",
             vec![ValueType::Vector, ValueType::String, ValueType::String],
-            ValueType::Vector
+            -1,
+            ValueType::Vector,
+            true
         ),
-        (
+        function!(
             "sort_by_label_desc",
             vec![ValueType::Vector, ValueType::String, ValueType::String],
-            ValueType::Vector
+            -1,
+            ValueType::Vector,
+            true
         ),
-        ("sqrt", vec![ValueType::Vector], ValueType::Vector),
-        (
+        function!("sqrt", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
             "stddev_over_time",
             vec![ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        (
+        function!(
             "stdvar_over_time",
             vec![ValueType::Matrix],
-            ValueType::Vector
+            0,
+            ValueType::Vector,
+            false
         ),
-        ("sum_over_time", vec![ValueType::Matrix], ValueType::Vector),
-        ("tan", vec![ValueType::Vector], ValueType::Vector),
-        ("tanh", vec![ValueType::Vector], ValueType::Vector),
-        ("time", vec![], ValueType::Scalar),
-        ("timestamp", vec![ValueType::Vector], ValueType::Vector),
-        ("vector", vec![ValueType::Scalar], ValueType::Vector),
-        ("year", vec![ValueType::Vector], ValueType::Vector)
-    );
+        function!(
+            "sum_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("tan", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("tanh", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("time", vec![], 0, ValueType::Scalar, false),
+        function!(
+            "timestamp",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "vector",
+            vec![ValueType::Scalar],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!("year", vec![ValueType::Vector], 1, ValueType::Vector, false),
+    ]);
 }
 
 /// get_function returns a predefined Function object for the given name.
