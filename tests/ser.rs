@@ -158,7 +158,8 @@ fn test_serialize() {
             ],
             "name": "rate",
             "returnType": "vector",
-            "variadic": 0
+            "variadic": 0,
+            "experimental": false
         },
         "type": "call"
     }
@@ -437,7 +438,8 @@ fn test_serialize() {
                             ],
                             "name": "rate",
                             "returnType": "vector",
-                            "variadic": 0
+                            "variadic": 0,
+                            "experimental": false
                         },
                         "type": "call"
                     },
@@ -455,7 +457,8 @@ fn test_serialize() {
                 ],
                 "name": "min_over_time",
                 "returnType": "vector",
-                "variadic": 0
+                "variadic": 0,
+                "experimental": false
             },
             "type": "call"
 
@@ -482,7 +485,8 @@ fn test_serialize() {
             ],
             "name": "rate",
             "returnType": "vector",
-            "variadic": 0
+            "variadic": 0,
+            "experimental": false
         },
         "type": "call"
         },
@@ -513,7 +517,8 @@ fn test_serialize() {
             ],
             "name": "rate",
             "returnType": "vector",
-            "variadic": 0
+            "variadic": 0,
+            "experimental": false
         },
         "type": "call"
         },
@@ -544,7 +549,8 @@ fn test_serialize() {
             ],
             "name": "rate",
             "returnType": "vector",
-            "variadic": 0
+            "variadic": 0,
+            "experimental": false
         },
         "type": "call"
         },
@@ -591,7 +597,8 @@ fn test_serialize() {
                 ],
                 "name":"time",
                 "returnType":"scalar",
-                "variadic":0
+                "variadic":0,
+                "experimental":false
                 },
                 "type":"call"
             },

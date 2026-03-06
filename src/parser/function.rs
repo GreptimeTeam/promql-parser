@@ -84,38 +84,27 @@ impl Prettier for FunctionArgs {
 pub struct Function {
     pub name: &'static str,
     pub arg_types: Vec<ValueType>,
-    #[cfg_attr(
-        feature = "ser",
-        serde(serialize_with = "Function::serialize_variadic")
-    )]
-    pub variadic: bool,
+    /// Variadic cardinality follows Prometheus semantics:
+    /// 0 = exact args, >0 = bounded optional args, <0 = unbounded args.
+    pub variadic: i32,
     pub return_type: ValueType,
+    pub experimental: bool,
 }
 
 impl Function {
     pub fn new(
         name: &'static str,
         arg_types: Vec<ValueType>,
-        variadic: bool,
+        variadic: i32,
         return_type: ValueType,
+        experimental: bool,
     ) -> Self {
         Self {
             name,
             arg_types,
             variadic,
             return_type,
-        }
-    }
-
-    #[cfg(feature = "ser")]
-    pub(crate) fn serialize_variadic<S>(variadic: &bool, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        if *variadic {
-            serializer.serialize_i8(1)
-        } else {
-            serializer.serialize_i8(0)
+            experimental,
         }
     }
 }
@@ -126,8 +115,12 @@ macro_rules! map {
         {
             let mut m: HashMap<&'static str, Function> = HashMap::new();
             $(
-                let variadic = FUNCTIONS_WITH_VARIADIC_ARGS.contains($name);
-                let func = Function::new($name, $arg, variadic, $ret);
+                let variadic = FUNCTION_VARIADIC_CARDINALITY
+                    .get($name)
+                    .copied()
+                    .unwrap_or_default();
+                let experimental = EXPERIMENTAL_FUNCTIONS.contains($name);
+                let func = Function::new($name, $arg, variadic, $ret, experimental);
                 m.insert($name, func);
             )*
             m
@@ -136,19 +129,29 @@ macro_rules! map {
 }
 
 lazy_static! {
-    static ref FUNCTIONS_WITH_VARIADIC_ARGS: HashSet<&'static str> = HashSet::from([
-        "days_in_month",
-        "day_of_year",
-        "day_of_month",
-        "day_of_week",
-        "year",
-        "month",
-        "hour",
-        "minute",
-        "label_join",
+    // Variadic cardinality follows Prometheus semantics:
+    // 0 = exact args, >0 = bounded optional args, <0 = unbounded args.
+    // Only non-zero entries are listed here; missing entries default to 0.
+    static ref FUNCTION_VARIADIC_CARDINALITY: HashMap<&'static str, i32> = HashMap::from([
+        ("days_in_month", 1),
+        ("day_of_year", 1),
+        ("day_of_month", 1),
+        ("day_of_week", 1),
+        ("year", 1),
+        ("month", 1),
+        ("hour", 1),
+        ("minute", 1),
+        ("label_join", -1),
+        ("sort_by_label", -1),
+        ("sort_by_label_desc", -1),
+        ("round", 1),
+    ]);
+    // Functions currently supported by this parser that are marked experimental in Prometheus.
+    // Keep this set in sync when adding new functions to FUNCTIONS.
+    static ref EXPERIMENTAL_FUNCTIONS: HashSet<&'static str> = HashSet::from([
+        "double_exponential_smoothing",
         "sort_by_label",
         "sort_by_label_desc",
-        "round",
     ]);
     static ref FUNCTIONS: HashMap<&'static str, Function> = map!(
         ("abs", vec![ValueType::Vector], ValueType::Vector),
@@ -377,5 +380,24 @@ mod tests {
         for (args, expect) in cases {
             assert_eq!(expect, args.to_string())
         }
+    }
+
+    #[test]
+    fn test_function_metadata() {
+        let round = get_function("round").unwrap();
+        assert_eq!(round.variadic, 1);
+        assert!(!round.experimental);
+
+        let label_join = get_function("label_join").unwrap();
+        assert_eq!(label_join.variadic, -1);
+        assert!(!label_join.experimental);
+
+        let sort_by_label = get_function("sort_by_label").unwrap();
+        assert_eq!(sort_by_label.variadic, -1);
+        assert!(sort_by_label.experimental);
+
+        let rate = get_function("rate").unwrap();
+        assert_eq!(rate.variadic, 0);
+        assert!(!rate.experimental);
     }
 }
