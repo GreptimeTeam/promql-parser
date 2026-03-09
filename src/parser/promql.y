@@ -265,27 +265,28 @@ group_modifiers -> Result<Option<BinModifier>, String>:
 ;
 
 fill_modifiers -> Result<Option<BinModifier>, String>:
-                group_modifiers { $1 }
-         |      group_modifiers FILL fill_value
-                {
-                         Ok(update_optional_fill($1?, VectorMatchFillValues::new($3, $3)))
-                }
-         |      group_modifiers FILL_LEFT fill_value
-                {
-                        Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_lhs($3)))
-                }
-         |      group_modifiers FILL_RIGHT fill_value
-                {
-                        Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_rhs($3)))
-                }
-         |      group_modifiers FILL_LEFT fill_value FILL_RIGHT fill_value
-                {
-                        Ok(update_optional_fill($1?, VectorMatchFillValues::new($3, $5)))
-                }
-         |      group_modifiers FILL_RIGHT fill_value FILL_LEFT fill_value
-                {
-                        Ok(update_optional_fill($1?, VectorMatchFillValues::new($5, $3)))
-                }
+                 group_modifiers { $1 }
+        |        group_modifiers FILL fill_value
+                 {
+                         let fill = $3?;
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new(fill, fill)))
+                 }
+        |        group_modifiers FILL_LEFT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_lhs($3?)))
+                 }
+        |        group_modifiers FILL_RIGHT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_rhs($3?)))
+                 }
+        |        group_modifiers FILL_LEFT fill_value FILL_RIGHT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new($3?, $5?)))
+                 }
+        |        group_modifiers FILL_RIGHT fill_value FILL_LEFT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new($5?, $3?)))
+                 }
 ;
 
 grouping_labels -> Result<Labels, String>:
@@ -316,14 +317,30 @@ grouping_label -> Result<Token, String>:
                 }
 ;
 
-fill_value -> f64:
-                LEFT_PAREN number_duration_literal RIGHT_PAREN
+fill_value -> Result<f64, String>:
+                LEFT_PAREN NUMBER RIGHT_PAREN
                 {
-                        $2
+                        if let Ok(tok) = $2 {
+                            parse_str_radix($lexer.span_str(tok.span()))
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
                 }
-        |       LEFT_PAREN SUB number_duration_literal RIGHT_PAREN
+        |       LEFT_PAREN ADD NUMBER RIGHT_PAREN
                 {
-                        -$3
+                        if let Ok(tok) = $3 {
+                            parse_str_radix($lexer.span_str(tok.span()))
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
+                }
+        |       LEFT_PAREN SUB NUMBER RIGHT_PAREN
+                {
+                        if let Ok(tok) = $3 {
+                            parse_str_radix($lexer.span_str(tok.span())).map(|v| -v)
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
                 }
 ;
 
@@ -638,21 +655,6 @@ number_literal -> Result<Expr, String>:
                 {
                         let duration = parse_duration($lexer.span_str($span))?;
                         Ok(Expr::from(duration.as_secs_f64()))
-                }
-;
-
-/*
- * Number or duration literal for fill values.
- */
-number_duration_literal -> f64:
-                NUMBER
-                {
-                        parse_str_radix($lexer.span_str($span)).unwrap()
-                }
-        |       DURATION
-                {
-                        let duration = parse_duration($lexer.span_str($span)).unwrap();
-                        duration.as_secs_f64()
                 }
 ;
 
