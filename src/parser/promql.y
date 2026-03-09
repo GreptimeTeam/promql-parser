@@ -90,6 +90,9 @@ BOOL
 BY
 GROUP_LEFT
 GROUP_RIGHT
+FILL
+FILL_LEFT
+FILL_RIGHT
 IGNORING
 OFFSET
 SMOOTHED
@@ -119,6 +122,8 @@ START_METRIC_SELECTOR
 %expect-unused 'STEP' 'STARTSYMBOLS_START'
 %expect-unused 'START_METRIC' 'START_SERIES_DESCRIPTION' 'START_EXPRESSION' 'START_METRIC_SELECTOR' 'STARTSYMBOLS_END'
 %expect-unused 'SMOOTHED' 'ANCHORED'
+
+%expect 5
 
 %start start
 
@@ -213,7 +218,7 @@ binary_expr -> Result<Expr, String>:
 // Using left recursion for the modifier rules, helps to keep the parser stack small and
 // reduces allocations
 bin_modifier -> Result<Option<BinModifier>, String>:
-                group_modifiers { $1 }
+                fill_modifiers { $1 }
 ;
 
 bool_modifier -> Result<Option<BinModifier>, String>:
@@ -259,6 +264,31 @@ group_modifiers -> Result<Option<BinModifier>, String>:
         |       GROUP_RIGHT grouping_labels { Err("unexpected <group_right>".into()) }
 ;
 
+fill_modifiers -> Result<Option<BinModifier>, String>:
+                 group_modifiers { $1 }
+        |        group_modifiers FILL fill_value
+                 {
+                         let fill = $3?;
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new(fill, fill)))
+                 }
+        |        group_modifiers FILL_LEFT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_lhs($3?)))
+                 }
+        |        group_modifiers FILL_RIGHT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::default().with_rhs($3?)))
+                 }
+        |        group_modifiers FILL_LEFT fill_value FILL_RIGHT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new($3?, $5?)))
+                 }
+        |        group_modifiers FILL_RIGHT fill_value FILL_LEFT fill_value
+                 {
+                         Ok(update_optional_fill($1?, VectorMatchFillValues::new($5?, $3?)))
+                 }
+;
+
 grouping_labels -> Result<Labels, String>:
                 LEFT_PAREN grouping_label_list RIGHT_PAREN { $2 }
         |       LEFT_PAREN grouping_label_list COMMA RIGHT_PAREN { $2 }
@@ -284,6 +314,33 @@ grouping_label -> Result<Token, String>:
         |       STRING {
                         let name = unquote_string($lexer.span_str($span))?;
                         Ok(Token::new(T_IDENTIFIER, name))
+                }
+;
+
+fill_value -> Result<f64, String>:
+                LEFT_PAREN NUMBER RIGHT_PAREN
+                {
+                        if let Ok(tok) = $2 {
+                            parse_str_radix($lexer.span_str(tok.span()))
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
+                }
+        |       LEFT_PAREN ADD NUMBER RIGHT_PAREN
+                {
+                        if let Ok(tok) = $3 {
+                            parse_str_radix($lexer.span_str(tok.span()))
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
+                }
+        |       LEFT_PAREN SUB NUMBER RIGHT_PAREN
+                {
+                        if let Ok(tok) = $3 {
+                            parse_str_radix($lexer.span_str(tok.span())).map(|v| -v)
+                        } else {
+                            Err("Number expected for fill value".to_string())
+                        }
                 }
 ;
 
@@ -498,6 +555,9 @@ metric_identifier -> Result<Token, String>:
         |       BY { lexeme_to_token($lexer, $1) }
         |       COUNT { lexeme_to_token($lexer, $1) }
         |       COUNT_VALUES { lexeme_to_token($lexer, $1) }
+        |       FILL { lexeme_to_token($lexer, $1) }
+        |       FILL_LEFT { lexeme_to_token($lexer, $1) }
+        |       FILL_RIGHT { lexeme_to_token($lexer, $1) }
         |       GROUP { lexeme_to_token($lexer, $1) }
         |       IDENTIFIER { lexeme_to_token($lexer, $1) }
         |       LAND { lexeme_to_token($lexer, $1) }
@@ -549,6 +609,9 @@ maybe_label -> Result<Token, String>:
         |       BY { lexeme_to_token($lexer, $1) }
         |       COUNT { lexeme_to_token($lexer, $1) }
         |       COUNT_VALUES { lexeme_to_token($lexer, $1) }
+        |       FILL { lexeme_to_token($lexer, $1) }
+        |       FILL_LEFT { lexeme_to_token($lexer, $1) }
+        |       FILL_RIGHT { lexeme_to_token($lexer, $1) }
         |       GROUP { lexeme_to_token($lexer, $1) }
         |       GROUP_LEFT { lexeme_to_token($lexer, $1) }
         |       GROUP_RIGHT { lexeme_to_token($lexer, $1) }
@@ -627,7 +690,7 @@ maybe_duration -> Result<Option<Duration>, String>:
 
 use std::time::Duration;
 use crate::label::{Labels, Matcher, Matchers};
-use crate::parser::{AtModifier, BinModifier, Expr, FunctionArgs, LabelModifier, Offset, VectorMatchCardinality};
+use crate::parser::{AtModifier, BinModifier, Expr, FunctionArgs, LabelModifier, Offset, VectorMatchCardinality, VectorMatchFillValues};
 use crate::parser::ast::check_ast;
 use crate::parser::function::get_function;
 use crate::parser::lex::is_label;
@@ -649,4 +712,12 @@ fn update_optional_card(
 ) -> Option<BinModifier> {
     let modifier = modifier.unwrap_or_default();
     Some(modifier.with_card(card))
+}
+
+fn update_optional_fill(
+    modifier: Option<BinModifier>,
+    fill: VectorMatchFillValues,
+) -> Option<BinModifier> {
+    let modifier = modifier.unwrap_or_default();
+    Some(modifier.with_fill_values(fill))
 }

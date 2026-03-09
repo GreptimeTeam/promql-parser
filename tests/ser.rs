@@ -245,7 +245,11 @@ fn test_serialize() {
                                 "card": "many-to-many",
                                 "include": [],
                                 "labels": [],
-                                "on": false
+                                "on": false,
+                                "fillValues": {
+                                    "lhs": null,
+                                    "rhs": null
+                                }
                             },
                             "op": "or",
                             "rhs": {
@@ -370,7 +374,11 @@ fn test_serialize() {
             "labels": [
             "branch"
             ],
-            "on": true
+            "on": true,
+            "fillValues": {
+                "lhs": null,
+                "rhs": null
+            }
         },
         "op": "*",
         "rhs": {
@@ -401,7 +409,45 @@ fn test_serialize() {
                 "labels": [
                     "branch"
                 ],
-                "on": false
+                "on": false,
+                "fillValues": {
+                    "lhs": null,
+                    "rhs": null
+                }
+            },
+            "op": "*",
+            "rhs": {
+                "matchers": [],
+                "name": "bar",
+                "offset": 0,
+                "type": "vectorSelector",
+                "startOrEnd": null,
+                "timestamp": null
+            },
+            "type": "binaryExpr"
+        }
+    );
+
+    assert_json_ser_eq!("foo * fill (42) bar",
+        {
+            "bool": false,
+            "lhs": {
+                "matchers": [],
+                "name": "foo",
+                "offset": 0,
+                "type": "vectorSelector",
+                "startOrEnd": null,
+                "timestamp": null
+            },
+            "matching": {
+                "card": "one-to-one",
+                "include": [],
+                "labels": [],
+                "on": false,
+                "fillValues": {
+                    "lhs": 42.0,
+                    "rhs": 42.0
+                }
             },
             "op": "*",
             "rhs": {
