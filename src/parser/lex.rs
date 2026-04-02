@@ -943,6 +943,20 @@ mod tests {
     }
 
     #[test]
+    fn test_aggregators() {
+        let cases = vec![
+            ("sum", vec![(T_SUM, 0, 3)], None),
+            ("AVG", vec![(T_AVG, 0, 3)], None),
+            ("Max", vec![(T_MAX, 0, 3)], None),
+            ("min", vec![(T_MIN, 0, 3)], None),
+            ("count", vec![(T_COUNT, 0, 5)], None),
+            ("stdvar", vec![(T_STDVAR, 0, 6)], None),
+            ("stddev", vec![(T_STDDEV, 0, 6)], None),
+        ];
+        assert_matches(cases);
+    }
+
+    #[test]
     fn test_keywords() {
         let cases = vec![
             ("offset", vec![(T_OFFSET, 0, 6)], None),
