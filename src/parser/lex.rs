@@ -429,11 +429,7 @@ impl Lexer {
                     }
                     if !found_lparen {
                         // Not followed by (, treat as metric identifier
-                        if s.contains(':') {
-                            return State::Lexeme(T_METRIC_IDENTIFIER);
-                        } else {
-                            return State::Lexeme(T_IDENTIFIER);
-                        }
+                        return State::Lexeme(T_IDENTIFIER);
                     }
                 }
                 State::Lexeme(token_id)
