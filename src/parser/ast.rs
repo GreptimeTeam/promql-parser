@@ -1579,12 +1579,10 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
                     "expected at most {expected_max_args_len} argument(s) in call to '{name}', got {actual_args_len}"
                 ));
             }
-        } else if ex.func.variadic == -1 {
-            if expected_args_len > actual_args_len {
-                return Err(format!(
+        } else if ex.func.variadic == -1 && expected_args_len > actual_args_len {
+            return Err(format!(
                     "expected at least {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
                 ));
-            }
         }
     }
 
