@@ -1570,19 +1570,19 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
             ));
         }
     } else {
-        let expected_args_len_without_default = expected_args_len.saturating_sub(1);
-        if expected_args_len_without_default > actual_args_len {
-            return Err(format!(
-                "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
-            ));
-        }
-
         if ex.func.variadic > 0 {
+            let expected_args_len_without_default = expected_args_len.saturating_sub(1);
             let expected_max_args_len =
                 expected_args_len_without_default + ex.func.variadic as usize;
             if expected_max_args_len < actual_args_len {
                 return Err(format!(
                     "expected at most {expected_max_args_len} argument(s) in call to '{name}', got {actual_args_len}"
+                ));
+            }
+        } else if ex.func.variadic == -1 {
+            if expected_args_len > actual_args_len {
+                return Err(format!(
+                    "expected at least {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
                 ));
             }
         }

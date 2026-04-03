@@ -1850,7 +1850,7 @@ mod tests {
             ("exp()", "expected 1 argument(s) in call to 'exp', got 0"),
             (
                 "label_join()",
-                "expected at least 3 argument(s) in call to 'label_join', got 0",
+                "expected at least 4 argument(s) in call to 'label_join', got 0",
             ),
             (
                 "sort_by_label()",
