@@ -19,7 +19,7 @@ use std::fmt;
 lrlex::lrlex_mod!("token_map");
 pub use token_map::*;
 
-pub type TokenId = u8;
+pub type TokenId = u16;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TokenType(TokenId);
@@ -70,6 +70,9 @@ lazy_static! {
             ("bool", T_BOOL),
             ("smoothed", T_SMOOTHED),
             ("anchored", T_ANCHORED),
+            ("fill", T_FILL),
+            ("fill_left", T_FILL_LEFT),
+            ("fill_right", T_FILL_RIGHT),
 
             // Preprocessors.
             ("start", T_START),
@@ -163,6 +166,9 @@ pub(crate) fn token_display(id: TokenId) -> &'static str {
         T_ANCHORED => "anchored",
         T_ON => "on",
         T_WITHOUT => "without",
+        T_FILL => "fill",
+        T_FILL_LEFT => "fill_left",
+        T_FILL_RIGHT => "fill_right",
         T_KEYWORDS_END => "keywords_end",
 
         // Preprocessors.
@@ -321,6 +327,9 @@ mod tests {
         assert_eq!(token_display(T_OFFSET), "offset");
         assert_eq!(token_display(T_SMOOTHED), "smoothed");
         assert_eq!(token_display(T_ANCHORED), "anchored");
+        assert_eq!(token_display(T_FILL), "fill");
+        assert_eq!(token_display(T_FILL_LEFT), "fill_left");
+        assert_eq!(token_display(T_FILL_RIGHT), "fill_right");
         assert_eq!(token_display(T_ON), "on");
         assert_eq!(token_display(T_WITHOUT), "without");
         assert_eq!(token_display(T_KEYWORDS_END), "keywords_end");
@@ -331,13 +340,13 @@ mod tests {
         assert_eq!(token_display(T_PREPROCESSOR_END), "preprocessors_end");
 
         // if new token added in promql.y, this has to be updated
-        for i in 77..=82 {
+        for i in 80..=85 {
             assert_eq!(token_display(i), "not used");
         }
 
         // All tokens are now tested individually above
 
-        for i in 83..=255 {
+        for i in 86..=u16::MAX {
             assert_eq!(token_display(i), "unknown token");
         }
     }
@@ -379,6 +388,12 @@ mod tests {
         assert!(matches!(get_keyword_token("bool"), Some(T_BOOL)));
         assert!(matches!(get_keyword_token("start"), Some(T_START)));
         assert!(matches!(get_keyword_token("end"), Some(T_END)));
+        assert!(matches!(get_keyword_token("fill"), Some(T_FILL)));
+        assert!(matches!(get_keyword_token("fill_left"), Some(T_FILL_LEFT)));
+        assert!(matches!(
+            get_keyword_token("fill_right"),
+            Some(T_FILL_RIGHT)
+        ));
         assert!(matches!(get_keyword_token("inf"), Some(T_NUMBER)));
         assert!(matches!(get_keyword_token("nan"), Some(T_NUMBER)));
 

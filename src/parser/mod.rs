@@ -31,7 +31,7 @@ pub mod value;
 pub use ast::{
     AggregateExpr, AtModifier, BinModifier, BinaryExpr, Call, EvalStmt, Expr, Extension,
     LabelModifier, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr,
-    UnaryExpr, VectorMatchCardinality, VectorSelector,
+    UnaryExpr, VectorMatchCardinality, VectorMatchFillValues, VectorSelector,
 };
 pub use function::{Function, FunctionArgs};
 pub use lex::lexer;

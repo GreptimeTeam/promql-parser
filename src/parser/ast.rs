@@ -100,8 +100,38 @@ impl VectorMatchCardinality {
     }
 }
 
+/// VectorMatchFillValues contains the fill values to use for Vector matching
+/// when one side does not find a match on the other side.
+/// When a fill value is nil, no fill is applied for that side, and there
+/// is no output for the match group if there is no match.
+#[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "ser", derive(serde::Serialize))]
+pub struct VectorMatchFillValues {
+    pub rhs: Option<f64>,
+    pub lhs: Option<f64>,
+}
+
+impl VectorMatchFillValues {
+    pub fn new(lhs: f64, rhs: f64) -> Self {
+        Self {
+            rhs: Some(rhs),
+            lhs: Some(lhs),
+        }
+    }
+
+    pub fn with_rhs(mut self, rhs: f64) -> Self {
+        self.rhs = Some(rhs);
+        self
+    }
+
+    pub fn with_lhs(mut self, lhs: f64) -> Self {
+        self.lhs = Some(lhs);
+        self
+    }
+}
+
 /// Binary Expr Modifier
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BinModifier {
     /// The matching behavior for the operation if both operands are Vectors.
     /// If they are not this field is None.
@@ -112,6 +142,9 @@ pub struct BinModifier {
     pub matching: Option<LabelModifier>,
     /// If a comparison operator, return 0/1 rather than filtering.
     pub return_bool: bool,
+    /// Fill-in values to use when a series from one side does not find a match
+    /// on the other side.
+    pub fill_values: VectorMatchFillValues,
 }
 
 impl fmt::Display for BinModifier {
@@ -132,6 +165,21 @@ impl fmt::Display for BinModifier {
             _ => (),
         }
 
+        if self.fill_values.rhs.is_some() || self.fill_values.lhs.is_some() {
+            if self.fill_values.rhs == self.fill_values.lhs {
+                let fill_value = self.fill_values.rhs.unwrap();
+                write!(s, "fill ({fill_value}) ")?;
+            } else {
+                if let Some(fill_value) = self.fill_values.lhs {
+                    write!(s, "fill_left ({fill_value}) ")?;
+                }
+
+                if let Some(fill_value) = self.fill_values.rhs {
+                    write!(s, "fill_right ({fill_value}) ")?;
+                }
+            }
+        }
+
         if s.trim().is_empty() {
             write!(f, "")
         } else {
@@ -146,6 +194,7 @@ impl Default for BinModifier {
             card: VectorMatchCardinality::OneToOne,
             matching: None,
             return_bool: false,
+            fill_values: VectorMatchFillValues::default(),
         }
     }
 }
@@ -163,6 +212,11 @@ impl BinModifier {
 
     pub fn with_return_bool(mut self, return_bool: bool) -> Self {
         self.return_bool = return_bool;
+        self
+    }
+
+    pub fn with_fill_values(mut self, fill_values: VectorMatchFillValues) -> Self {
+        self.fill_values = fill_values;
         self
     }
 
@@ -255,6 +309,7 @@ where
                         "include": [],
                         "labels": labels,
                         "on": true,
+                        "fillValues": t.fill_values,
                     });
                     map.serialize_value(&value)?;
                 }
@@ -264,6 +319,7 @@ where
                         "include": [],
                         "labels": labels,
                         "on": false,
+                        "fillValues": t.fill_values,
                     });
                     map.serialize_value(&value)?;
                 }
@@ -274,6 +330,7 @@ where
                 "include": [],
                 "labels": [],
                 "on": false,
+                "fillValues": t.fill_values,
             });
             map.serialize_entry("matching", &value)?;
         }
@@ -322,7 +379,7 @@ where
     map.end()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Offset {
     Pos(Duration),
     Neg(Duration),
@@ -359,7 +416,7 @@ impl fmt::Display for Offset {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AtModifier {
     Start,
     End,
@@ -487,7 +544,7 @@ impl fmt::Display for EvalStmt {
 /// ```
 ///
 /// parameter is only required for `count_values`, `quantile`, `topk` and `bottomk`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct AggregateExpr {
     /// The used aggregation operation.
@@ -544,7 +601,7 @@ impl Prettier for AggregateExpr {
 }
 
 /// UnaryExpr will negate the expr
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnaryExpr {
     pub expr: Box<Expr>,
 }
@@ -587,7 +644,7 @@ impl serde::Serialize for UnaryExpr {
 /// <vector expr> <bin-op> on(<label list>) group_left(<label list>) <vector expr>
 /// <vector expr> <bin-op> on(<label list>) group_right(<label list>) <vector expr>
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct BinaryExpr {
     /// The operation of the expression.
@@ -658,7 +715,7 @@ impl Prettier for BinaryExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct ParenExpr {
     pub expr: Box<Expr>,
@@ -685,7 +742,7 @@ impl Prettier for ParenExpr {
 /// ```norust
 /// <instant_query> '[' <range> ':' [<resolution>] ']' [ @ <float_literal> ] [ offset <duration> ]
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct SubqueryExpr {
     pub expr: Box<Expr>,
@@ -805,7 +862,7 @@ impl Prettier for NumberLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct StringLiteral {
     pub val: String,
@@ -823,7 +880,7 @@ impl Prettier for StringLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct VectorSelector {
     pub name: Option<String>,
@@ -928,7 +985,7 @@ impl Prettier for VectorSelector {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct MatrixSelector {
     #[cfg_attr(feature = "ser", serde(flatten))]
@@ -1010,7 +1067,7 @@ impl Prettier for MatrixSelector {
 ///  - sinh()
 ///  - tan()
 ///  - tanh()
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct Call {
     pub func: Function,
@@ -1061,7 +1118,7 @@ impl PartialEq for Extension {
 
 impl Eq for Extension {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 #[cfg_attr(feature = "ser", serde(tag = "type", rename_all = "camelCase"))]
 pub enum Expr {
@@ -1988,6 +2045,17 @@ mod tests {
             ("a - on(b) group_left c", "a - on (b) group_left () c"),
             ("a - ignoring(b) c", "a - ignoring (b) c"),
             ("a - ignoring() c", "a - c"),
+            ("a + fill(-23) b", "a + fill (-23) b"),
+            ("a + fill_left(-23) b", "a + fill_left (-23) b"),
+            ("a + fill_right(42) b", "a + fill_right (42) b"),
+            (
+                "a + fill_left(-23) fill_right(42) b",
+                "a + fill_left (-23) fill_right (42) b",
+            ),
+            (
+                "a + on(b) group_left fill(-23) c",
+                "a + on (b) group_left () fill (-23) c",
+            ),
             ("up > bool 0", "up > bool 0"),
             ("a offset 1m", "a offset 1m"),
             ("a offset -7m", "a offset -7m"),

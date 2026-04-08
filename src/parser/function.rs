@@ -22,7 +22,7 @@ use crate::parser::{Expr, Prettier};
 use crate::util::join_vector;
 
 /// called by func in Call
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ser", derive(serde::Serialize))]
 pub struct FunctionArgs {
     pub args: Vec<Box<Expr>>,

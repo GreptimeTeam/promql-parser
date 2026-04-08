@@ -408,8 +408,32 @@ impl Lexer {
         }
 
         let s = self.lexeme_string();
-        match get_keyword_token(&s.to_lowercase()) {
-            Some(token_id) => State::Lexeme(token_id),
+        let s_lower = s.to_lowercase();
+        match get_keyword_token(&s_lower) {
+            Some(token_id) => {
+                // fill, fill_left, fill_right can be used as metric identifiers
+                // if not followed by a left parenthesis
+                if token_id == T_FILL || token_id == T_FILL_LEFT || token_id == T_FILL_RIGHT {
+                    // Look ahead to see if next non-whitespace char is '('
+                    let mut idx = self.ctx.idx;
+                    let mut found_lparen = false;
+                    while let Some(&ch) = self.ctx.chars.get(idx) {
+                        if ch.is_ascii_whitespace() {
+                            idx += 1;
+                        } else if ch == '(' {
+                            found_lparen = true;
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                    if !found_lparen {
+                        // Not followed by (, treat as metric identifier
+                        return State::Lexeme(T_IDENTIFIER);
+                    }
+                }
+                State::Lexeme(token_id)
+            }
             None if s.contains(':') => State::Lexeme(T_METRIC_IDENTIFIER),
             _ => State::Lexeme(T_IDENTIFIER),
         }
@@ -940,6 +964,72 @@ mod tests {
             ("group_right", vec![(T_GROUP_RIGHT, 0, 11)], None),
             ("bool", vec![(T_BOOL, 0, 4)], None),
             ("atan2", vec![(T_ATAN2, 0, 5)], None),
+            // fill as metric identifier (not followed by ()
+            ("fill", vec![(T_IDENTIFIER, 0, 4)], None),
+            ("fill_left", vec![(T_IDENTIFIER, 0, 9)], None),
+            ("fill_right", vec![(T_IDENTIFIER, 0, 10)], None),
+            // fill as modifier (followed by ()
+            (
+                "fill(1)",
+                vec![
+                    (T_FILL, 0, 4),
+                    (T_LEFT_PAREN, 4, 1),
+                    (T_NUMBER, 5, 1),
+                    (T_RIGHT_PAREN, 6, 1),
+                ],
+                None,
+            ),
+            (
+                "fill_left(1)",
+                vec![
+                    (T_FILL_LEFT, 0, 9),
+                    (T_LEFT_PAREN, 9, 1),
+                    (T_NUMBER, 10, 1),
+                    (T_RIGHT_PAREN, 11, 1),
+                ],
+                None,
+            ),
+            (
+                "fill_right(2)",
+                vec![
+                    (T_FILL_RIGHT, 0, 10),
+                    (T_LEFT_PAREN, 10, 1),
+                    (T_NUMBER, 11, 1),
+                    (T_RIGHT_PAREN, 12, 1),
+                ],
+                None,
+            ),
+            // fill with whitespace before (
+            (
+                "fill (1)",
+                vec![
+                    (T_FILL, 0, 4),
+                    (T_LEFT_PAREN, 5, 1),
+                    (T_NUMBER, 6, 1),
+                    (T_RIGHT_PAREN, 7, 1),
+                ],
+                None,
+            ),
+            (
+                "fill_left (1)",
+                vec![
+                    (T_FILL_LEFT, 0, 9),
+                    (T_LEFT_PAREN, 10, 1),
+                    (T_NUMBER, 11, 1),
+                    (T_RIGHT_PAREN, 12, 1),
+                ],
+                None,
+            ),
+            (
+                "fill_right (2)",
+                vec![
+                    (T_FILL_RIGHT, 0, 10),
+                    (T_LEFT_PAREN, 11, 1),
+                    (T_NUMBER, 12, 1),
+                    (T_RIGHT_PAREN, 13, 1),
+                ],
+                None,
+            ),
         ];
         assert_matches(cases);
     }
