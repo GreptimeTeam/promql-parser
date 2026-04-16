@@ -1108,6 +1108,8 @@ pub trait ExtensionExpr: std::fmt::Debug + Send + Sync {
     fn value_type(&self) -> ValueType;
 
     fn children(&self) -> &[Expr];
+
+    fn with_new_children(&self, children: Vec<Expr>) -> Arc<dyn ExtensionExpr>;
 }
 
 impl PartialEq for Extension {
