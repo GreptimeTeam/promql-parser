@@ -1256,6 +1256,32 @@ mod tests {
                 let ex = Expr::from(VectorSelector::from("sum"));
                 Expr::new_aggregate_expr(token::T_SUM, None, FunctionArgs::new_args(ex))
             }),
+            ("limitk by (group) (-1, http_requests)", {
+                let ex = Expr::from(VectorSelector::from("http_requests"));
+                let modifier = LabelModifier::include(vec!["group"]);
+                let param = Expr::from(-1.0);
+                let args = FunctionArgs::new_args(param).append_args(ex);
+                Expr::new_aggregate_expr(token::T_LIMITK, Some(modifier), args)
+            }),
+            ("limitk by (group) (1, http_requests)", {
+                let ex = Expr::from(VectorSelector::from("http_requests"));
+                let modifier = LabelModifier::include(vec!["group"]);
+                let param = Expr::from(1.0);
+                let args = FunctionArgs::new_args(param).append_args(ex);
+                Expr::new_aggregate_expr(token::T_LIMITK, Some(modifier), args)
+            }),
+            ("limit_ratio(-1.1, http_requests)", {
+                let ex = Expr::from(VectorSelector::from("http_requests"));
+                let param = Expr::from(-1.1);
+                let args = FunctionArgs::new_args(param).append_args(ex);
+                Expr::new_aggregate_expr(token::T_LIMIT_RATIO, None, args)
+            }),
+            ("limit_ratio(0.2, http_requests)", {
+                let ex = Expr::from(VectorSelector::from("http_requests"));
+                let param = Expr::from(0.2);
+                let args = FunctionArgs::new_args(param).append_args(ex);
+                Expr::new_aggregate_expr(token::T_LIMIT_RATIO, None, args)
+            }),
         ];
         assert_cases(Case::new_result_cases(cases));
 
