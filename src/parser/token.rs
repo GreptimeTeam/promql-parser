@@ -230,7 +230,10 @@ impl TokenType {
     }
 
     pub fn is_aggregator_with_param(&self) -> bool {
-        matches!(self.0, T_TOPK | T_BOTTOMK | T_COUNT_VALUES | T_QUANTILE)
+        matches!(
+            self.0,
+            T_TOPK | T_BOTTOMK | T_COUNT_VALUES | T_QUANTILE | T_LIMITK | T_LIMIT_RATIO
+        )
     }
 
     pub fn is_comparison_operator(&self) -> bool {
@@ -408,6 +411,8 @@ mod tests {
         assert!(TokenType(T_BOTTOMK).is_aggregator_with_param());
         assert!(TokenType(T_COUNT_VALUES).is_aggregator_with_param());
         assert!(TokenType(T_QUANTILE).is_aggregator_with_param());
+        assert!(TokenType(T_LIMITK).is_aggregator_with_param());
+        assert!(TokenType(T_LIMIT_RATIO).is_aggregator_with_param());
 
         assert!(!TokenType(T_MAX).is_aggregator_with_param());
         assert!(!TokenType(T_MIN).is_aggregator_with_param());
@@ -479,6 +484,8 @@ mod tests {
         assert!(TokenType(T_STDVAR).is_aggregator());
         assert!(TokenType(T_SUM).is_aggregator());
         assert!(TokenType(T_TOPK).is_aggregator());
+        assert!(TokenType(T_LIMITK).is_aggregator());
+        assert!(TokenType(T_LIMIT_RATIO).is_aggregator());
 
         assert!(!TokenType(T_LOR).is_aggregator());
         assert!(!TokenType(T_ADD).is_aggregator());

@@ -118,7 +118,7 @@ START_METRIC_SELECTOR
 
 %expect-unused 'BLANK' 'COMMENT' 'ERROR' 'SEMICOLON' 'SPACE' 'TIMES' 'OPEN_HIST' 'CLOSE_HIST'
 %expect-unused 'OPERATORS_START' 'OPERATORS_END' 'AGGREGATORS_START' 'AGGREGATORS_END'
-%expect-unused 'LIMITK' 'LIMIT_RATIO' 'KEYWORDS_START' 'KEYWORDS_END' 'PREPROCESSOR_START' 'PREPROCESSOR_END'
+%expect-unused 'KEYWORDS_START' 'KEYWORDS_END' 'PREPROCESSOR_START' 'PREPROCESSOR_END'
 %expect-unused 'STEP' 'STARTSYMBOLS_START'
 %expect-unused 'START_METRIC' 'START_SERIES_DESCRIPTION' 'START_EXPRESSION' 'START_METRIC_SELECTOR' 'STARTSYMBOLS_END'
 %expect-unused 'SMOOTHED' 'ANCHORED'
@@ -572,6 +572,8 @@ metric_identifier -> Result<Token, String>:
         |       STDVAR { lexeme_to_token($lexer, $1) }
         |       SUM { lexeme_to_token($lexer, $1) }
         |       TOPK { lexeme_to_token($lexer, $1) }
+        |       LIMITK { lexeme_to_token($lexer, $1) }
+        |       LIMIT_RATIO { lexeme_to_token($lexer, $1) }
         |       WITHOUT { lexeme_to_token($lexer, $1) }
         |       START { lexeme_to_token($lexer, $1) }
         |       END { lexeme_to_token($lexer, $1) }
@@ -598,6 +600,8 @@ aggregate_op -> Result<Token, String>:
         |       STDVAR { lexeme_to_token($lexer, $1) }
         |       SUM { lexeme_to_token($lexer, $1) }
         |       TOPK { lexeme_to_token($lexer, $1) }
+        |       LIMITK { lexeme_to_token($lexer, $1) }
+        |       LIMIT_RATIO { lexeme_to_token($lexer, $1) }
 ;
 
 // inside of grouping options label names can be recognized as keywords by the lexer.
@@ -630,6 +634,8 @@ maybe_label -> Result<Token, String>:
         |       STDVAR { lexeme_to_token($lexer, $1) }
         |       SUM { lexeme_to_token($lexer, $1) }
         |       TOPK { lexeme_to_token($lexer, $1) }
+        |       LIMITK { lexeme_to_token($lexer, $1) }
+        |       LIMIT_RATIO { lexeme_to_token($lexer, $1) }
         |       START { lexeme_to_token($lexer, $1) }
         |       END { lexeme_to_token($lexer, $1) }
         |       ATAN2 { lexeme_to_token($lexer, $1) }
