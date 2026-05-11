@@ -247,6 +247,13 @@ lazy_static! {
             ValueType::Vector,
             false
         ),
+        function!(
+            "end",
+            vec![],
+            0,
+            ValueType::Scalar,
+            true
+        ),
         function!("exp", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!(
             "first_over_time",
@@ -336,13 +343,6 @@ lazy_static! {
             0,
             ValueType::Vector,
             true
-        ),
-        function!(
-            "holt_winters",
-            vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
-            0,
-            ValueType::Vector,
-            false
         ),
         function!("hour", vec![ValueType::Vector], 1, ValueType::Vector, false),
         function!(
@@ -472,6 +472,13 @@ lazy_static! {
         ),
         function!("pi", vec![], 0, ValueType::Scalar, false),
         function!(
+            "range",
+            vec![],
+            0,
+            ValueType::Scalar,
+            true
+        ),
+        function!(
             "predict_linear",
             vec![ValueType::Matrix, ValueType::Scalar],
             0,
@@ -516,6 +523,20 @@ lazy_static! {
             false
         ),
         function!("sgn", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "start",
+            vec![],
+            0,
+            ValueType::Scalar,
+            true
+        ),
+        function!(
+            "step",
+            vec![],
+            0,
+            ValueType::Scalar,
+            true
+        ),
         function!("sin", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sinh", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sort", vec![ValueType::Vector], 0, ValueType::Vector, false),
