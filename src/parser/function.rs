@@ -247,13 +247,7 @@ lazy_static! {
             ValueType::Vector,
             false
         ),
-        function!(
-            "end",
-            vec![],
-            0,
-            ValueType::Scalar,
-            true
-        ),
+        function!("end", vec![], 0, ValueType::Scalar, true),
         function!("exp", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!(
             "first_over_time",
@@ -471,13 +465,7 @@ lazy_static! {
             false
         ),
         function!("pi", vec![], 0, ValueType::Scalar, false),
-        function!(
-            "range",
-            vec![],
-            0,
-            ValueType::Scalar,
-            true
-        ),
+        function!("range", vec![], 0, ValueType::Scalar, true),
         function!(
             "predict_linear",
             vec![ValueType::Matrix, ValueType::Scalar],
@@ -523,20 +511,8 @@ lazy_static! {
             false
         ),
         function!("sgn", vec![ValueType::Vector], 0, ValueType::Vector, false),
-        function!(
-            "start",
-            vec![],
-            0,
-            ValueType::Scalar,
-            true
-        ),
-        function!(
-            "step",
-            vec![],
-            0,
-            ValueType::Scalar,
-            true
-        ),
+        function!("start", vec![], 0, ValueType::Scalar, true),
+        function!("step", vec![], 0, ValueType::Scalar, true),
         function!("sin", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sinh", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sort", vec![ValueType::Vector], 0, ValueType::Vector, false),
