@@ -1559,37 +1559,14 @@ fn check_ast_for_aggregate_expr(ex: AggregateExpr) -> Result<Expr, String> {
 }
 
 fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
-    let expected_args_len = ex.func.arg_types.len();
     let name = ex.func.name;
-    let actual_args_len = ex.args.len();
 
-    if ex.func.variadic == 0 {
-        if expected_args_len != actual_args_len {
-            return Err(format!(
-                "expected {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
-            ));
-        }
-    } else {
-        if ex.func.variadic > 0 {
-            let expected_args_len_without_default = expected_args_len.saturating_sub(1);
-            let expected_max_args_len =
-                expected_args_len_without_default + ex.func.variadic as usize;
-            if actual_args_len < expected_args_len_without_default {
-                return Err(format!(
-                    "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
-                ));
-            }
-            if expected_max_args_len < actual_args_len {
-                return Err(format!(
-                    "expected at most {expected_max_args_len} argument(s) in call to '{name}', got {actual_args_len}"
-                ));
-            }
-        } else if ex.func.variadic == -1 && expected_args_len > actual_args_len {
-            return Err(format!(
-                    "expected at least {expected_args_len} argument(s) in call to '{name}', got {actual_args_len}"
-                ));
-        }
-    }
+    check_call_arity(
+        ex.func.arg_types.len(),
+        ex.func.variadic,
+        ex.args.len(),
+        name,
+    )?;
 
     // special cases from https://prometheus.io/docs/prometheus/latest/querying/functions
     if name.eq("exp") {
@@ -1606,20 +1583,61 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
         }
     }
 
-    for (mut idx, actual_arg) in ex.args.args.iter().enumerate() {
-        // this only happens when function args are variadic
-        if idx >= ex.func.arg_types.len() {
-            idx = ex.func.arg_types.len() - 1;
-        }
+    check_args_match_types(&ex.args.args, &ex.func.arg_types, name)?;
+    Ok(Expr::Call(ex))
+}
 
+fn check_call_arity(
+    defined_types: usize,
+    variadic: i32,
+    actual: usize,
+    name: &str,
+) -> Result<(), String> {
+    if variadic == 0 {
+        if defined_types != actual {
+            return Err(format!(
+                "expected {defined_types} argument(s) in call to '{name}', got {actual}"
+            ));
+        }
+    } else if variadic > 0 {
+        let min_args = defined_types.saturating_sub(1);
+        let max_args = min_args + variadic as usize;
+        if actual < min_args {
+            return Err(format!(
+                "expected at least {min_args} argument(s) in call to '{name}', got {actual}"
+            ));
+        }
+        if actual > max_args {
+            return Err(format!(
+                "expected at most {max_args} argument(s) in call to '{name}', got {actual}"
+            ));
+        }
+    } else if variadic == -1 && actual < defined_types {
+        return Err(format!(
+            "expected at least {defined_types} argument(s) in call to '{name}', got {actual}"
+        ));
+    }
+    Ok(())
+}
+
+fn check_args_match_types(
+    args: &[Box<Expr>],
+    arg_types: &[ValueType],
+    name: &str,
+) -> Result<(), String> {
+    for (i, actual_arg) in args.iter().enumerate() {
+        let expected_idx = if i < arg_types.len() {
+            i
+        } else {
+            arg_types.len() - 1
+        };
         expect_type(
-            ex.func.arg_types[idx],
+            arg_types[expected_idx],
             Some(actual_arg.value_type()),
             &format!("call to function '{name}'"),
         )?;
     }
-
-    Ok(Expr::Call(ex))
+    Ok(())
 }
 
 fn check_ast_for_unary(ex: UnaryExpr) -> Result<Expr, String> {
@@ -2747,7 +2765,8 @@ or
 
     fn make_call(func_name: &str, arg_count: usize) -> Call {
         use crate::parser::function::get_function;
-        let func = get_function(func_name).unwrap_or_else(|| panic!("unknown function: {func_name}"));
+        let func =
+            get_function(func_name).unwrap_or_else(|| panic!("unknown function: {func_name}"));
         let args: Vec<Box<Expr>> = (0..arg_count)
             .map(|_| Box::new(Expr::VectorSelector(VectorSelector::from("foo"))))
             .collect();
@@ -2828,7 +2847,9 @@ or
 
         let err = check_ast(Expr::Call(make_call("histogram_quantiles", 13))).unwrap_err();
         assert!(
-            err.contains("expected at most 12 argument(s) in call to 'histogram_quantiles', got 13"),
+            err.contains(
+                "expected at most 12 argument(s) in call to 'histogram_quantiles', got 13"
+            ),
             "{err}"
         );
     }
