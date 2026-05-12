@@ -1574,6 +1574,11 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
             let expected_args_len_without_default = expected_args_len.saturating_sub(1);
             let expected_max_args_len =
                 expected_args_len_without_default + ex.func.variadic as usize;
+            if actual_args_len < expected_args_len_without_default {
+                return Err(format!(
+                    "expected at least {expected_args_len_without_default} argument(s) in call to '{name}', got {actual_args_len}"
+                ));
+            }
             if expected_max_args_len < actual_args_len {
                 return Err(format!(
                     "expected at most {expected_max_args_len} argument(s) in call to '{name}', got {actual_args_len}"
@@ -2738,6 +2743,104 @@ or
         };
 
         assert_eq!(expect, stmt.to_string());
+    }
+
+    fn make_call(func_name: &str, arg_count: usize) -> Call {
+        use crate::parser::function::get_function;
+        let func = get_function(func_name).unwrap_or_else(|| panic!("unknown function: {func_name}"));
+        let args: Vec<Box<Expr>> = (0..arg_count)
+            .map(|_| Box::new(Expr::VectorSelector(VectorSelector::from("foo"))))
+            .collect();
+        Call {
+            func,
+            args: FunctionArgs { args },
+        }
+    }
+
+    #[test]
+    fn test_call_arity_variadic_zero() {
+        // floor: arg_types=[Vector], variadic=0 → exact 1 arg required
+        assert!(check_ast(Expr::Call(make_call("floor", 1))).is_ok());
+
+        let err = check_ast(Expr::Call(make_call("floor", 0))).unwrap_err();
+        assert!(
+            err.contains("expected 1 argument(s) in call to 'floor', got 0"),
+            "{err}"
+        );
+
+        let err = check_ast(Expr::Call(make_call("floor", 2))).unwrap_err();
+        assert!(
+            err.contains("expected 1 argument(s) in call to 'floor', got 2"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_call_arity_bounded_variadic_single_arg_type() {
+        // days_in_month: arg_types=[Vector], variadic=1 → min=0, max=1
+        // 0 args is valid (default); only "too many" is enforced
+        assert!(check_ast(Expr::Call(make_call("days_in_month", 1))).is_ok());
+
+        let err = check_ast(Expr::Call(make_call("days_in_month", 2))).unwrap_err();
+        assert!(
+            err.contains("expected at most 1 argument(s) in call to 'days_in_month', got 2"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_call_arity_bounded_variadic_two_arg_types() {
+        // round: arg_types=[Vector, Scalar], variadic=1 → min=1, max=2
+        let err = check_ast(Expr::Call(make_call("round", 0))).unwrap_err();
+        assert!(
+            err.contains("expected at least 1 argument(s) in call to 'round', got 0"),
+            "{err}"
+        );
+
+        let err = check_ast(Expr::Call(make_call("round", 3))).unwrap_err();
+        assert!(
+            err.contains("expected at most 2 argument(s) in call to 'round', got 3"),
+            "{err}"
+        );
+
+        // info: arg_types=[Vector, Vector], variadic=1 → min=1, max=2
+        let err = check_ast(Expr::Call(make_call("info", 0))).unwrap_err();
+        assert!(
+            err.contains("expected at least 1 argument(s) in call to 'info', got 0"),
+            "{err}"
+        );
+
+        let err = check_ast(Expr::Call(make_call("info", 3))).unwrap_err();
+        assert!(
+            err.contains("expected at most 2 argument(s) in call to 'info', got 3"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_call_arity_bounded_variadic_large() {
+        // histogram_quantiles: arg_types=[Vector, String, Scalar, Scalar], variadic=9 → min=3, max=12
+        let err = check_ast(Expr::Call(make_call("histogram_quantiles", 2))).unwrap_err();
+        assert!(
+            err.contains("expected at least 3 argument(s) in call to 'histogram_quantiles', got 2"),
+            "{err}"
+        );
+
+        let err = check_ast(Expr::Call(make_call("histogram_quantiles", 13))).unwrap_err();
+        assert!(
+            err.contains("expected at most 12 argument(s) in call to 'histogram_quantiles', got 13"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_call_arity_unbounded_variadic() {
+        // label_join: arg_types=[Vector, String, String, String], variadic=-1 → min=4, no max
+        let err = check_ast(Expr::Call(make_call("label_join", 3))).unwrap_err();
+        assert!(
+            err.contains("expected at least 4 argument(s) in call to 'label_join', got 3"),
+            "{err}"
+        );
     }
 
     #[test]
