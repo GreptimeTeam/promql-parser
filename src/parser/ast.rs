@@ -1587,35 +1587,27 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     Ok(Expr::Call(ex))
 }
 
-fn check_call_arity(
-    defined_types: usize,
-    variadic: i32,
-    actual: usize,
-    name: &str,
-) -> Result<(), String> {
+fn check_call_arity(nargs: usize, variadic: i32, actual: usize, name: &str) -> Result<(), String> {
     if variadic == 0 {
-        if defined_types != actual {
+        if nargs != actual {
             return Err(format!(
-                "expected {defined_types} argument(s) in call to '{name}', got {actual}"
+                "expected {nargs} argument(s) in call to '{name}', got {actual}"
             ));
         }
-    } else if variadic > 0 {
-        let min_args = defined_types.saturating_sub(1);
-        let max_args = min_args + variadic as usize;
-        if actual < min_args {
+    } else {
+        let na = nargs.saturating_sub(1);
+        if na > actual {
             return Err(format!(
-                "expected at least {min_args} argument(s) in call to '{name}', got {actual}"
+                "expected at least {na} argument(s) in call to '{name}', got {actual}"
             ));
+        } else if variadic > 0 {
+            let nargsmax = na + variadic as usize;
+            if nargsmax < actual {
+                return Err(format!(
+                    "expected at most {nargsmax} argument(s) in call to '{name}', got {actual}"
+                ));
+            }
         }
-        if actual > max_args {
-            return Err(format!(
-                "expected at most {max_args} argument(s) in call to '{name}', got {actual}"
-            ));
-        }
-    } else if variadic == -1 && actual < defined_types {
-        return Err(format!(
-            "expected at least {defined_types} argument(s) in call to '{name}', got {actual}"
-        ));
     }
     Ok(())
 }
@@ -2856,10 +2848,17 @@ or
 
     #[test]
     fn test_call_arity_unbounded_variadic() {
-        // label_join: arg_types=[Vector, String, String, String], variadic=-1 → min=4, no max
-        let err = check_ast(Expr::Call(make_call("label_join", 3))).unwrap_err();
+        // label_join: arg_types=[Vector, String, String, String], variadic=-1 → min=3, no max
+        let err = check_ast(Expr::Call(make_call("label_join", 2))).unwrap_err();
         assert!(
-            err.contains("expected at least 4 argument(s) in call to 'label_join', got 3"),
+            err.contains("expected at least 3 argument(s) in call to 'label_join', got 2"),
+            "{err}"
+        );
+
+        // sort_by_label: arg_types=[Vector, String], variadic=-1 → min=1, no max
+        let err = check_ast(Expr::Call(make_call("sort_by_label", 0))).unwrap_err();
+        assert!(
+            err.contains("expected at least 1 argument(s) in call to 'sort_by_label', got 0"),
             "{err}"
         );
     }
