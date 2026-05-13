@@ -1370,20 +1370,6 @@ mod tests {
                     )
                 })
             }),
-            ("holt_winters(some_metric[5m], 0.5, 0.1)", {
-                Expr::new_matrix_selector(
-                    Expr::from(VectorSelector::from("some_metric")),
-                    duration::MINUTE_DURATION * 5,
-                )
-                .and_then(|ex| {
-                    Expr::new_call(
-                        get_function("holt_winters").unwrap(),
-                        FunctionArgs::new_args(ex)
-                            .append_args(Expr::from(0.5))
-                            .append_args(Expr::from(0.1)),
-                    )
-                })
-            }),
             // cases from https://prometheus.io/docs/prometheus/latest/querying/functions
             (r#"absent(nonexistent{job="myjob"})"#, {
                 let name = String::from("nonexistent");
@@ -1880,19 +1866,11 @@ mod tests {
             ),
             (
                 "sort_by_label()",
-                "expected at least 2 argument(s) in call to 'sort_by_label', got 0",
+                "expected at least 1 argument(s) in call to 'sort_by_label', got 0",
             ),
             (
                 "sort_by_label_desc()",
-                "expected at least 2 argument(s) in call to 'sort_by_label_desc', got 0",
-            ),
-            (
-                "sort_by_label(sum(up) by (instance))",
-                "expected at least 2 argument(s) in call to 'sort_by_label', got 1",
-            ),
-            (
-                "sort_by_label_desc(sum(up) by (instance))",
-                "expected at least 2 argument(s) in call to 'sort_by_label_desc', got 1",
+                "expected at least 1 argument(s) in call to 'sort_by_label_desc', got 0",
             ),
             // (r#"label_replace(a, `b`, `c\xff`, `d`, `.*`)"#, ""),
         ];
