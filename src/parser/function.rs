@@ -247,7 +247,15 @@ lazy_static! {
             ValueType::Vector,
             false
         ),
+        function!("end", vec![], 0, ValueType::Scalar, true),
         function!("exp", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!(
+            "first_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
+        ),
         function!(
             "floor",
             vec![ValueType::Vector],
@@ -256,21 +264,14 @@ lazy_static! {
             false
         ),
         function!(
-            "histogram_count",
-            vec![ValueType::Vector],
-            0,
-            ValueType::Vector,
-            false
-        ),
-        function!(
-            "histogram_sum",
-            vec![ValueType::Vector],
-            0,
-            ValueType::Vector,
-            false
-        ),
-        function!(
             "histogram_avg",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "histogram_count",
             vec![ValueType::Vector],
             0,
             ValueType::Vector,
@@ -291,6 +292,18 @@ lazy_static! {
             false
         ),
         function!(
+            "histogram_quantiles",
+            vec![
+                ValueType::Vector,
+                ValueType::String,
+                ValueType::Scalar,
+                ValueType::Scalar
+            ],
+            9,
+            ValueType::Vector,
+            true
+        ),
+        function!(
             "histogram_stddev",
             vec![ValueType::Vector],
             0,
@@ -305,18 +318,25 @@ lazy_static! {
             false
         ),
         function!(
+            "histogram_sum",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            false
+        ),
+        function!(
+            "info",
+            vec![ValueType::Vector, ValueType::Vector],
+            1,
+            ValueType::Vector,
+            true
+        ),
+        function!(
             "double_exponential_smoothing",
             vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
             0,
             ValueType::Vector,
             true
-        ),
-        function!(
-            "holt_winters",
-            vec![ValueType::Matrix, ValueType::Scalar, ValueType::Scalar],
-            0,
-            ValueType::Vector,
-            false
         ),
         function!("hour", vec![ValueType::Vector], 1, ValueType::Vector, false),
         function!(
@@ -382,6 +402,13 @@ lazy_static! {
         ),
         function!("log2", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!(
+            "mad_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
+        ),
+        function!(
             "max_over_time",
             vec![ValueType::Matrix],
             0,
@@ -394,6 +421,34 @@ lazy_static! {
             0,
             ValueType::Vector,
             false
+        ),
+        function!(
+            "ts_of_first_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
+        ),
+        function!(
+            "ts_of_last_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
+        ),
+        function!(
+            "ts_of_max_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
+        ),
+        function!(
+            "ts_of_min_over_time",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true
         ),
         function!(
             "minute",
@@ -410,6 +465,7 @@ lazy_static! {
             false
         ),
         function!("pi", vec![], 0, ValueType::Scalar, false),
+        function!("range", vec![], 0, ValueType::Scalar, true),
         function!(
             "predict_linear",
             vec![ValueType::Matrix, ValueType::Scalar],
@@ -455,6 +511,8 @@ lazy_static! {
             false
         ),
         function!("sgn", vec![ValueType::Vector], 0, ValueType::Vector, false),
+        function!("start", vec![], 0, ValueType::Scalar, true),
+        function!("step", vec![], 0, ValueType::Scalar, true),
         function!("sin", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sinh", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sort", vec![ValueType::Vector], 0, ValueType::Vector, false),
@@ -467,14 +525,14 @@ lazy_static! {
         ),
         function!(
             "sort_by_label",
-            vec![ValueType::Vector, ValueType::String, ValueType::String],
+            vec![ValueType::Vector, ValueType::String],
             -1,
             ValueType::Vector,
             true
         ),
         function!(
             "sort_by_label_desc",
-            vec![ValueType::Vector, ValueType::String, ValueType::String],
+            vec![ValueType::Vector, ValueType::String],
             -1,
             ValueType::Vector,
             true
