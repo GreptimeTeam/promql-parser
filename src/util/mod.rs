@@ -21,7 +21,7 @@ pub mod visitor;
 
 pub use duration::{display_duration, parse_duration};
 pub use number::parse_str_radix;
-pub use string::unquote_string;
+pub use string::{escape_string, unquote_string};
 pub use visitor::{walk_expr, ExprVisitor};
 
 pub(crate) fn join_vector<T: std::fmt::Display>(v: &[T], sep: &str, sort: bool) -> String {

@@ -14,6 +14,23 @@
 
 //! Internal utilities for strings.
 
+/// Escapes a string value for embedding in a PromQL double-quoted string literal.
+/// This is the inverse of `unquote_string` — it re-escapes backslashes and double quotes.
+pub fn escape_string(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
 /// This function is modified from original go version
 /// https://github.com/prometheus/prometheus/blob/v3.8.0/util/strutil/quote.go
 pub fn unquote_string(s: &str) -> Result<String, String> {
@@ -345,5 +362,33 @@ mod tests {
         // Test nested backticks (should fail)
         assert!(unquote_string("`hello`world`").is_err());
         assert!(unquote_string("``hello`").is_err());
+    }
+
+    #[test]
+    fn test_escape_string() {
+        assert_eq!(escape_string("hello"), "hello");
+        assert_eq!(escape_string(r#"say "hi""#), r#"say \"hi\""#);
+        assert_eq!(escape_string("back\\slash"), "back\\\\slash");
+        assert_eq!(escape_string("new\nline"), "new\\nline");
+        assert_eq!(escape_string("tab\there"), "tab\\there");
+        assert_eq!(escape_string("cr\rhere"), "cr\\rhere");
+    }
+
+    #[test]
+    fn test_escape_unquote_roundtrip() {
+        // escape_string should produce output that unquote_string can reverse
+        let values = vec![
+            "hello",
+            "flagd\\.eval",
+            "a\\|b",
+            "C:\\\\Windows",
+            "say \"hi\"",
+        ];
+        for val in values {
+            let escaped = escape_string(val);
+            let quoted = format!("\"{}\"", escaped);
+            let unquoted = unquote_string(&quoted).unwrap();
+            assert_eq!(unquoted, val, "roundtrip failed for: {val:?}");
+        }
     }
 }
