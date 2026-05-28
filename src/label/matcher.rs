@@ -19,7 +19,7 @@ use regex::Regex;
 
 use crate::parser::lex::is_label;
 use crate::parser::token::{token_display, TokenId, T_EQL, T_EQL_REGEX, T_NEQ, T_NEQ_REGEX};
-use crate::util::join_vector;
+use crate::util::{escape_string, join_vector};
 
 const LABEL_METRIC_NAME: &str = "__name__";
 
@@ -152,9 +152,9 @@ impl fmt::Display for Matcher {
         let name = if is_label(&self.name) {
             self.name.clone()
         } else {
-            format!("\"{}\"", self.name)
+            format!("\"{}\"", escape_string(&self.name))
         };
-        write!(f, "{}{}\"{}\"", name, self.op, self.value)
+        write!(f, "{}{}\"{}\"", name, self.op, escape_string(&self.value))
     }
 }
 

@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use crate::parser::lex::is_label;
+use crate::util::escape_string;
 
 mod matcher;
 pub use matcher::{MatchOp, Matcher, Matchers};
@@ -78,7 +79,7 @@ impl fmt::Display for Labels {
                 if is_label(label) {
                     label.clone()
                 } else {
-                    format!("\"{}\"", label)
+                    format!("\"{}\"", escape_string(label))
                 }
             })
             .collect();

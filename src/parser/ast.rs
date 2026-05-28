@@ -19,7 +19,7 @@ use crate::parser::token::{
 use crate::parser::token::{Token, TokenId, TokenType};
 use crate::parser::value::ValueType;
 use crate::parser::{indent, Function, FunctionArgs, Prettier, MAX_CHARACTERS_PER_LINE};
-use crate::util::display_duration;
+use crate::util::{display_duration, escape_string};
 use chrono::{DateTime, Utc};
 use std::fmt::{self, Write};
 use std::ops::Neg;
@@ -870,7 +870,7 @@ pub struct StringLiteral {
 
 impl fmt::Display for StringLiteral {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "\"{}\"", self.val)
+        write!(f, "\"{}\"", escape_string(&self.val))
     }
 }
 
@@ -2971,6 +2971,44 @@ or
             let parsed = crate::parser::parse(input).unwrap();
             let prettified = parsed.prettify();
             assert_eq!(prettified, expected);
+        }
+    }
+
+    #[test]
+    fn test_prettify_escape_roundtrip() {
+        // Queries with backslash escapes must survive parse → prettify → re-parse
+        let cases = vec![
+            // Escaped dot in regex matcher
+            (
+                r#"{__name__="up",service=~"flagd\\.evaluation\\.v1\\.Service"}"#,
+                r#"{__name__="up",service=~"flagd\\.evaluation\\.v1\\.Service"}"#,
+            ),
+            // Escaped pipe
+            (
+                r#"{__name__="up",tag=~"a\\|b"}"#,
+                r#"{__name__="up",tag=~"a\\|b"}"#,
+            ),
+            // Literal backslash in value
+            (r#"{path="C:\\\\Windows"}"#, r#"{path="C:\\\\Windows"}"#),
+            // Embedded double quote
+            (r#"{msg="say \"hello\""}"#, r#"{msg="say \"hello\""}"#),
+        ];
+
+        for (input, expected) in &cases {
+            let parsed = crate::parser::parse(input).unwrap();
+            let prettified = parsed.prettify();
+            assert_eq!(
+                &prettified, expected,
+                "prettify mismatch for input: {input}"
+            );
+
+            // Roundtrip: re-parsing the prettified output must succeed and produce the same result
+            let reparsed = crate::parser::parse(&prettified).unwrap();
+            assert_eq!(
+                parsed.prettify(),
+                reparsed.prettify(),
+                "roundtrip failed for input: {input}"
+            );
         }
     }
 }
