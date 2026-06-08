@@ -1356,6 +1356,18 @@ mod tests {
                     FunctionArgs::new_args(ex).append_args(Expr::from(5.0)),
                 )
             }),
+            ("max_of(1, 2)", {
+                Expr::new_call(
+                    get_function("max_of").unwrap(),
+                    FunctionArgs::new_args(Expr::from(1.0)).append_args(Expr::from(2.0)),
+                )
+            }),
+            ("min_of(1, 2)", {
+                Expr::new_call(
+                    get_function("min_of").unwrap(),
+                    FunctionArgs::new_args(Expr::from(1.0)).append_args(Expr::from(2.0)),
+                )
+            }),
             ("double_exponential_smoothing(some_metric[5m], 0.5, 0.1)", {
                 Expr::new_matrix_selector(
                     Expr::from(VectorSelector::from("some_metric")),
