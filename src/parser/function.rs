@@ -14,12 +14,62 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::RwLock;
 
 use lazy_static::lazy_static;
 
 use crate::parser::value::ValueType;
 use crate::parser::{Expr, Prettier};
 use crate::util::join_vector;
+
+lazy_static! {
+    static ref EXTRA_FUNCTIONS: RwLock<HashMap<String, Function>> =
+        RwLock::new(HashMap::new());
+}
+
+/// Register additional custom functions that the parser will recognize.
+///
+/// This allows extending the parser with functions not in upstream Prometheus,
+/// similar to Thanos's XFunctions pattern. Can be called multiple times;
+/// functions are accumulated additively.
+///
+/// Returns an error if any function name conflicts with a built-in Prometheus
+/// function. Overriding built-in functions is not allowed.
+///
+/// # Example
+///
+/// ```
+/// use promql_parser::parser::function::{register_extra_functions, Function};
+/// use promql_parser::parser::value::ValueType;
+///
+/// register_extra_functions(vec![
+///     Function::new("xrate", vec![ValueType::Matrix], 0, ValueType::Vector, true),
+/// ]).unwrap();
+///
+/// // Now parse() will accept xrate as a valid function
+/// let result = promql_parser::parser::parse("xrate(foo[5m])");
+/// assert!(result.is_ok());
+/// ```
+pub fn register_extra_functions(funcs: Vec<Function>) -> Result<(), String> {
+    let mut map = EXTRA_FUNCTIONS.write().unwrap();
+    for f in &funcs {
+        if FUNCTIONS.contains_key(f.name) {
+            return Err(format!(
+                "cannot register custom function \"{}\": conflicts with built-in function",
+                f.name
+            ));
+        }
+    }
+    for f in funcs {
+        map.insert(f.name.to_string(), f);
+    }
+    Ok(())
+}
+
+/// Clear all previously registered custom functions.
+pub fn clear_extra_functions() {
+    EXTRA_FUNCTIONS.write().unwrap().clear();
+}
 
 /// called by func in Call
 #[derive(Debug, Clone, PartialEq)]
@@ -595,8 +645,11 @@ lazy_static! {
 }
 
 /// get_function returns a predefined Function object for the given name.
+/// It checks built-in functions first, then any registered custom functions.
 pub(crate) fn get_function(name: &str) -> Option<Function> {
-    FUNCTIONS.get(name).cloned()
+    FUNCTIONS.get(name).cloned().or_else(|| {
+        EXTRA_FUNCTIONS.read().unwrap().get(name).cloned()
+    })
 }
 
 #[cfg(test)]
@@ -676,5 +729,63 @@ mod tests {
             assert_eq!(func.return_type, ValueType::Scalar);
             assert!(func.experimental);
         }
+    }
+
+    #[test]
+    fn test_register_custom_function() {
+        // Register a custom function
+        register_extra_functions(vec![Function::new(
+            "xrate",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true,
+        )])
+        .unwrap();
+
+        // Should be found by get_function
+        let func = get_function("xrate");
+        assert!(func.is_some());
+        let func = func.unwrap();
+        assert_eq!(func.name, "xrate");
+        assert_eq!(func.arg_types, vec![ValueType::Matrix]);
+        assert_eq!(func.variadic, 0);
+        assert_eq!(func.return_type, ValueType::Vector);
+        assert!(func.experimental);
+
+        // Built-in functions still work
+        assert!(get_function("rate").is_some());
+        assert!(get_function("sum_over_time").is_some());
+
+        // Unknown functions still return None
+        assert!(get_function("totally_nonexistent_xyz").is_none());
+    }
+
+    #[test]
+    fn test_register_multiple_custom_functions() {
+        register_extra_functions(vec![
+            Function::new("xdelta", vec![ValueType::Matrix], 0, ValueType::Vector, true),
+            Function::new("xincrease", vec![ValueType::Matrix], 0, ValueType::Vector, true),
+        ])
+        .unwrap();
+
+        assert!(get_function("xdelta").is_some());
+        assert!(get_function("xincrease").is_some());
+    }
+
+    #[test]
+    fn test_register_builtin_override_rejected() {
+        // Attempting to override a built-in function should return an error
+        let result = register_extra_functions(vec![Function::new(
+            "rate",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true,
+        )]);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("conflicts with built-in function"));
     }
 }

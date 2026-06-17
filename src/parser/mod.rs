@@ -33,7 +33,7 @@ pub use ast::{
     LabelModifier, MatrixSelector, NumberLiteral, Offset, ParenExpr, StringLiteral, SubqueryExpr,
     UnaryExpr, VectorMatchCardinality, VectorMatchFillValues, VectorSelector,
 };
-pub use function::{Function, FunctionArgs};
+pub use function::{clear_extra_functions, register_extra_functions, Function, FunctionArgs};
 pub use lex::lexer;
 pub use parse::parse;
 
