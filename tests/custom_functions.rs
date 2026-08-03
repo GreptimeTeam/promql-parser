@@ -21,7 +21,13 @@ fn test_parse_with_custom_function() {
     // Register custom functions (like Thanos xrate/xdelta/xincrease)
     parser::register_extra_functions(vec![
         Function::new("xrate", vec![ValueType::Matrix], 0, ValueType::Vector, true),
-        Function::new("xdelta", vec![ValueType::Matrix], 0, ValueType::Vector, true),
+        Function::new(
+            "xdelta",
+            vec![ValueType::Matrix],
+            0,
+            ValueType::Vector,
+            true,
+        ),
         Function::new(
             "xincrease",
             vec![ValueType::Matrix],
@@ -73,12 +79,13 @@ fn test_custom_function_arg_validation() {
 
     // Correct usage (matrix selector)
     let result = parser::parse("custom_over_time(metric[5m])");
-    assert!(result.is_ok(), "correct args should parse: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "correct args should parse: {:?}",
+        result.err()
+    );
 
     // Wrong arg type (vector instead of matrix) should fail
     let result = parser::parse("custom_over_time(metric)");
-    assert!(
-        result.is_err(),
-        "vector arg for matrix param should fail"
-    );
+    assert!(result.is_err(), "vector arg for matrix param should fail");
 }

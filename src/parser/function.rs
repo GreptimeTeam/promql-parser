@@ -23,8 +23,7 @@ use crate::parser::{Expr, Prettier};
 use crate::util::join_vector;
 
 lazy_static! {
-    static ref EXTRA_FUNCTIONS: RwLock<HashMap<String, Function>> =
-        RwLock::new(HashMap::new());
+    static ref EXTRA_FUNCTIONS: RwLock<HashMap<String, Function>> = RwLock::new(HashMap::new());
 }
 
 /// Register additional custom functions that the parser will recognize.
@@ -647,9 +646,10 @@ lazy_static! {
 /// get_function returns a predefined Function object for the given name.
 /// It checks built-in functions first, then any registered custom functions.
 pub(crate) fn get_function(name: &str) -> Option<Function> {
-    FUNCTIONS.get(name).cloned().or_else(|| {
-        EXTRA_FUNCTIONS.read().unwrap().get(name).cloned()
-    })
+    FUNCTIONS
+        .get(name)
+        .cloned()
+        .or_else(|| EXTRA_FUNCTIONS.read().unwrap().get(name).cloned())
 }
 
 #[cfg(test)]
@@ -764,8 +764,20 @@ mod tests {
     #[test]
     fn test_register_multiple_custom_functions() {
         register_extra_functions(vec![
-            Function::new("xdelta", vec![ValueType::Matrix], 0, ValueType::Vector, true),
-            Function::new("xincrease", vec![ValueType::Matrix], 0, ValueType::Vector, true),
+            Function::new(
+                "xdelta",
+                vec![ValueType::Matrix],
+                0,
+                ValueType::Vector,
+                true,
+            ),
+            Function::new(
+                "xincrease",
+                vec![ValueType::Matrix],
+                0,
+                ValueType::Vector,
+                true,
+            ),
         ])
         .unwrap();
 
