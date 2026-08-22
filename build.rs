@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use cfgrammar::yacc::YaccKind;
-use lrlex::{ct_token_map, DefaultLexerTypes};
+use lrlex::{CTTokenMapBuilder, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,5 +22,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .recoverer(lrpar::RecoveryKind::None)
         .grammar_in_src_dir("parser/promql.y")?
         .build()?;
-    ct_token_map::<u16>("token_map", ctp.token_map(), None)
+    CTTokenMapBuilder::<u16>::new("token_map", ctp.token_map()).build()
 }

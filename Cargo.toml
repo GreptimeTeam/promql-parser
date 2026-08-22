@@ -25,13 +25,13 @@ license = "Apache-2.0"
 categories = ["parser-implementations"]
 
 [dependencies]
-cfgrammar = "0.13.5"
+cfgrammar = "0.14.2"
 chrono = "0.4.38"
 lazy_static = "1.4.0"
-lrlex = "0.13.5"
-lrpar = "0.13.5"
+lrlex = "0.14.2"
+lrpar = "0.14.2"
 regex = "1"
-serde = { version = "1", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 
 [features]
@@ -39,6 +39,6 @@ default = []
 ser = ["serde", "serde_json"]
 
 [build-dependencies]
-cfgrammar = "0.13.5"
-lrlex = "0.13.5"
-lrpar = "0.13.5"
+cfgrammar = "0.14.2"
+lrlex = "0.14.2"
+lrpar = "0.14.2"
