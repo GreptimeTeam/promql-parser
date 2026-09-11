@@ -16,9 +16,17 @@
 name: Function Comparison
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '0 0 * * 0'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   compare:
@@ -31,4 +39,40 @@ jobs:
         with:
           python-version: '3.x'
       - name: Run function comparison
-        run: python scripts/compare_functions.py
+        run: python scripts/compare_functions.py | tee comparison.log
+      - name: Create issue on scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_TITLE="Function comparison failed: Rust functions out of sync with Prometheus"
+          EXISTING=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --search "in:title \"${ISSUE_TITLE}\"" \
+            --json number \
+            --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "An open issue already exists, skipping creation."
+            exit 0
+          fi
+          {
+            echo "The scheduled function comparison check failed."
+            echo ""
+            echo "Rust functions in \`src/parser/function.rs\` are out of sync with"
+            echo "[Prometheus functions.go](https://github.com/prometheus/prometheus/blob/main/promql/parser/functions.go)."
+            echo ""
+            echo "See the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+            echo ""
+            echo "<details><summary>Comparison output</summary>"
+            echo ""
+            echo '```'
+            cat comparison.log
+            echo '```'
+            echo ""
+            echo "</details>"
+          } > issue_body.md
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "$ISSUE_TITLE" \
+            --body-file issue_body.md
