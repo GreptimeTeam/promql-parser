@@ -39,6 +39,10 @@ jobs:
         with:
           python-version: '3.x'
       - name: Run function comparison
+        # explicit shell: 'bash' in GitHub Actions means
+        # `bash --noprofile --norc -eo pipefail`, and pipefail is required
+        # here so a script failure isn't swallowed by `tee`.
+        shell: bash
         run: python scripts/compare_functions.py | tee comparison.log
       - name: Create issue on scheduled failure
         if: failure() && github.event_name == 'schedule'
