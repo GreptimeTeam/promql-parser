@@ -303,7 +303,7 @@ lazy_static! {
             vec![ValueType::Matrix],
             0,
             ValueType::Vector,
-            true
+            false
         ),
         function!(
             "floor",
@@ -575,6 +575,13 @@ lazy_static! {
         ),
         function!("sgn", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("start", vec![], 0, ValueType::Scalar, true),
+        function!(
+            "start_timestamp",
+            vec![ValueType::Vector],
+            0,
+            ValueType::Vector,
+            true
+        ),
         function!("step", vec![], 0, ValueType::Scalar, true),
         function!("sin", vec![ValueType::Vector], 0, ValueType::Vector, false),
         function!("sinh", vec![ValueType::Vector], 0, ValueType::Vector, false),
