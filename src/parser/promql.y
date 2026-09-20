@@ -356,6 +356,14 @@ function_call -> Result<Expr, String>:
                             Some(func) => Expr::new_call(func, $2?)
                         }
                 }
+        |       at_modifier_preprocessors function_call_body
+                {
+                        let name = $1?.val;
+                        match get_function(&name) {
+                            None => Err(format!("unknown function with name '{name}'")),
+                            Some(func) => Expr::new_call(func, $2?)
+                        }
+                }
 ;
 
 function_call_body -> Result<FunctionArgs, String>:
