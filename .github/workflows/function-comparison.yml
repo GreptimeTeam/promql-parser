@@ -39,13 +39,25 @@ jobs:
         with:
           python-version: '3.x'
       - name: Run function comparison
+        id: compare
         # explicit shell: 'bash' in GitHub Actions means
-        # `bash --noprofile --norc -eo pipefail`, and pipefail is required
-        # here so a script failure isn't swallowed by `tee`.
+        # `bash --noprofile --norc -eo pipefail`. `set +e` disables errexit
+        # so the script's exit code can be captured from PIPESTATUS (pipefail
+        # + `tee` would otherwise mask it) and exposed as a step output.
+        # Exit codes: 0 = in sync, 1 = mismatch, 2 = operational error.
         shell: bash
-        run: python scripts/compare_functions.py | tee comparison.log
-      - name: Create issue on scheduled failure
-        if: failure() && github.event_name == 'schedule'
+        run: |
+          set +e
+          python scripts/compare_functions.py | tee comparison.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+      - name: Create issue on scheduled mismatch
+        # Only a confirmed mismatch (exit code 1) files an issue. Operational
+        # failures (exit code 2, e.g. unable to fetch Prometheus functions.go)
+        # still fail the job but must not create an "out of sync" issue that
+        # would then suppress a later genuine mismatch report via dedup.
+        if: github.event_name == 'schedule' && steps.compare.outputs.exit_code == '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -61,7 +73,7 @@ jobs:
             exit 0
           fi
           {
-            echo "The scheduled function comparison check failed."
+            echo "The scheduled function comparison detected mismatches."
             echo ""
             echo "Rust functions in \`src/parser/function.rs\` are out of sync with"
             echo "[Prometheus functions.go](https://github.com/prometheus/prometheus/blob/main/promql/parser/functions.go)."

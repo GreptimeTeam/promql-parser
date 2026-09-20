@@ -2,12 +2,24 @@
 """
 Script to compare Prometheus Go functions.go with Rust functions.rs
 Ensures Rust functions are complete and consistent with Go version.
+
+Exit codes:
+    0 - success, functions are in sync
+    1 - mismatch detected (Rust functions out of sync with Prometheus)
+    2 - operational error (e.g. network failure, file read error)
 """
 
 import re
 import sys
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+
+# Exit code for a confirmed mismatch between Go and Rust functions.
+EXIT_MISMATCH = 1
+# Exit code for operational errors that are NOT mismatches (fetch/read
+# failures, unexpected exceptions). The CI workflow distinguishes these so
+# it only files an "out of sync" issue for a real mismatch.
+EXIT_ERROR = 2
 
 
 @dataclass
@@ -185,7 +197,7 @@ def main():
         go_content = result.stdout
     except Exception as e:
         print(f"Error fetching Go file: {e}")
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
     # Read Rust functions.rs
     rust_file = "src/parser/function.rs"
@@ -196,7 +208,7 @@ def main():
             rust_content = f.read()
     except Exception as e:
         print(f"Error reading Rust file: {e}")
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
     # Parse both files
     go_functions = parse_go_functions(go_content)
@@ -270,7 +282,7 @@ def main():
         sys.exit(0)
     else:
         print("\n❌ Issues found - please review and fix")
-        sys.exit(1)
+        sys.exit(EXIT_MISMATCH)
 
 
 if __name__ == "__main__":
