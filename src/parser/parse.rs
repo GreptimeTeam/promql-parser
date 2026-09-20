@@ -2271,14 +2271,17 @@ mod tests {
                     Expr::from(VectorSelector::from("bar")),
                 )
             }),
+            // start() and end() are also functions (Prometheus conformance).
+            (
+                "start()",
+                Expr::new_call(get_function("start").unwrap(), FunctionArgs::empty_args()),
+            ),
+            (
+                "end()",
+                Expr::new_call(get_function("end").unwrap(), FunctionArgs::empty_args()),
+            ),
         ];
         assert_cases(Case::new_result_cases(cases));
-
-        let cases = vec![
-            ("start()", INVALID_QUERY_INFO),
-            ("end()", INVALID_QUERY_INFO),
-        ];
-        assert_cases(Case::new_fail_cases(cases));
     }
 
     #[test]
