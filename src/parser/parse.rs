@@ -1374,7 +1374,10 @@ mod tests {
                     duration::MINUTE_DURATION * 5,
                 )
                 .and_then(|ex| {
-                    Expr::new_call(get_function("integral").unwrap(), FunctionArgs::new_args(ex))
+                    Expr::new_call(
+                        get_function("integral").unwrap(),
+                        FunctionArgs::new_args(ex),
+                    )
                 })
             }),
             ("integral(some_metric[5m], 1)", {
