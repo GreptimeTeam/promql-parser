@@ -1368,6 +1368,27 @@ mod tests {
                     FunctionArgs::new_args(Expr::from(1.0)).append_args(Expr::from(2.0)),
                 )
             }),
+            ("integral(some_metric[5m])", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(get_function("integral").unwrap(), FunctionArgs::new_args(ex))
+                })
+            }),
+            ("integral(some_metric[5m], 1)", {
+                Expr::new_matrix_selector(
+                    Expr::from(VectorSelector::from("some_metric")),
+                    duration::MINUTE_DURATION * 5,
+                )
+                .and_then(|ex| {
+                    Expr::new_call(
+                        get_function("integral").unwrap(),
+                        FunctionArgs::new_args(ex).append_args(Expr::from(1.0)),
+                    )
+                })
+            }),
             ("double_exponential_smoothing(some_metric[5m], 0.5, 0.1)", {
                 Expr::new_matrix_selector(
                     Expr::from(VectorSelector::from("some_metric")),
@@ -1861,6 +1882,22 @@ mod tests {
             (
                 "rate(some_metric)",
                 "expected type matrix in call to function 'rate', got vector",
+            ),
+            (
+                "integral(some_metric)",
+                "expected type matrix in call to function 'integral', got vector",
+            ),
+            (
+                "integral()",
+                "expected at least 1 argument(s) in call to 'integral', got 0",
+            ),
+            (
+                "integral(some_metric[5m], 1, 2)",
+                "expected at most 2 argument(s) in call to 'integral', got 3",
+            ),
+            (
+                r#"integral(some_metric[5m], "strategy")"#,
+                "expected type scalar in call to function 'integral', got string",
             ),
             (
                 "ln(1)",
