@@ -57,7 +57,8 @@ jobs:
         # failures (exit code 2, e.g. unable to fetch Prometheus functions.go)
         # still fail the job but must not create an "out of sync" issue that
         # would then suppress a later genuine mismatch report via dedup.
-        if: github.event_name == 'schedule' && steps.compare.outputs.exit_code == '1'
+        # failure() overrides the implicit success() check after a mismatch.
+        if: failure() && github.event_name == 'schedule' && steps.compare.outputs.exit_code == '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
