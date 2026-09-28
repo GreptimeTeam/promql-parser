@@ -403,6 +403,13 @@ lazy_static! {
             false
         ),
         function!(
+            "integral",
+            vec![ValueType::Matrix, ValueType::Scalar],
+            1,
+            ValueType::Vector,
+            true
+        ),
+        function!(
             "irate",
             vec![ValueType::Matrix],
             0,
@@ -728,6 +735,17 @@ mod tests {
         let rate = get_function("rate").unwrap();
         assert_eq!(rate.variadic, 0);
         assert!(!rate.experimental);
+
+        // integral was added upstream after v3.8; it is experimental and takes
+        // an optional scalar "strategy" argument (0=left, 1=right, 2=trapezoid).
+        let integral = get_function("integral").unwrap();
+        assert_eq!(
+            integral.arg_types,
+            vec![ValueType::Matrix, ValueType::Scalar]
+        );
+        assert_eq!(integral.variadic, 1);
+        assert_eq!(integral.return_type, ValueType::Vector);
+        assert!(integral.experimental);
 
         for func_name in ["max_of", "min_of"] {
             let func = get_function(func_name).unwrap();
