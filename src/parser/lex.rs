@@ -678,12 +678,20 @@ impl Iterator for Lexer {
     type Item = Result<LexemeType, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.shift();
-        match &self.state {
-            State::Lexeme(token_id) => Some(Ok(self.lexeme(*token_id))),
-            State::Err(info) => Some(Err(info.clone())),
-            State::End => None,
-            _ => self.next(),
+        // Iterative rather than recursive: the skip arm below is a tail call,
+        // and rustc does not guarantee tail-call elimination. Some state
+        // transitions form cycles that yield no lexeme (`String` -> `Escape`
+        // -> `String`, `Start` -> `LineComment`/`Space` -> `Start`), so
+        // recursing there grew the stack with the length of the input and
+        // overflowed on long queries.
+        loop {
+            self.shift();
+            match &self.state {
+                State::Lexeme(token_id) => return Some(Ok(self.lexeme(*token_id))),
+                State::Err(info) => return Some(Err(info.clone())),
+                State::End => return None,
+                _ => continue,
+            }
         }
     }
 }
@@ -1436,6 +1444,64 @@ mod tests {
             ),
         ];
         assert_matches(cases);
+    }
+
+    /// Runs `f` on a thread with a deliberately small stack, so that a
+    /// regression into per-input-item recursion is caught rather than
+    /// absorbed by a large default stack.
+    fn assert_lexes_on_small_stack(input: String, expected: Vec<LexemeTuple>) {
+        const STACK_SIZE: usize = 256 * 1024;
+
+        let handle = std::thread::Builder::new()
+            .stack_size(STACK_SIZE)
+            .spawn(move || {
+                let actual: Vec<Result<LexemeType, String>> = Lexer::new(&input)
+                    .filter(|r| !matches!(r, Ok(l) if l.tok_id() == T_EOF))
+                    .collect();
+                let expected: Vec<Result<LexemeType, String>> = expected
+                    .into_iter()
+                    .map(|(token_id, start, len)| Ok(LexemeType::new(token_id, start, len)))
+                    .collect();
+                assert_eq!(expected, actual, "\n<input len>: {}", input.len());
+            })
+            .expect("failed to spawn lexer thread");
+
+        handle.join().expect("lexer thread panicked or overflowed");
+    }
+
+    /// `<Lexer as Iterator>::next` must not consume stack proportional to its
+    /// input.
+    ///
+    /// `next` used to tail-call itself for every state transition that does
+    /// not yield a lexeme, and rustc does not guarantee tail-call
+    /// elimination. Two of those transitions form cycles that can repeat
+    /// without producing a lexeme, so the recursion depth grew with the length
+    /// of the input rather than staying constant:
+    ///
+    /// - `String` -> `Escape` -> `String`, one frame pair per escape sequence
+    ///   inside a single quoted string;
+    /// - `Start` -> `LineComment`/`Space` -> `Start`, one frame pair per
+    ///   comment line or whitespace run.
+    ///
+    /// A 0.8 MB production query whose label matcher held a large regex with
+    /// 29,416 escape sequences exhausted an 8 MB stack this way, aborting the
+    /// process. A stack overflow cannot be caught, so this is not recoverable
+    /// by the caller.
+    #[test]
+    fn test_next_does_not_recurse_on_input_length() {
+        // One escape sequence per repetition, none of which yields a lexeme
+        // until the closing quote. The whole input lexes to a single string.
+        const ESCAPES: usize = 50_000;
+        let escaped = r"\\.".repeat(ESCAPES);
+        let input = format!("\"{escaped}\"");
+        let len = input.len();
+        assert_lexes_on_small_stack(input, vec![(T_STRING, 0, len)]);
+
+        // Comment lines and whitespace runs yield no lexeme at all, so the
+        // entire input is consumed within one `next` call.
+        const LINES: usize = 50_000;
+        let input = "# c\n \t\n".repeat(LINES);
+        assert_lexes_on_small_stack(input, vec![]);
     }
 
     #[test]
