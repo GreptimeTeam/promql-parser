@@ -1643,6 +1643,20 @@ fn check_ast_for_call(ex: Call) -> Result<Expr, String> {
     }
 
     check_args_match_types(&ex.args.args, &ex.func.arg_types, name)?;
+
+    // info() only accepts label selectors, without a metric name, as its second argument.
+    if name.eq("info") {
+        if let Some(arg) = ex.args.args.get(1) {
+            match arg.as_ref() {
+                Expr::VectorSelector(vs) if vs.name.is_some() => {
+                    return Err("expected label selectors only, got vector selector instead".into());
+                }
+                Expr::VectorSelector(_) => {}
+                _ => return Err("expected label selectors only".into()),
+            }
+        }
+    }
+
     Ok(Expr::Call(ex))
 }
 
@@ -2896,6 +2910,27 @@ or
             err.contains("expected at most 2 argument(s) in call to 'info', got 3"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn test_info_second_arg_must_be_label_selector() {
+        // https://github.com/prometheus/prometheus: info() only accepts label selectors
+        // without a metric name as its second argument.
+        assert!(crate::parser::parse(r#"info(up, {job="api"})"#).is_ok());
+        assert!(crate::parser::parse("info(up)").is_ok());
+
+        let err = crate::parser::parse("info(up, target_info)").unwrap_err();
+        assert!(
+            err.contains("expected label selectors only, got vector selector instead"),
+            "{err}"
+        );
+        let err = crate::parser::parse(r#"info(up, target_info{job="api"})"#).unwrap_err();
+        assert!(
+            err.contains("expected label selectors only, got vector selector instead"),
+            "{err}"
+        );
+        let err = crate::parser::parse("info(up, sum(up))").unwrap_err();
+        assert!(err.contains("expected label selectors only"), "{err}");
     }
 
     #[test]
